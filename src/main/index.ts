@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
 import { readdir, stat } from 'fs/promises'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -7,8 +7,17 @@ import type { FileEntry } from '../shared/types'
 import { readTextFile, writeTextFile } from './file-io'
 import { registerImageProtocolSchemes, setupImageProtocol } from './image-protocol'
 import { addRecentProject, getRecentProjects, isExistingDirectory } from './recent-projects'
+import { APP_DISPLAY_NAME } from '../shared/app-name'
 
 registerImageProtocolSchemes()
+
+const appIcon = nativeImage.createFromPath(icon)
+
+if (process.platform === 'linux') {
+  app.setDesktopName('lee-label')
+}
+
+app.setName(APP_DISPLAY_NAME)
 
 async function readDirTree(dirPath: string): Promise<FileEntry[]> {
   const entries = await readdir(dirPath, { withFileTypes: true })
@@ -102,12 +111,16 @@ function createWindow(): void {
     frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#ffffff',
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon: appIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
+
+  if (!appIcon.isEmpty()) {
+    mainWindow.setIcon(appIcon)
+  }
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.maximize()
@@ -133,9 +146,12 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.electron.app')
 
   app.on('browser-window-created', (_, window) => {
+    if (!appIcon.isEmpty()) {
+      window.setIcon(appIcon)
+    }
     optimizer.watchWindowShortcuts(window)
   })
 

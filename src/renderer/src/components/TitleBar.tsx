@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js'
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import AppLogo from './AppLogo'
 
 const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (props) => {
   const [maximized, setMaximized] = createSignal(false)
@@ -24,7 +25,10 @@ const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (
         <span class="titlebar-menu opacity-55">View</span>
         <span class="titlebar-menu opacity-55">Help</span>
       </div>
-      <div class="titlebar-center text-base-content/60">{props.title()}</div>
+      <div class="titlebar-center text-base-content/60">
+        <AppLogo size={16} class="titlebar-logo" />
+        <span class="titlebar-title">{props.title()}</span>
+      </div>
       <div class="titlebar-controls">
         <button
           type="button"

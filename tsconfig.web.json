@@ -12,7 +12,8 @@
     "jsxImportSource": "solid-js",
     "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["src/renderer/src/*"]
+      "@renderer/*": ["src/renderer/src/*"],
+      "@logo": ["build/logo_icon.svg"]
     }
   }
 }

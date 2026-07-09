@@ -9,7 +9,8 @@ export default defineConfig({
   renderer: {
     resolve: {
       alias: {
-        '@renderer': resolve('src/renderer/src')
+        '@renderer': resolve('src/renderer/src'),
+        '@logo': resolve('build/logo_icon.svg')
       }
     },
     plugins: [tailwindcss(), solid()]

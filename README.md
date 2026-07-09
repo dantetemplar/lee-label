@@ -1,4 +1,4 @@
-# lee-label
+# Lee Label
 
 An Electron application with Solid and TypeScript
 

@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: lee-label
+productName: Lee Label
 directories:
   buildResources: build
 files:
@@ -29,6 +29,12 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  icon: build/icons
+  syncDesktopName: true
+  desktop:
+    entry:
+      Name: Lee Label
+      StartupWMClass: lee-label
   target:
     - AppImage
     - snap

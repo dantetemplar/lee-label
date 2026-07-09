@@ -9,6 +9,7 @@ import TitleBar from './components/TitleBar'
 import WelcomeScreen from './components/WelcomeScreen'
 import type { ImageLayers } from '../../shared/image-layers'
 import { getAdjacentImagePaths } from './lib/tree-nav'
+import { APP_DISPLAY_NAME } from '../../shared/app-name'
 
 const App: Component = () => {
   const [folderPath, setFolderPath] = createSignal<string | null>(null)
@@ -233,7 +234,7 @@ const App: Component = () => {
   return (
     <div class="app bg-base-100 text-base-content">
       <TitleBar
-        title={() => (folderPath() ? folderName() : 'lee-label')}
+        title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
         onOpenFolder={openFolder}
       />
       <div class="app-body">

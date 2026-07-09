@@ -21,6 +21,19 @@ function formatDisplayPath(path: string): string {
   return path
 }
 
+function getParentDisplayPath(path: string): string {
+  return formatDisplayPath(dirname(path))
+}
+
+function toRecentProject(path: string, openedAt: number): RecentProject {
+  return {
+    path,
+    name: getProjectName(path),
+    displayPath: getParentDisplayPath(path),
+    openedAt
+  }
+}
+
 function getProjectName(path: string): string {
   const parts = path.split(/[/\\]/).filter(Boolean)
   return parts[parts.length - 1] ?? path
@@ -49,12 +62,19 @@ export async function getRecentProjects(): Promise<RecentProject[]> {
 
   for (const project of store.projects) {
     if (await isExistingDirectory(project.path)) {
-      projects.push(project)
+      projects.push(toRecentProject(project.path, project.openedAt))
     }
   }
 
   if (projects.length !== store.projects.length) {
     await writeStore({ projects })
+  } else {
+    const staleDisplayPath = store.projects.some(
+      (project, index) => project.displayPath !== projects[index]?.displayPath
+    )
+    if (staleDisplayPath) {
+      await writeStore({ projects })
+    }
   }
 
   return projects
@@ -62,12 +82,7 @@ export async function getRecentProjects(): Promise<RecentProject[]> {
 
 export async function addRecentProject(path: string): Promise<RecentProject[]> {
   const store = await readStore()
-  const entry: RecentProject = {
-    path,
-    name: getProjectName(path),
-    displayPath: formatDisplayPath(path),
-    openedAt: Date.now()
-  }
+  const entry = toRecentProject(path, Date.now())
 
   const projects = [entry, ...store.projects.filter((project) => project.path !== path)].slice(
     0,

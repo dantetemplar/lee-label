@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <defs>
+    <linearGradient id="greenStroke" x1="171" y1="225" x2="1080" y2="1144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#37ca2e"/>
+      <stop offset="1" stop-color="#22b91f"/>
+    </linearGradient>
+    <linearGradient id="orangeStroke" x1="47" y1="122" x2="1207" y2="954" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8a00"/>
+      <stop offset="1" stop-color="#ff7300"/>
+    </linearGradient>
+  </defs>
+
+  <path
+    d="M 627 153 L 74 927 L 1180 927 Z"
+    fill="#ffd9bd"
+    fill-opacity="0.55"
+    stroke="url(#orangeStroke)"
+    stroke-width="58"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+
+  <g stroke="url(#greenStroke)" stroke-width="54" stroke-linecap="butt">
+    <path d="M 282 302 H 968"/>
+    <path d="M 282 1068 H 968"/>
+    <path d="M 250 337 V 1033"/>
+    <path d="M 1000 337 V 1033"/>
+  </g>
+
+  <g fill="url(#greenStroke)" fill-rule="evenodd">
+    <path
+      d="M 202 225 H 294 Q 325 225 325 256 V 348 Q 325 379 294 379 H 202 Q 171 379 171 348 V 256 Q 171 225 202 225 Z
+         M 214 269 H 282 V 337 H 214 Z"
+    />
+    <path
+      d="M 958 225 H 1049 Q 1080 225 1080 256 V 348 Q 1080 379 1049 379 H 958 Q 927 379 927 348 V 256 Q 927 225 958 225 Z
+         M 970 269 H 1038 V 337 H 970 Z"
+    />
+    <path
+      d="M 202 990 H 294 Q 325 990 325 1021 V 1113 Q 325 1144 294 1144 H 202 Q 171 1144 171 1113 V 1021 Q 171 990 202 990 Z
+         M 214 1033 H 282 V 1101 H 214 Z"
+    />
+    <path
+      d="M 958 990 H 1049 Q 1080 990 1080 1021 V 1113 Q 1080 1144 1049 1144 H 958 Q 927 1144 927 1113 V 1021 Q 927 990 958 990 Z
+         M 970 1033 H 1038 V 1101 H 970 Z"
+    />
+  </g>
+</svg>
