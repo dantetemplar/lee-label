@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "daisyui": {
+      "source": "saadeghi/daisyui",
+      "sourceType": "github",
+      "skillPath": "skills/daisyui/SKILL.md",
+      "computedHash": "92b9228e8f5325c1d44a3aa820f2af310743307ea978bb86faff118c6864e9ea"
+    },
+    "electron-development": {
+      "source": "sickn33/agentic-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/electron-development/SKILL.md",
+      "computedHash": "77f6ad9152c7224766365dae3b962bad3a1211b5cf7bb6626c293499f1e38596"
+    }
+  }
+}
