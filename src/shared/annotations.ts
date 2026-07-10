@@ -86,7 +86,7 @@ export interface SaveMaskInput {
 
 export interface CreateLabelInput {
   name: string
-  color: string
+  color?: string
   shortcut?: string
 }
 
@@ -131,16 +131,5 @@ export const LABEL_COLORS = [
   '#733380'
 ] as const
 
-// CVAT cvat-canvas canvasModel defaults
 export const SHAPE_OPACITY = 0.2
 export const SELECTED_SHAPE_OPACITY = 0.5
-export const MASK_DISPLAY_OPACITY = Math.sqrt(SHAPE_OPACITY)
-export const MASK_SELECTED_DISPLAY_OPACITY = Math.sqrt(SELECTED_SHAPE_OPACITY)
-
-export function getDefaultLabelColor(existingLabels: Pick<Label, 'color'>[]): string {
-  const used = new Set(existingLabels.map((label) => label.color.toLowerCase()))
-  for (const color of LABEL_COLORS) {
-    if (!used.has(color.toLowerCase())) return color
-  }
-  return LABEL_COLORS[existingLabels.length % LABEL_COLORS.length]
-}

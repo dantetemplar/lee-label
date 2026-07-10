@@ -81,10 +81,13 @@ uniform float uActiveOpacity;
 out vec4 outColor;
 
 void main() {
-  float sessionCov = texture(uSessionMask, vUv).r;
-  float activeStrokeCov = texture(uActiveStrokeMask, vUv).r;
-  float maskAlpha = max(sessionCov * uSessionOpacity, activeStrokeCov * uActiveOpacity);
-  outColor = vec4(uMaskColor, maskAlpha);
+  float sessionCov = step(0.5, texture(uSessionMask, vUv).r);
+  float activeCov = step(0.5, texture(uActiveStrokeMask, vUv).r);
+  float alpha = max(sessionCov * uSessionOpacity, activeCov * uActiveOpacity);
+  if (alpha < 0.001) {
+    discard;
+  }
+  outColor = vec4(uMaskColor * alpha, alpha);
 }
 `
 
@@ -118,7 +121,8 @@ in vec2 vLocal;
 uniform float uRadiusPx;
 uniform float uStrokeWidthPx;
 uniform float uInnerStrokeWidthPx;
-uniform float uOpacity;
+uniform float uOuterOpacity;
+uniform float uInnerOpacity;
 
 out vec4 outColor;
 
@@ -133,8 +137,8 @@ void main() {
 
   float midEdge = 1.0 - uInnerStrokeWidthPx / uRadiusPx;
   float midEdge2 = midEdge * midEdge;
-  float alpha = d2 >= midEdge2 ? uOpacity : uOpacity * 0.5;
-  outColor = vec4(1.0, 1.0, 1.0, alpha);
+  float alpha = d2 >= midEdge2 ? uOuterOpacity : uInnerOpacity;
+  outColor = vec4(vec3(1.0) * alpha, alpha);
 }
 `
 
@@ -171,7 +175,10 @@ uniform float uOpacity;
 out vec4 outColor;
 
 void main() {
-  float coverage = texture(uMask, vUv).r;
-  outColor = vec4(uMaskColor, coverage * uOpacity);
+  float coverage = step(0.5, texture(uMask, vUv).r);
+  if (coverage < 0.5) {
+    discard;
+  }
+  outColor = vec4(uMaskColor * uOpacity, uOpacity);
 }
 `

@@ -283,7 +283,7 @@ const App: Component = () => {
     })
   }
 
-  const handleCreateLabel = async (name: string, color: string): Promise<void> => {
+  const handleCreateLabel = async (name: string, color?: string): Promise<void> => {
     setLabelError(null)
     try {
       const label = await window.api.labels.create({ name, color })

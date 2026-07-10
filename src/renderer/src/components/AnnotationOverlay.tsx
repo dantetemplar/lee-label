@@ -16,9 +16,9 @@ import type { WorkingShape } from '../lib/annotation-store'
 import { AnnotationStore } from '../lib/annotation-store'
 import { BrushEngine, type CapsuleSegment, type Point2D, type SavedMaskLayer } from '../lib/brush/brush-engine'
 import {
+  BRUSH_PREVIEW_INNER_OPACITY,
   BRUSH_PREVIEW_INNER_STROKE_IMAGE_PX,
-  BRUSH_PREVIEW_OPACITY,
-  BRUSH_PREVIEW_PRESSED_OPACITY_FACTOR,
+  BRUSH_PREVIEW_OUTER_OPACITY,
   BRUSH_PREVIEW_STROKE_IMAGE_PX
 } from '../lib/brush/constants'
 import type { AnnotationTool } from './AnnotationToolbar'
@@ -203,9 +203,8 @@ const AnnotationOverlay: Component<{
             radiusPx: previewRadius,
             strokeWidthPx: BRUSH_PREVIEW_STROKE_IMAGE_PX,
             innerStrokeWidthPx: BRUSH_PREVIEW_INNER_STROKE_IMAGE_PX,
-            alpha: isDrawing
-              ? BRUSH_PREVIEW_OPACITY * BRUSH_PREVIEW_PRESSED_OPACITY_FACTOR
-              : BRUSH_PREVIEW_OPACITY
+            outerOpacity: BRUSH_PREVIEW_OUTER_OPACITY,
+            innerOpacity: BRUSH_PREVIEW_INNER_OPACITY
           }
         : undefined,
       props.store.selectedShapeId[0]()

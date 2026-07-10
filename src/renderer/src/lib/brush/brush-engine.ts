@@ -1,8 +1,7 @@
 import {
-    ACTIVE_STROKE_OPACITY,
-    COMMITTED_MASK_OPACITY,
-    COMMITTED_MASK_SELECTED_OPACITY,
-    SESSION_MASK_OPACITY
+  ACTIVE_STROKE_OPACITY,
+  COMMITTED_MASK_OPACITY,
+  SESSION_MASK_OPACITY
 } from './constants'
 import {
     CAPSULE_FRAGMENT,
@@ -132,12 +131,17 @@ function uploadMaskDataTexture(
   width: number,
   height: number
 ): WebGLTexture {
+  const normalized = new Uint8Array(data.length)
+  for (let index = 0; index < data.length; index++) {
+    normalized[index] = data[index] > 0 ? 255 : 0
+  }
+
   const texture = gl.createTexture()
   if (!texture) throw new Error('Failed to create mask data texture')
 
   gl.bindTexture(gl.TEXTURE_2D, texture)
   gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, width, height, 0, gl.RED, gl.UNSIGNED_BYTE, data)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, width, height, 0, gl.RED, gl.UNSIGNED_BYTE, normalized)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -205,7 +209,8 @@ export class BrushEngine {
   private previewRadiusPx: WebGLUniformLocation
   private previewStrokeWidthPx: WebGLUniformLocation
   private previewInnerStrokeWidthPx: WebGLUniformLocation
-  private previewOpacity: WebGLUniformLocation
+  private previewOuterOpacity: WebGLUniformLocation
+  private previewInnerOpacity: WebGLUniformLocation
 
   private placedImageSizePx: WebGLUniformLocation
   private placedBounds: WebGLUniformLocation
@@ -227,7 +232,7 @@ export class BrushEngine {
     const gl = canvas.getContext('webgl2', {
       alpha: true,
       antialias: false,
-      premultipliedAlpha: false,
+      premultipliedAlpha: true,
       preserveDrawingBuffer: true
     })
     if (!gl) throw new Error('WebGL2 is not available')
@@ -302,7 +307,8 @@ export class BrushEngine {
     this.previewRadiusPx = gl.getUniformLocation(this.previewProgram, 'uRadiusPx')!
     this.previewStrokeWidthPx = gl.getUniformLocation(this.previewProgram, 'uStrokeWidthPx')!
     this.previewInnerStrokeWidthPx = gl.getUniformLocation(this.previewProgram, 'uInnerStrokeWidthPx')!
-    this.previewOpacity = gl.getUniformLocation(this.previewProgram, 'uOpacity')!
+    this.previewOuterOpacity = gl.getUniformLocation(this.previewProgram, 'uOuterOpacity')!
+    this.previewInnerOpacity = gl.getUniformLocation(this.previewProgram, 'uInnerOpacity')!
 
     this.placedImageSizePx = gl.getUniformLocation(this.placedMaskProgram, 'uImageSizePx')!
     this.placedBounds = gl.getUniformLocation(this.placedMaskProgram, 'uBounds')!
@@ -440,9 +446,10 @@ export class BrushEngine {
       radiusPx: number
       strokeWidthPx: number
       innerStrokeWidthPx: number
-      alpha: number
+      outerOpacity: number
+      innerOpacity: number
     },
-    selectedMaskId?: string | null
+    _selectedMaskId?: string | null
   ): void {
     if (!this.sessionTexture || !this.activeTexture || this.width <= 0 || this.height <= 0) return
 
@@ -456,9 +463,9 @@ export class BrushEngine {
 
     gl.enable(gl.BLEND)
     gl.blendEquation(gl.FUNC_ADD)
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
-    this.drawSavedMasks(savedMasks, selectedMaskId)
+    this.drawSavedMasks(savedMasks)
 
     gl.useProgram(this.compositeProgram)
     gl.activeTexture(gl.TEXTURE0)
@@ -481,7 +488,8 @@ export class BrushEngine {
       gl.uniform1f(this.previewRadiusPx, preview.radiusPx)
       gl.uniform1f(this.previewStrokeWidthPx, preview.strokeWidthPx)
       gl.uniform1f(this.previewInnerStrokeWidthPx, preview.innerStrokeWidthPx)
-      gl.uniform1f(this.previewOpacity, preview.alpha)
+      gl.uniform1f(this.previewOuterOpacity, preview.outerOpacity)
+      gl.uniform1f(this.previewInnerOpacity, preview.innerOpacity)
       gl.bindVertexArray(this.previewVao)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
       gl.bindVertexArray(null)
@@ -524,12 +532,13 @@ export class BrushEngine {
     return { width: this.width, height: this.height }
   }
 
-  private drawSavedMasks(savedMasks: SavedMaskLayer[], selectedMaskId?: string | null): void {
+  private drawSavedMasks(savedMasks: SavedMaskLayer[]): void {
     if (savedMasks.length === 0) return
 
     const { gl } = this
     gl.useProgram(this.placedMaskProgram)
     gl.uniform2f(this.placedImageSizePx, this.width, this.height)
+    gl.uniform1f(this.placedOpacity, COMMITTED_MASK_OPACITY)
     gl.uniform1i(this.placedMaskSampler, 0)
     gl.bindVertexArray(this.placedMaskVao)
 
@@ -537,10 +546,6 @@ export class BrushEngine {
       const cached = this.savedMaskCache.get(layer.id)
       if (!cached) continue
 
-      gl.uniform1f(
-        this.placedOpacity,
-        layer.id === selectedMaskId ? COMMITTED_MASK_SELECTED_OPACITY : COMMITTED_MASK_OPACITY
-      )
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, cached.texture)
       gl.uniform4f(

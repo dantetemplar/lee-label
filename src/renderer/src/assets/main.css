@@ -475,6 +475,7 @@ button.titlebar-menu {
   left: 0;
   pointer-events: auto;
   z-index: 2;
+  isolation: isolate;
 }
 
 .annotation-overlay__gl-canvas,
@@ -489,6 +490,8 @@ button.titlebar-menu {
 
 .annotation-overlay__gl-canvas {
   z-index: 1;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .annotation-overlay__svg {

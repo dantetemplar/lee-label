@@ -14,6 +14,7 @@ import type {
   Shape,
   UpdateLabelInput
 } from '../../shared/annotations'
+import { getLabelColor } from '../../shared/label-color'
 import { runMigrations } from './migrations'
 import { getDbPath } from './paths'
 
@@ -155,11 +156,14 @@ export class ProjectDatabase {
     const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM labels').get() as {
       max_order: number
     }
+    const existingColors = (db.prepare('SELECT color FROM labels').all() as { color: string }[]).map(
+      (row) => row.color
+    )
     const id = randomUUID()
     const label: Label = {
       id,
       name: input.name,
-      color: input.color,
+      color: input.color?.trim() || getLabelColor(input.name, existingColors),
       sortOrder: maxOrder.max_order + 1,
       shortcut: input.shortcut
     }
