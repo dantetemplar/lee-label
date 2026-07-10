@@ -8,6 +8,7 @@ import { readTextFile, writeTextFile } from './file-io'
 import { registerImageProtocolSchemes, setupImageProtocol } from './image-protocol'
 import { addRecentProject, getRecentProjects, isExistingDirectory } from './recent-projects'
 import { APP_DISPLAY_NAME } from '../shared/app-name'
+import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
 
 registerImageProtocolSchemes()
 
@@ -156,6 +157,7 @@ app.whenReady().then(() => {
   })
 
   registerIpc()
+  registerAnnotationsIpc()
   setupImageProtocol()
   createWindow()
 
@@ -165,6 +167,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  closeProjectDatabase()
   if (process.platform !== 'darwin') {
     app.quit()
   }

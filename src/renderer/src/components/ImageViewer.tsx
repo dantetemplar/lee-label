@@ -1,6 +1,15 @@
 import type { Component } from 'solid-js'
-import { createEffect, createSignal, on, onCleanup, For } from 'solid-js'
+import { createEffect, createSignal, on, onCleanup, onMount, For, Show } from 'solid-js'
 import type { ImageLayers } from '../../../shared/image-layers'
+import type { Label } from '../../../shared/annotations'
+import type { AnnotationTool } from './AnnotationToolbar'
+import AnnotationOverlay from './AnnotationOverlay'
+import type { AnnotationStore } from '../lib/annotation-store'
+import type { ViewTransform } from '../lib/annotation-coords'
+import {
+  panFromScreenDrag,
+  snapPanToImagePixelGrid
+} from '../lib/annotation-coords'
 import { toLocalImageUrl } from '../lib/local-image-url'
 
 const MAX_SCALE_MULTIPLIER = 16
@@ -103,6 +112,11 @@ function isSameImageSrc(image: HTMLImageElement, src: string): boolean {
 
 const ImageViewer: Component<{
   layers: ImageLayers
+  activeTool: () => AnnotationTool
+  labels: () => Label[]
+  activeLabelId: () => string | null
+  brushSize: () => number
+  annotationStore: AnnotationStore | null
   onLoad: (dims: { width: number; height: number }) => void
   onError: () => void
 }> = (props) => {
@@ -127,6 +141,14 @@ const ImageViewer: Component<{
   const [showVisible, setShowVisible] = createSignal(false)
   const [panning, setPanning] = createSignal(false)
   const [sideLayersEnabled, setSideLayersEnabled] = createSignal(false)
+
+  const viewTransform = (): ViewTransform => ({
+    panX: panX(),
+    panY: panY(),
+    scale: scale(),
+    fitScale: fitScale(),
+    maxScale: maxScale()
+  })
 
   let panStartX = 0
   let panStartY = 0
@@ -172,8 +194,14 @@ const ImageViewer: Component<{
     )
   }
 
+  const isAnnotationMode = (): boolean => Boolean(props.annotationStore)
+
   const setClampedPan = (nextPanX: number, nextPanY: number, nextScale = scale()): void => {
-    const clamped = clampCurrentPan(nextPanX, nextPanY, nextScale)
+    let pan = { panX: nextPanX, panY: nextPanY }
+    if (isAnnotationMode()) {
+      pan = snapPanToImagePixelGrid(pan.panX, pan.panY, nextScale)
+    }
+    const clamped = clampCurrentPan(pan.panX, pan.panY, nextScale)
     setPanX(clamped.panX)
     setPanY(clamped.panY)
   }
@@ -216,10 +244,17 @@ const ImageViewer: Component<{
   }
 
   const handlePanMove = (event: MouseEvent): void => {
-    setClampedPan(
-      panOriginX + (event.clientX - panStartX),
-      panOriginY + (event.clientY - panStartY)
-    )
+    const dx = event.clientX - panStartX
+    const dy = event.clientY - panStartY
+    const currentScale = scale()
+
+    if (isAnnotationMode()) {
+      const pan = panFromScreenDrag(panOriginX, panOriginY, dx, dy, currentScale)
+      setClampedPan(pan.panX, pan.panY, currentScale)
+      return
+    }
+
+    setClampedPan(panOriginX + dx, panOriginY + dy, currentScale)
   }
 
   const handlePanEnd = (event: MouseEvent): void => {
@@ -489,11 +524,41 @@ const ImageViewer: Component<{
     stopPan()
   })
 
+  const viewportCursor = (): string => {
+    if (panning()) return 'grabbing'
+    if (props.activeTool() === 'mask') return 'none'
+    if (props.activeTool() === 'rectangle') return 'crosshair'
+    return 'default'
+  }
+
+  const focusWorkspace = (): void => {
+    const viewport = viewportRef
+    if (!viewport) return
+
+    const active = document.activeElement
+    if (active instanceof HTMLElement && active !== viewport && !viewport.contains(active)) {
+      active.blur()
+    }
+
+    if (document.activeElement !== viewport) {
+      viewport.focus({ preventScroll: true })
+    }
+  }
+
+  onMount(() => {
+    const viewport = viewportRef
+    if (!viewport) return
+    viewport.addEventListener('pointerdown', focusWorkspace, { capture: true })
+    onCleanup(() => viewport.removeEventListener('pointerdown', focusWorkspace, { capture: true }))
+  })
+
   return (
     <div
       ref={viewportRef}
       class="image-viewport"
       classList={{ 'image-viewport--panning': panning() }}
+      style={{ cursor: viewportCursor() }}
+      tabindex={0}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onContextMenu={(event) => event.preventDefault()}
@@ -530,6 +595,18 @@ const ImageViewer: Component<{
           />
         )}
       </For>
+      <Show when={props.annotationStore && showVisible()}>
+        <AnnotationOverlay
+          viewportRef={() => viewportRef}
+          transform={viewTransform}
+          imageSize={imageSize}
+          activeTool={props.activeTool}
+          activeLabelId={props.activeLabelId}
+          brushSize={props.brushSize}
+          labels={props.labels}
+          store={props.annotationStore!}
+        />
+      </Show>
     </div>
   )
 }

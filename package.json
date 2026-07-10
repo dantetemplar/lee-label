@@ -25,6 +25,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "better-sqlite3": "^12.11.1",
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
@@ -32,6 +33,7 @@
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@tailwindcss/vite": "^4.3.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.1",
     "daisyui": "^5.6.16",
     "electron": "^43.1.0",

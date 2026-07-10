@@ -1,8 +1,12 @@
 import type { Component } from 'solid-js'
-import { Match, Show, Switch, createEffect, createSignal } from 'solid-js'
+import { Match, Show, Switch, createEffect, createSignal, on } from 'solid-js'
 import type { FileKind } from '../../../shared/file-types'
 import type { ImageLayers } from '../../../shared/image-layers'
+import type { Label } from '../../../shared/annotations'
+import AnnotationToolbar, { type AnnotationTool } from './AnnotationToolbar'
 import ImageViewer from './ImageViewer'
+import type { AnnotationStore } from '../lib/annotation-store'
+import { toRelativePath } from '../lib/project-path'
 
 export interface FileInfo {
   name: string
@@ -42,23 +46,55 @@ const FileViewer: Component<{
   kind: () => FileKind | null
   fileName: () => string | null
   filePath: () => string | null
+  projectRoot: () => string | null
   imageLayers: () => ImageLayers | null
   textLoading: () => boolean
   textDraft: () => string
   error: () => string | null
+  labels: () => Label[]
+  activeLabelId: () => string | null
+  annotationStore: AnnotationStore | null
   onImageLoad: (dims: { width: number; height: number }) => void
   onTextChange: (value: string) => void
   onTextSave: () => void
+  activeTool: () => AnnotationTool
+  onToolChange: (tool: AnnotationTool) => void
+  brushSize: () => number
 }> = (props) => {
   const [imageError, setImageError] = createSignal(false)
+  const [imageDimensions, setImageDimensions] = createSignal<{ width: number; height: number } | null>(
+    null
+  )
 
   createEffect(() => {
     props.imageLayers()
     setImageError(false)
+    setImageDimensions(null)
   })
+
+  createEffect(
+    on(
+      () => {
+        const layers = props.imageLayers()
+        const root = props.projectRoot()
+        const store = props.annotationStore
+        const dims = imageDimensions()
+        if (!layers || !root || !store || !dims) return null
+        return {
+          relativePath: toRelativePath(root, layers.currentPath),
+          dims
+        }
+      },
+      (payload) => {
+        if (!payload) return
+        void props.annotationStore?.loadForImage(payload.relativePath, payload.dims)
+      }
+    )
+  )
 
   const handleImageLoad = (dims: { width: number; height: number }): void => {
     setImageError(false)
+    setImageDimensions(dims)
     props.onImageLoad(dims)
   }
 
@@ -116,10 +152,19 @@ const FileViewer: Component<{
                   <Show when={!imageError()}>
                     <ImageViewer
                       layers={layers()}
+                      activeTool={props.activeTool}
+                      labels={props.labels}
+                      activeLabelId={props.activeLabelId}
+                      brushSize={props.brushSize}
+                      annotationStore={props.annotationStore}
                       onLoad={handleImageLoad}
                       onError={() => setImageError(true)}
                     />
                   </Show>
+                  <AnnotationToolbar
+                    activeTool={props.activeTool}
+                    onToolChange={props.onToolChange}
+                  />
                 </div>
               )}
             </Show>

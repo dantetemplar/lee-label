@@ -1,7 +1,9 @@
 import type { Component } from 'solid-js'
 import { For, Show, createEffect, createSignal, on, onCleanup } from 'solid-js'
 import type { FileEntry } from '../../../shared/types'
+import type { ImageStatus } from '../../../shared/annotations'
 import { getFileKind } from '../../../shared/file-types'
+import { toRelativePath } from '../lib/project-path'
 import {
   flattenVisibleTree,
   findNodeByPath,
@@ -94,6 +96,8 @@ const TreeNode: Component<{
   expandedPaths: () => Set<string>
   selectedPath: () => string | null
   focusedPath: () => string | null
+  projectRoot: () => string | null
+  imageStatuses: () => Record<string, ImageStatus>
   onToggleExpand: (path: string) => void
   onFocus: (node: FileEntry) => void
   onSelect: (node: FileEntry) => void
@@ -114,6 +118,18 @@ const TreeNode: Component<{
     } else {
       props.onSelect(props.node)
     }
+  }
+
+  const imageStatus = (): ImageStatus | null => {
+    const root = props.projectRoot()
+    if (!root || props.node.type !== 'file' || getFileKind(props.node.name) !== 'image') return null
+    return props.imageStatuses()[toRelativePath(root, props.node.path)] ?? 'todo'
+  }
+
+  const statusClass = (): string | undefined => {
+    const status = imageStatus()
+    if (!status || status === 'todo') return undefined
+    return `tree-status--${status}`
   }
 
   return (
@@ -153,6 +169,9 @@ const TreeNode: Component<{
           </Show>
         </span>
         <span class="tree-item-label">{props.node.name}</span>
+        <Show when={imageStatus() && imageStatus() !== 'todo'}>
+          <span class={`tree-status ${statusClass() ?? ''}`} />
+        </Show>
       </button>
       <Show when={props.node.type === 'directory' && isExpanded() && props.node.children}>
         <For each={props.node.children}>
@@ -163,6 +182,8 @@ const TreeNode: Component<{
               expandedPaths={props.expandedPaths}
               selectedPath={props.selectedPath}
               focusedPath={props.focusedPath}
+              projectRoot={props.projectRoot}
+              imageStatuses={props.imageStatuses}
               onToggleExpand={props.onToggleExpand}
               onFocus={props.onFocus}
               onSelect={props.onSelect}
@@ -179,6 +200,8 @@ const FileTree: Component<{
   rootName: () => string
   entries: () => FileEntry[]
   selectedPath: () => string | null
+  projectRoot: () => string | null
+  imageStatuses: () => Record<string, ImageStatus>
   onSelect: (node: FileEntry) => void
   onFocusChange?: (path: string) => void
 }> = (props) => {
@@ -387,6 +410,8 @@ const FileTree: Component<{
                 expandedPaths={expandedPaths}
                 selectedPath={props.selectedPath}
                 focusedPath={focusedPath}
+                projectRoot={props.projectRoot}
+                imageStatuses={props.imageStatuses}
                 onToggleExpand={toggleExpanded}
                 onFocus={focusNode}
                 onSelect={selectNode}
