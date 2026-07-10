@@ -75,30 +75,6 @@ export function forEachBrushStrokeCenter(
   forEachLinePixel(fromX, fromY, toX, toY, fn)
 }
 
-export function isPixelInBrushShape(
-  x: number,
-  y: number,
-  centerX: number,
-  centerY: number,
-  brushSize: number
-): boolean {
-  if (brushSize === 1) {
-    return x === centerX && y === centerY
-  }
-
-  if (brushSize === 2) {
-    return x >= centerX - 1 && x <= centerX && y >= centerY - 1 && y <= centerY
-  }
-
-  if (brushSize === 3) {
-    if (x === centerX && y === centerY) return true
-    if (x === centerX && Math.abs(y - centerY) === 1) return true
-    if (y === centerY && Math.abs(x - centerX) === 1) return true
-  }
-
-  return false
-}
-
 export function getPixelBrushBounds(
   centerX: number,
   centerY: number,

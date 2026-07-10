@@ -439,12 +439,6 @@ export class ProjectDatabase {
     }
   }
 
-  deleteShape(shapeId: string): void {
-    const result = this.requireDb().prepare('DELETE FROM shapes WHERE id = ?').run(shapeId)
-    if (result.changes === 0) throw new Error('Shape not found')
-    this.touchProject()
-  }
-
   getMaskBlob(shapeId: string): MaskBlob | null {
     const row = this.requireDb()
       .prepare('SELECT width, height, format, data FROM mask_data WHERE shape_id = ?')

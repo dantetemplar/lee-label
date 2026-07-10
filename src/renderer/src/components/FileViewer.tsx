@@ -6,7 +6,7 @@ import type { Label } from '../../../shared/annotations'
 import AnnotationToolbar, { type AnnotationTool } from './AnnotationToolbar'
 import ImageViewer from './ImageViewer'
 import type { AnnotationStore } from '../lib/annotation-store'
-import { toRelativePath } from '../lib/project-path'
+import { toRelativePath } from '../../../shared/paths'
 
 export interface FileInfo {
   name: string
@@ -31,7 +31,7 @@ const TextEditor: Component<{
 
   return (
     <textarea
-      class="text-viewer"
+      class="box-border h-full w-full cursor-text resize-none overflow-auto border-none bg-base-100 p-3 font-mono text-[13px] leading-normal break-words whitespace-pre text-base-content select-text focus:outline-none focus:ring-1 focus:ring-primary/40"
       value={props.value()}
       spellcheck={false}
       autocomplete="off"
@@ -102,36 +102,36 @@ const FileViewer: Component<{
   const showImageLoading = (): boolean => props.kind() === 'image' && !props.imageLayers()
 
   return (
-    <div class="file-viewer bg-base-300">
+    <div class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-base-300">
       <Show
         when={props.kind()}
         fallback={
-          <div class="file-viewer-empty text-base-content/60">
-            <p>Select a file to preview</p>
-            <span class="file-viewer-hint">Choose a file from the explorer</span>
+          <div class="flex flex-col items-center gap-1.5 text-base-content/60">
+            <p class="m-0 text-sm">Select a file to preview</p>
+            <span class="text-xs opacity-70">Choose a file from the explorer</span>
           </div>
         }
       >
         <Switch>
           <Match when={props.error()}>
-            <div class="file-viewer-empty text-error">
-              <p>{props.error()}</p>
+            <div class="flex flex-col items-center gap-1.5 text-error">
+              <p class="m-0 text-sm">{props.error()}</p>
             </div>
           </Match>
 
           <Match when={props.kind() === 'unsupported'}>
-            <div class="file-viewer-empty text-base-content/60">
-              <p>Cannot render this file type</p>
-              <span class="file-viewer-hint">{props.fileName()}</span>
+            <div class="flex flex-col items-center gap-1.5 text-base-content/60">
+              <p class="m-0 text-sm">Cannot render this file type</p>
+              <span class="text-xs opacity-70">{props.fileName()}</span>
             </div>
           </Match>
 
           <Match when={props.kind() === 'text' && props.filePath()}>
             <Show
               when={!props.textLoading()}
-              fallback={<div class="file-viewer-empty text-primary">Loading…</div>}
+              fallback={<div class="flex flex-col items-center gap-1.5 text-primary">Loading…</div>}
             >
-              <div class="file-viewer-frame file-viewer-frame--text">
+              <div class="relative box-border flex h-full w-full min-h-0 min-w-0 items-stretch justify-stretch p-4">
                 <TextEditor
                   value={() => props.textDraft()}
                   onChange={props.onTextChange}
@@ -144,10 +144,10 @@ const FileViewer: Component<{
           <Match when={props.kind() === 'image'}>
             <Show when={props.imageLayers()}>
               {(layers) => (
-                <div class="file-viewer-frame file-viewer-frame--image">
+                <div class="relative box-border flex h-full w-full min-h-0 min-w-0 flex-row items-stretch justify-stretch">
                   <Show when={imageError()}>
-                    <div class="file-viewer-empty text-error">
-                      <p>Failed to load image</p>
+                    <div class="flex flex-col items-center gap-1.5 text-error">
+                      <p class="m-0 text-sm">Failed to load image</p>
                     </div>
                   </Show>
                   <Show when={!imageError()}>
@@ -171,7 +171,7 @@ const FileViewer: Component<{
               )}
             </Show>
             <Show when={showImageLoading()}>
-              <div class="file-viewer-empty text-primary">Loading…</div>
+              <div class="flex flex-col items-center gap-1.5 text-primary">Loading…</div>
             </Show>
           </Match>
         </Switch>

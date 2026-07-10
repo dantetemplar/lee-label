@@ -4,8 +4,8 @@
   "description": "Lee Label — image and file labeling desktop app",
   "packageManager": "pnpm@11.1.3",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "Lee Label",
+  "homepage": "https://github.com/lee-label/lee-label",
   "desktopName": "lee-label.desktop",
   "scripts": {
     "format": "prettier --write . -l",
@@ -26,7 +26,6 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "better-sqlite3": "^12.11.1",
-    "electron-updater": "^6.3.9",
     "solid-icons": "^1.2.0"
   },
   "devDependencies": {

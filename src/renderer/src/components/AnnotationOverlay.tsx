@@ -2,6 +2,7 @@ import type { Component } from 'solid-js'
 import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
 import type { Label, RectangleShape } from '../../../shared/annotations'
 import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY } from '../../../shared/annotations'
+import { hexToRgba, hexToRgbNormalized } from '../../../shared/label-color'
 import type { ViewTransform } from '../lib/annotation-coords'
 import {
     clampToImage,
@@ -22,43 +23,12 @@ import {
   BRUSH_PREVIEW_FILLED_OPACITY,
   getBrushPreviewSettings,
   getEffectiveBrushDiameter,
-  usesPixelBrushShape,
   usesSvgBrushPreview
 } from '../lib/brush/constants'
-import {
-  forEachPixelBrushPixel,
-  usesPixelBrushShape as isPixelBrushShape
-} from '../lib/brush/brush-shapes'
+import { forEachPixelBrushPixel, usesPixelBrushShape } from '../lib/brush/brush-shapes'
 import type { AnnotationTool } from './AnnotationToolbar'
 
 const MIN_RECT_SIZE = 3
-
-function parseHexRgb(hex: string): { r: number; g: number; b: number } {
-  const normalized = hex.replace('#', '')
-  const value =
-    normalized.length === 3
-      ? normalized
-          .split('')
-          .map((char) => char + char)
-          .join('')
-      : normalized
-  const int = Number.parseInt(value, 16)
-  return {
-    r: (int >> 16) & 255,
-    g: (int >> 8) & 255,
-    b: int & 255
-  }
-}
-
-function hexToRgbNormalized(hex: string): [number, number, number] {
-  const { r, g, b } = parseHexRgb(hex)
-  return [r / 255, g / 255, b / 255]
-}
-
-function hexToRgba(hex: string, alpha: number): string {
-  const { r, g, b } = parseHexRgb(hex)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
 
 function findShapeAtPoint(
   shapes: WorkingShape[],
@@ -93,7 +63,6 @@ const AnnotationOverlay: Component<{
     width: number
     height: number
   } | null>(null)
-  const [interacting, setInteracting] = createSignal(false)
   const [hoverPoint, setHoverPoint] = createSignal<Point2D | null>(null)
 
   let lastPointerClient: { x: number; y: number } | null = null
@@ -159,7 +128,7 @@ const AnnotationOverlay: Component<{
     if (!hover) return null
 
     const diameter = effectiveBrushDiameter()
-    if (!isPixelBrushShape(diameter)) return null
+    if (!usesPixelBrushShape(diameter)) return null
 
     const pixels: Array<{ x: number; y: number }> = []
     forEachPixelBrushPixel(hover.x, hover.y, diameter, (x, y) => {
@@ -258,8 +227,7 @@ const AnnotationOverlay: Component<{
             innerOpacity: preview.innerOpacity,
             filled: preview.mode === 'filled'
           }
-        : undefined,
-      props.store.selectedShapeId[0]()
+        : undefined
     )
   }
 
@@ -416,9 +384,10 @@ const AnnotationOverlay: Component<{
   createEffect(() => {
     props.brushSize()
     props.shrinkBrushAtMaxZoom()
-    props.transform().scale
-    props.transform().panX
-    props.transform().panY
+    const { scale, panX, panY } = props.transform()
+    void scale
+    void panX
+    void panY
     syncHoverFromLastPointer()
     requestOverlayRender()
   })
@@ -427,7 +396,6 @@ const AnnotationOverlay: Component<{
     dragMode = 'none'
     moveShapeId = null
     setDraftRect(null)
-    setInteracting(false)
     window.removeEventListener('mousemove', handleMouseMove)
     window.removeEventListener('mouseup', handleMouseUp)
   }
@@ -547,7 +515,6 @@ const AnnotationOverlay: Component<{
       brushEngine?.clearActiveStroke()
       addStrokeSegment(point, point)
       lastPoint = point
-      setInteracting(true)
       requestOverlayRender()
       return
     }
@@ -568,7 +535,6 @@ const AnnotationOverlay: Component<{
         dragMode = 'move-rect'
         moveShapeId = hit.id
         moveOffset = { x: point.x - hit.x, y: point.y - hit.y }
-        setInteracting(true)
         window.addEventListener('mousemove', handleMouseMove)
         window.addEventListener('mouseup', handleMouseUp)
       }
@@ -580,7 +546,6 @@ const AnnotationOverlay: Component<{
       dragMode = 'draw-rect'
       dragStart = point
       setDraftRect({ x: point.x, y: point.y, width: 0, height: 0 })
-      setInteracting(true)
       window.addEventListener('mousemove', handleMouseMove)
       window.addEventListener('mouseup', handleMouseUp)
     }
@@ -616,14 +581,12 @@ const AnnotationOverlay: Component<{
   const handleOverlayPointerUp = (event: PointerEvent): void => {
     if (props.activeTool() !== 'mask') return
     stopBrushDrawing(event)
-    setInteracting(false)
   }
 
   const handleOverlayPointerLeave = (event: PointerEvent): void => {
     if (props.activeTool() !== 'mask') return
     if (isDrawing) {
       stopBrushDrawing(event)
-      setInteracting(false)
       return
     }
     lastPointerClient = null
@@ -690,8 +653,7 @@ const AnnotationOverlay: Component<{
       {(size) => (
         <div
           ref={overlayRef}
-          class="annotation-overlay"
-          classList={{ 'annotation-overlay--interacting': interacting() }}
+          class="pointer-events-auto absolute top-0 left-0 isolate z-2"
           style={{
             width: `${size().width}px`,
             height: `${size().height}px`,
@@ -705,9 +667,12 @@ const AnnotationOverlay: Component<{
             if (props.activeTool() === 'mask') event.preventDefault()
           }}
         >
-          <canvas ref={glCanvasRef} class="annotation-overlay__gl-canvas" />
+          <canvas
+            ref={glCanvasRef}
+            class="annotation-gl-canvas pointer-events-none absolute top-0 left-0 z-1 h-full w-full"
+          />
           <svg
-            class="annotation-overlay__svg"
+            class="pointer-events-none absolute top-0 left-0 z-2 h-full w-full overflow-visible"
             width={size().width}
             height={size().height}
             viewBox={`0 0 ${size().width} ${size().height}`}

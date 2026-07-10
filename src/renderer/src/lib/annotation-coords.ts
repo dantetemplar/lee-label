@@ -25,17 +25,6 @@ export function viewportToImage(
   }
 }
 
-export function imageToViewport(
-  imageX: number,
-  imageY: number,
-  transform: ViewTransform
-): { x: number; y: number } {
-  return {
-    x: imageX * transform.scale + transform.panX,
-    y: imageY * transform.scale + transform.panY
-  }
-}
-
 export function clampToImage(
   x: number,
   y: number,

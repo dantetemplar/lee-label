@@ -556,8 +556,8 @@ const ImageViewer: Component<{
   return (
     <div
       ref={viewportRef}
-      class="image-viewport"
-      classList={{ 'image-viewport--panning': panning() }}
+      class="relative min-h-0 min-w-0 flex-1 touch-none outline-none focus:outline-none"
+      classList={{ 'cursor-grabbing': panning() }}
       style={{ cursor: viewportCursor() }}
       tabindex={0}
       onWheel={handleWheel}
@@ -570,9 +570,9 @@ const ImageViewer: Component<{
             ref={(element) => {
               layerRefs[role] = element
             }}
-            class="image-viewport-img"
+            class="pointer-events-none absolute top-0 left-0 block max-w-none max-h-none origin-top-left select-none will-change-transform"
             classList={{
-              'image-viewport-img--hidden': visibleRole() !== role || !showVisible()
+              invisible: visibleRole() !== role || !showVisible()
             }}
             data-layer={role}
             src={layerPaths()[role] ? toLocalImageUrl(layerPaths()[role]!) : undefined}

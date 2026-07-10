@@ -19,39 +19,41 @@ const BrushSettings: Component<{
   }
 
   return (
-    <section class="brush-settings">
-      <div class="brush-settings-header text-base-content/60">BRUSH</div>
-      <div class="brush-settings-body">
-        <label class="brush-settings-row">
-          <span class="brush-settings-label">Size</span>
-          <input
-            type="range"
-            class="brush-settings-slider"
-            min={0}
-            max={BRUSH_SIZE_SLIDER_STEPS}
-            step={1}
-            value={brushSizeToSliderValue(props.brushSize())}
-            onInput={(event) =>
-              props.onBrushSizeChange(sliderValueToBrushSize(Number(event.currentTarget.value)))
-            }
-          />
-          <span class="brush-settings-input-wrap">
+    <section class="shrink-0 border-b border-base-content/10">
+      <div class="px-3 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">BRUSH</div>
+      <div class="px-3 pb-3">
+        <label class="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-xs">
+          <span class="min-w-7">Size</span>
+          <div class="min-w-0">
+            <input
+              type="range"
+              class="range range-xs range-primary w-full"
+              min={0}
+              max={BRUSH_SIZE_SLIDER_STEPS}
+              step={1}
+              value={brushSizeToSliderValue(props.brushSize())}
+              onInput={(event) =>
+                props.onBrushSizeChange(sliderValueToBrushSize(Number(event.currentTarget.value)))
+              }
+            />
+          </div>
+          <span class="inline-flex items-center gap-0.5">
             <input
               type="number"
-              class="brush-settings-input"
+              class="input input-bordered input-sm bg-base-100 font-inherit h-8 min-h-8 w-11 px-1 text-right tabular-nums"
               min={MIN_BRUSH_DIAMETER_IMAGE_PX}
               step={1}
               value={props.brushSize()}
               onInput={(event) => commitBrushSizeInput(event.currentTarget.value)}
             />
-            <span class="brush-settings-input-suffix">px</span>
+            <span class="text-xs text-base-content/70">px</span>
           </span>
         </label>
-        <label class="brush-settings-toggle-row">
-          <span class="brush-settings-toggle-label">Fine at max zoom</span>
+        <label class="mt-2.5 flex cursor-pointer items-center justify-between gap-2 text-xs">
+          <span class="leading-snug">Fine at max zoom</span>
           <input
             type="checkbox"
-            class="brush-settings-toggle"
+            class="toggle toggle-sm toggle-primary"
             checked={props.shrinkAtMaxZoom()}
             onChange={(event) => props.onShrinkAtMaxZoomChange(event.currentTarget.checked)}
           />

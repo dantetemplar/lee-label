@@ -1,4 +1,3 @@
-import { electronAPI } from '@electron-toolkit/preload'
 import type {
   CreateLabelInput,
   ImageRecord,
@@ -6,8 +5,6 @@ import type {
   Label,
   LabelDeleteStats,
   MaskBlob,
-  MaskShape,
-  RectangleShape,
   SaveMaskInput,
   SaveRectangleInput,
   Shape,
@@ -51,9 +48,6 @@ export interface AppAPI {
   }
   shapes: {
     list: (relativePath: string) => Promise<Shape[]>
-    saveRectangle: (input: SaveRectangleInput) => Promise<RectangleShape>
-    saveMask: (input: SaveMaskInput, data: ArrayBuffer) => Promise<MaskShape>
-    delete: (shapeId: string) => Promise<void>
     replaceImage: (
       relativePath: string,
       rectangles: SaveRectangleInput[],
@@ -65,14 +59,10 @@ export interface AppAPI {
   masks: {
     get: (shapeId: string) => Promise<MaskBlob | null>
   }
-  paths: {
-    toRelative: (rootPath: string, absolutePath: string) => Promise<string>
-  }
 }
 
 declare global {
   interface Window {
-    electron: typeof electronAPI
     api: AppAPI
   }
 }

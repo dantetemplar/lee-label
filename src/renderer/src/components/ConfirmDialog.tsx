@@ -7,42 +7,43 @@ const ConfirmDialog: Component<{
   title: () => string
   message: () => string | JSX.Element
   confirmLabel?: string
+  destructive?: boolean
   onCancel: () => void
   onConfirm: () => void
 }> = (props) => (
   <Show when={props.open()}>
-    <div class="confirm-dialog-backdrop" role="presentation" onClick={() => props.onCancel()}>
-      <div
-        class="confirm-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-message"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div class="confirm-dialog-header">
-          <BsExclamationCircleFill class="confirm-dialog-icon" size={22} aria-hidden="true" />
-          <h2 id="confirm-dialog-title" class="confirm-dialog-title">
-            {props.title()}
-          </h2>
+    <dialog class="modal modal-open">
+      <div class="modal-box max-w-md">
+        <div class="flex items-start gap-3">
+          <BsExclamationCircleFill class="text-warning mt-0.5 shrink-0" size={22} aria-hidden="true" />
+          <div class="min-w-0">
+            <h2 id="confirm-dialog-title" class="text-base font-semibold leading-snug">
+              {props.title()}
+            </h2>
+            <p id="confirm-dialog-message" class="text-base-content/70 mt-2 text-sm leading-relaxed">
+              {props.message()}
+            </p>
+          </div>
         </div>
-        <p id="confirm-dialog-message" class="confirm-dialog-message">
-          {props.message()}
-        </p>
-        <div class="confirm-dialog-actions">
-          <button type="button" class="confirm-dialog-btn confirm-dialog-btn--cancel" onClick={() => props.onCancel()}>
+        <div class="modal-action mt-6">
+          <button type="button" class="btn btn-ghost" onClick={() => props.onCancel()}>
             Cancel
           </button>
           <button
             type="button"
-            class="confirm-dialog-btn confirm-dialog-btn--confirm"
+            class={`btn ${props.destructive ? 'btn-error' : 'btn-primary'}`}
             onClick={() => props.onConfirm()}
           >
             {props.confirmLabel ?? 'OK'}
           </button>
         </div>
       </div>
-    </div>
+      <form method="dialog" class="modal-backdrop">
+        <button type="button" aria-label="Close dialog" onClick={() => props.onCancel()}>
+          close
+        </button>
+      </form>
+    </dialog>
   </Show>
 )
 

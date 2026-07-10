@@ -1,40 +1,33 @@
 # Lee Label
 
-An Electron application with Solid and TypeScript
+Desktop image and file labeling app built with Electron, SolidJS, and SQLite.
 
-## Recommended IDE Setup
+Open a folder as a project, browse files in a tree, preview images and text, annotate images with rectangle and brush tools, and track per-image status.
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
-
-## Project Setup
-
-### Install
+## Setup
 
 ```bash
 pnpm install
 ```
 
-### Development
+## Development
 
 ```bash
 pnpm dev
 ```
 
-### Code style
+## Quality checks
 
 ```bash
 pnpm format && pnpm lint --fix && pnpm typecheck
 ```
 
-### Build
+## Build
 
 ```bash
-# For windows
-pnpm build:win
-
-# For macOS
-pnpm build:mac
-
-# For Linux
 pnpm build:linux
+pnpm build:win
+pnpm build:mac
 ```
+
+Build artifacts are produced via `electron-builder` after `electron-vite build`.

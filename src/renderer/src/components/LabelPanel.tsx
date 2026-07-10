@@ -24,7 +24,7 @@ const LabelPanel: Component<{
     const close = (event: MouseEvent): void => {
       const target = event.target
       if (!(target instanceof Node)) return
-      if (target instanceof Element && target.closest('.label-panel-swatch-wrap')) return
+      if (target instanceof Element && target.closest('[data-color-picker]')) return
       setColorPickerId(null)
     }
 
@@ -78,23 +78,23 @@ const LabelPanel: Component<{
   }
 
   return (
-    <section class="label-panel">
-      <div class="label-panel-header text-base-content/60">LABELS</div>
-      <div class="label-panel-body">
+    <section class="flex min-h-0 flex-1 flex-col">
+      <div class="px-3 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">LABELS</div>
+      <div class="flex-1 overflow-auto px-2 pb-2">
         <Show when={props.error()}>
-          <div class="label-panel-error text-error">{props.error()}</div>
+          <div class="mb-2 text-xs text-error">{props.error()}</div>
         </Show>
 
         <For each={props.labels()}>
           {(label) => (
             <div
-              class="label-panel-item"
-              classList={{ 'label-panel-item--active': props.activeLabelId() === label.id }}
+              class="mb-1 flex items-center gap-1 rounded"
+              classList={{ 'bg-primary/15': props.activeLabelId() === label.id }}
             >
-              <div class="label-panel-swatch-wrap">
+              <div class="relative shrink-0" data-color-picker>
                 <button
                   type="button"
-                  class="label-panel-swatch-btn"
+                  class="btn btn-ghost btn-xs h-auto min-h-0 px-1 py-1.5"
                   title="Change color"
                   aria-label={`Change color for ${label.name}`}
                   aria-expanded={colorPickerId() === label.id}
@@ -103,17 +103,28 @@ const LabelPanel: Component<{
                     toggleColorPicker(label.id)
                   }}
                 >
-                  <span class="label-panel-swatch" style={{ background: label.color }} />
+                  <span
+                    class="h-3 w-3 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_18%,transparent)]"
+                    style={{ background: label.color }}
+                  />
                 </button>
                 <Show when={colorPickerId() === label.id}>
-                  <div class="label-panel-color-palette" role="listbox" aria-label="Label colors">
+                  <div
+                    class="absolute top-[calc(100%+4px)] left-0 z-20 grid w-[156px] grid-cols-6 gap-1 rounded-md border border-base-content/12 bg-base-100 p-1.5 shadow-lg"
+                    role="listbox"
+                    aria-label="Label colors"
+                    data-color-picker
+                  >
                     <For each={[...LABEL_COLORS]}>
                       {(color) => (
                         <button
                           type="button"
                           role="option"
-                          class="label-panel-color-option"
-                          classList={{ 'label-panel-color-option--active': color === label.color }}
+                          class="h-5 w-5 cursor-pointer rounded-sm border-none shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_14%,transparent)]"
+                          classList={{
+                            'shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_14%,transparent),0_0_0_2px_var(--color-base-100),0_0_0_3px_var(--color-primary)]':
+                              color === label.color
+                          }}
                           style={{ background: color }}
                           title={color}
                           aria-label={color}
@@ -132,14 +143,14 @@ const LabelPanel: Component<{
                   <>
                     <button
                       type="button"
-                      class="label-panel-select"
+                      class="btn btn-ghost btn-sm h-auto min-h-0 flex-1 justify-start px-1 py-1.5 text-xs font-normal"
                       onClick={() => props.onSelect(label.id)}
                     >
-                      <span class="label-panel-name">{label.name}</span>
+                      <span class="truncate">{label.name}</span>
                     </button>
                     <button
                       type="button"
-                      class="label-panel-edit-btn"
+                      class="btn btn-ghost btn-xs btn-square text-base-content/45"
                       title="Rename label"
                       aria-label={`Rename ${label.name}`}
                       onClick={() => startEditName(label)}
@@ -150,7 +161,7 @@ const LabelPanel: Component<{
                 }
               >
                 <input
-                  class="label-panel-input label-panel-input--inline"
+                  class="input input-bordered input-sm bg-base-100 font-inherit h-8 min-h-8 min-w-0 flex-1"
                   value={editName()}
                   ref={(element) => queueMicrotask(() => element.focus())}
                   onInput={(event) => setEditName(event.currentTarget.value)}
@@ -164,7 +175,7 @@ const LabelPanel: Component<{
 
               <button
                 type="button"
-                class="label-panel-delete-btn"
+                class="btn btn-ghost btn-xs btn-square text-error/55 hover:text-error"
                 title="Delete label"
                 aria-label={`Delete ${label.name}`}
                 onClick={() => void props.onDelete(label.id)}
@@ -175,9 +186,9 @@ const LabelPanel: Component<{
           )}
         </For>
 
-        <div class="label-panel-create">
+        <div class="mt-2 flex flex-col gap-1.5">
           <input
-            class="label-panel-input"
+            class="input input-bordered input-sm bg-base-100 font-inherit h-8 min-h-8 w-full"
             placeholder="New label"
             value={newName()}
             onInput={(event) => setNewName(event.currentTarget.value)}
@@ -185,7 +196,7 @@ const LabelPanel: Component<{
               if (event.key === 'Enter') void handleCreate()
             }}
           />
-          <button type="button" class="label-panel-add" onClick={() => void handleCreate()}>
+          <button type="button" class="btn btn-sm btn-outline w-full" onClick={() => void handleCreate()}>
             Add
           </button>
         </div>

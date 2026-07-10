@@ -17,7 +17,7 @@ import type { ImageLayers } from '../../shared/image-layers'
 import { getAdjacentImagePaths } from './lib/tree-nav'
 import { APP_DISPLAY_NAME } from '../../shared/app-name'
 import { AnnotationStore } from './lib/annotation-store'
-import { toRelativePath } from './lib/project-path'
+import { toRelativePath } from '../../shared/paths'
 
 const App: Component = () => {
   const [folderPath, setFolderPath] = createSignal<string | null>(null)
@@ -370,16 +370,12 @@ const App: Component = () => {
 
   createEffect(
     on(
-      () => imageLayers(),
-      () => setActiveTool('cursor')
-    )
-  )
-
-  createEffect(
-    on(
-      () => selectedKind(),
-      (kind) => {
-        if (kind !== 'image') setActiveTool('cursor')
+      () => [imageLayers(), selectedKind()] as const,
+      ([layers, kind], previous) => {
+        const layersChanged = previous !== undefined && previous[0] !== layers
+        if (layersChanged || kind !== 'image') {
+          setActiveTool('cursor')
+        }
       }
     )
   )
@@ -394,19 +390,15 @@ const App: Component = () => {
     return toRelativePath(root, path)
   }
 
-  const handleMarkDone = (): void => {
-    void annotationStore.setImageStatus('done').then(() => {
+  const markImageStatus = (status: ImageStatus): void => {
+    void annotationStore.setImageStatus(status).then(() => {
       const relativePath = currentImageRelativePath()
-      if (relativePath) handleImageStatusChange(relativePath, 'done')
+      if (relativePath) handleImageStatusChange(relativePath, status)
     })
   }
 
-  const handleMarkSkipped = (): void => {
-    void annotationStore.setImageStatus('skipped').then(() => {
-      const relativePath = currentImageRelativePath()
-      if (relativePath) handleImageStatusChange(relativePath, 'skipped')
-    })
-  }
+  const handleMarkDone = (): void => markImageStatus('done')
+  const handleMarkSkipped = (): void => markImageStatus('skipped')
 
   createEffect(
     on(
@@ -418,12 +410,12 @@ const App: Component = () => {
   )
 
   return (
-    <div class="app bg-base-100 text-base-content">
+    <div class="app flex h-screen flex-col bg-base-100 text-base-content">
       <TitleBar
         title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
         onOpenFolder={openFolder}
       />
-      <div class="app-body">
+      <div class="flex min-h-0 flex-1">
         <Show when={folderPath()}>
           <Show
             when={showLabelSidebar()}
@@ -439,7 +431,7 @@ const App: Component = () => {
               />
             }
           >
-            <aside class="sidebar border-base-300 bg-base-200 border-r">
+            <aside class="flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-base-300 bg-base-200 border-r">
               <Show when={activeTool() === 'mask'}>
                 <BrushSettings
                   brushSize={brushSize}
@@ -457,17 +449,17 @@ const App: Component = () => {
                 onDelete={handleRequestDeleteLabel}
                 error={labelError}
               />
-              <div class="annotation-status-actions">
-                <button type="button" class="annotation-status-btn" onClick={handleMarkDone}>
+              <div class="flex shrink-0 flex-col gap-1.5 border-t border-base-content/10 p-2">
+                <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkDone}>
                   Mark done
                 </button>
-                <button type="button" class="annotation-status-btn" onClick={handleMarkSkipped}>
+                <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkSkipped}>
                   Skip
                 </button>
               </div>
             </aside>
           </Show>
-          <div class="main-panel bg-base-100">
+          <div class="flex min-w-0 flex-1 flex-col bg-base-100">
             <FileViewer
               kind={selectedKind}
               fileName={() => selectedFile()?.name ?? null}
@@ -516,6 +508,7 @@ const App: Component = () => {
             </>
           )
         }}
+        destructive
         onCancel={handleCancelDeleteLabel}
         onConfirm={() => void handleConfirmDeleteLabel()}
       />

@@ -10,7 +10,7 @@ import {
 import type { FileEntry } from '../../../shared/types'
 import type { ImageStatus } from '../../../shared/annotations'
 import { getFileKind } from '../../../shared/file-types'
-import { toRelativePath } from '../lib/project-path'
+import { toRelativePath } from '../../../shared/paths'
 import {
   flattenVisibleTree,
   findNodeByPath,
@@ -21,10 +21,13 @@ import {
 const TREE_ROW_HEIGHT = 22
 const TREE_ICON_SIZE = 16
 
+const treeItemBaseClass =
+  'relative flex w-full h-[22px] items-center gap-0.5 border-none pr-2 text-left font-inherit text-[13px] text-base-content cursor-pointer hover:bg-base-300'
+
 const Chevron: Component<{ expanded: boolean }> = (props) => (
   <BsChevronRight
-    class="tree-chevron text-base-content/50"
-    classList={{ 'tree-chevron--expanded': props.expanded }}
+    class="shrink-0 text-base-content/50 transition-transform duration-100"
+    classList={{ 'rotate-90': props.expanded }}
     size={TREE_ICON_SIZE}
     aria-hidden="true"
   />
@@ -57,8 +60,10 @@ const TreeNode: Component<{
   onToggleExpand: (path: string) => void
   onFocus: (node: FileEntry) => void
   onSelect: (node: FileEntry) => void
-  focusTree: () => void
+  onKeyDown: (event: KeyboardEvent) => void
 }> = (props) => {
+  let itemRef: HTMLButtonElement | undefined
+
   const isExpanded = (): boolean =>
     props.node.type === 'directory' && props.expandedPaths().has(props.node.path)
 
@@ -67,7 +72,22 @@ const TreeNode: Component<{
 
   const isFocused = (): boolean => props.focusedPath() === props.node.path
 
+  const hasTextSelectionInItem = (): boolean => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed || !selection.toString()) return false
+    const item = itemRef
+    if (!item) return false
+    const { anchorNode, focusNode } = selection
+    return (
+      (anchorNode != null && item.contains(anchorNode)) ||
+      (focusNode != null && item.contains(focusNode))
+    )
+  }
+
   const handleClick = (): void => {
+    if (hasTextSelectionInItem()) return
+
+    itemRef?.focus()
     props.onFocus(props.node)
     if (props.node.type === 'directory') {
       props.onToggleExpand(props.node.path)
@@ -76,47 +96,62 @@ const TreeNode: Component<{
     }
   }
 
+  const handleFocus = (): void => {
+    props.onFocus(props.node)
+  }
+
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      if (props.node.type === 'directory') {
+        props.onToggleExpand(props.node.path)
+      } else {
+        props.onSelect(props.node)
+      }
+      return
+    }
+
+    props.onKeyDown(event)
+  }
+
   const imageStatus = (): ImageStatus | null => {
     const root = props.projectRoot()
     if (!root || props.node.type !== 'file' || getFileKind(props.node.name) !== 'image') return null
     return props.imageStatuses()[toRelativePath(root, props.node.path)] ?? 'todo'
   }
 
-  const statusClass = (): string | undefined => {
-    const status = imageStatus()
-    if (!status || status === 'todo') return undefined
-    return `tree-status--${status}`
-  }
-
   return (
     <>
       <button
+        ref={itemRef}
         type="button"
-        class="tree-item text-base-content"
-        data-path={props.node.path}
+        data-tree-item
+        aria-selected={isSelected()}
+        class={treeItemBaseClass}
         classList={{
-          'tree-item--selected': isSelected(),
-          'tree-item--focused': isFocused(),
-          'tree-item--sticky': isExpanded()
+          sticky: isExpanded(),
+          'bg-base-200': isExpanded() && !(isFocused() && !isSelected()),
+          'bg-primary/25 hover:bg-primary/25': isSelected() && isFocused(),
+          'bg-primary/15 hover:bg-primary/25': isSelected() && !isFocused(),
+          'bg-base-300': isFocused() && !isSelected()
         }}
+        data-path={props.node.path}
         style={{
           'padding-left': `${8 + props.depth * 16}px`,
           top: isExpanded() ? `${props.depth * TREE_ROW_HEIGHT}px` : undefined,
           'z-index': isExpanded() ? props.depth + 1 : undefined
         }}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
         onClick={handleClick}
-        onMouseDown={(event) => {
-          event.preventDefault()
-          props.focusTree()
-        }}
       >
         <Show when={props.node.type === 'directory'}>
           <Chevron expanded={isExpanded()} />
         </Show>
         <Show when={props.node.type === 'file'}>
-          <span class="tree-chevron-spacer" />
+          <span class="w-4 shrink-0" />
         </Show>
-        <span class="tree-item-icon text-base-content/45">
+        <span class="flex shrink-0 text-base-content/45">
           <Show
             when={props.node.type === 'directory'}
             fallback={<FileIcon name={props.node.name} />}
@@ -124,9 +159,16 @@ const TreeNode: Component<{
             <BsFolderFill size={TREE_ICON_SIZE} aria-hidden="true" />
           </Show>
         </span>
-        <span class="tree-item-label">{props.node.name}</span>
+        <span class="truncate">{props.node.name}</span>
         <Show when={imageStatus() && imageStatus() !== 'todo'}>
-          <span class={`tree-status ${statusClass() ?? ''}`} />
+          <span
+            class="ml-auto mr-2 h-2 w-2 shrink-0 rounded-full"
+            classList={{
+              'bg-amber-500': imageStatus() === 'in_progress',
+              'bg-green-500': imageStatus() === 'done',
+              'bg-gray-400': imageStatus() === 'skipped'
+            }}
+          />
         </Show>
       </button>
       <Show when={props.node.type === 'directory' && isExpanded() && props.node.children}>
@@ -143,7 +185,7 @@ const TreeNode: Component<{
               onToggleExpand={props.onToggleExpand}
               onFocus={props.onFocus}
               onSelect={props.onSelect}
-              focusTree={props.focusTree}
+              onKeyDown={props.onKeyDown}
             />
           )}
         </For>
@@ -183,7 +225,13 @@ const FileTree: Component<{
   )
 
   const focusTree = (): void => {
-    treeRef?.focus()
+    const path = getActivePath() ?? getVisibleNodes()[0]?.path
+    if (path) focusItemElement(path)
+  }
+
+  const focusItemElement = (path: string): void => {
+    const el = treeRef?.querySelector(`[data-path="${CSS.escape(path)}"]`) as HTMLElement | null
+    el?.focus({ preventScroll: true })
   }
 
   const expandFolder = (path: string): void => {
@@ -211,11 +259,12 @@ const FileTree: Component<{
 
   const setNodeFocus = (
     node: FileEntry,
-    options: { scroll?: boolean; select?: boolean } = {}
+    options: { scroll?: boolean; select?: boolean; focusElement?: boolean } = {}
   ): void => {
     const previous = getActivePath()
     setFocusedPath(node.path)
     if (options.scroll) scrollToPath(node.path)
+    if (options.focusElement ?? true) focusItemElement(node.path)
     if (previous !== node.path) {
       props.onFocusChange?.(node.path)
     }
@@ -225,7 +274,7 @@ const FileTree: Component<{
   }
 
   const focusNode = (node: FileEntry): void => {
-    setNodeFocus(node)
+    setNodeFocus(node, { focusElement: false })
   }
 
   const selectNode = (node: FileEntry): void => {
@@ -325,38 +374,28 @@ const FileTree: Component<{
     }
   }
 
-  const handleTreeFocus = (): void => {
-    if (focusedPath() || props.selectedPath()) return
-
-    const visible = getVisibleNodes()
-    const first = visible[0]
-    if (!first) return
-
-    setFocusedPath(first.path)
-    if (first.type === 'file') props.onSelect(first)
-  }
-
   onCleanup(() => {
     treeRef = undefined
   })
 
   return (
-    <aside class="sidebar border-base-300 bg-base-200 border-r">
-      <div class="sidebar-header text-base-content/60">{props.rootName().toUpperCase()}</div>
+    <aside class="flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-base-300 bg-base-200 border-r">
+      <div class="px-5 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">
+        {props.rootName().toUpperCase()}
+      </div>
       <div
         ref={treeRef}
-        class="sidebar-tree outline-none focus:outline-none"
-        tabindex={0}
-        onKeyDown={handleKeyDown}
-        onFocus={handleTreeFocus}
+        class="tree-scrollbar flex-1 overflow-x-hidden overflow-y-auto pb-2 outline-none focus:outline-none"
         onMouseDown={(event) => {
-          if (event.target === treeRef) event.preventDefault()
-          treeRef?.focus()
+          if (event.target === treeRef) {
+            event.preventDefault()
+            focusTree()
+          }
         }}
       >
         <Show
           when={props.entries().length > 0}
-          fallback={<div class="sidebar-empty text-base-content/60">No files found</div>}
+          fallback={<div class="px-5 py-2 text-xs text-base-content/60">No files found</div>}
         >
           <For each={props.entries()}>
             {(node) => (
@@ -371,7 +410,7 @@ const FileTree: Component<{
                 onToggleExpand={toggleExpanded}
                 onFocus={focusNode}
                 onSelect={selectNode}
-                focusTree={focusTree}
+                onKeyDown={handleKeyDown}
               />
             )}
           </For>

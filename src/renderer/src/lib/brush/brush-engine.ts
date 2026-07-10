@@ -566,8 +566,7 @@ export class BrushEngine {
       outerOpacity: number
       innerOpacity: number
       filled: boolean
-    },
-    _selectedMaskId?: string | null
+    }
   ): void {
     if (!this.sessionTexture || !this.activeTexture || this.width <= 0 || this.height <= 0) return
 

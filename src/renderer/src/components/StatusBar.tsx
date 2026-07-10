@@ -9,23 +9,23 @@ function formatSize(bytes: number): string {
 }
 
 const StatusBar: Component<{ info: () => FileInfo | null }> = (props) => (
-  <footer class="statusbar border-base-300 bg-base-200 text-base-content/60 border-t">
+  <footer class="flex h-[var(--statusbar-height)] min-h-[var(--statusbar-height)] w-full shrink-0 items-center justify-end border-base-300 bg-base-200 px-3 text-xs text-base-content/60 border-t">
     <Show when={props.info()}>
       {(info) => (
-        <div class="statusbar-items">
-          <span class="statusbar-item">{info().dirty ? `${info().name} •` : info().name}</span>
+        <div class="flex items-center">
+          <span class="whitespace-nowrap px-2">{info().dirty ? `${info().name} •` : info().name}</span>
           <Show when={info().width && info().height}>
-            <span class="statusbar-separator bg-base-300" />
-            <span class="statusbar-item">
+            <span class="h-3.5 w-px bg-base-300" />
+            <span class="whitespace-nowrap px-2">
               {info().width}×{info().height}
             </span>
           </Show>
           <Show when={info().lines}>
-            <span class="statusbar-separator bg-base-300" />
-            <span class="statusbar-item">{info().lines} lines</span>
+            <span class="h-3.5 w-px bg-base-300" />
+            <span class="whitespace-nowrap px-2">{info().lines} lines</span>
           </Show>
-          <span class="statusbar-separator bg-base-300" />
-          <span class="statusbar-item">{formatSize(info().size)}</span>
+          <span class="h-3.5 w-px bg-base-300" />
+          <span class="whitespace-nowrap px-2">{formatSize(info().size)}</span>
         </div>
       )}
     </Show>

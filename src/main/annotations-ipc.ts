@@ -7,7 +7,6 @@ import type {
   UpdateLabelInput
 } from '../shared/annotations'
 import { projectDatabase } from './db/project-db'
-import { toRelativePath } from './db/paths'
 
 function requireOpenProject(): void {
   if (!projectDatabase.getRootPath()) {
@@ -73,21 +72,6 @@ export function registerAnnotationsIpc(): void {
     return projectDatabase.listShapes(relativePath)
   })
 
-  ipcMain.handle('shapes:save-rectangle', (_, input: SaveRectangleInput) => {
-    requireOpenProject()
-    return projectDatabase.saveRectangle(input)
-  })
-
-  ipcMain.handle('shapes:save-mask', (_, input: SaveMaskInput, data: ArrayBuffer) => {
-    requireOpenProject()
-    return projectDatabase.saveMask(input, Buffer.from(data))
-  })
-
-  ipcMain.handle('shapes:delete', (_, shapeId: string) => {
-    requireOpenProject()
-    projectDatabase.deleteShape(shapeId)
-  })
-
   ipcMain.handle(
     'shapes:replace-image',
     (
@@ -116,10 +100,6 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('masks:get', (_, shapeId: string) => {
     requireOpenProject()
     return projectDatabase.getMaskBlob(shapeId)
-  })
-
-  ipcMain.handle('paths:to-relative', (_, rootPath: string, absolutePath: string) => {
-    return toRelativePath(rootPath, absolutePath)
   })
 }
 

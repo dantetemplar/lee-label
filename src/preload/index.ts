@@ -1,5 +1,4 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
 import type { FileEntry, RecentProject } from '../shared/types'
 import type {
   CreateLabelInput,
@@ -71,16 +70,6 @@ const api = {
   shapes: {
     list: (relativePath: string): Promise<import('../shared/annotations').Shape[]> =>
       ipcRenderer.invoke('shapes:list', relativePath),
-    saveRectangle: (
-      input: SaveRectangleInput
-    ): Promise<import('../shared/annotations').RectangleShape> =>
-      ipcRenderer.invoke('shapes:save-rectangle', input),
-    saveMask: (
-      input: SaveMaskInput,
-      data: ArrayBuffer
-    ): Promise<import('../shared/annotations').MaskShape> =>
-      ipcRenderer.invoke('shapes:save-mask', input, data),
-    delete: (shapeId: string): Promise<void> => ipcRenderer.invoke('shapes:delete', shapeId),
     replaceImage: (
       relativePath: string,
       rectangles: SaveRectangleInput[],
@@ -100,23 +89,16 @@ const api = {
   masks: {
     get: (shapeId: string): Promise<import('../shared/annotations').MaskBlob | null> =>
       ipcRenderer.invoke('masks:get', shapeId)
-  },
-  paths: {
-    toRelative: (rootPath: string, absolutePath: string): Promise<string> =>
-      ipcRenderer.invoke('paths:to-relative', rootPath, absolutePath)
   }
 }
 
 if (process.contextIsolated) {
   try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
   // @ts-ignore (define in dts)
   window.api = api
 }

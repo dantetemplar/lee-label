@@ -36,6 +36,16 @@ export function hexToRgb(color: string): Rgb {
   return [(int >> 16) & 255, (int >> 8) & 255, int & 255]
 }
 
+export function hexToRgba(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+export function hexToRgbNormalized(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex)
+  return [r / 255, g / 255, b / 255]
+}
+
 export function getColorFromIndex(index: number): Rgb {
   const color: Rgb = [0, 0, 0]
   let value = index >>> 0

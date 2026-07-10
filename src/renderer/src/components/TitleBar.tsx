@@ -13,27 +13,33 @@ const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (
   })
 
   return (
-    <header class="titlebar border-base-300 bg-base-200 text-base-content border-b">
-      <div class="titlebar-menus">
+    <header class="flex h-[var(--titlebar-height)] min-h-[var(--titlebar-height)] items-center border-base-300 bg-base-200 text-base-content border-b [-webkit-app-region:drag]">
+      <div class="flex items-center pl-2 [-webkit-app-region:no-drag]">
         <button
           type="button"
-          class="titlebar-menu hover:bg-base-300"
+          class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
           onClick={() => props.onOpenFolder()}
         >
           File
         </button>
-        <span class="titlebar-menu opacity-55">Edit</span>
-        <span class="titlebar-menu opacity-55">View</span>
-        <span class="titlebar-menu opacity-55">Help</span>
+        <span class="cursor-default px-2.5 text-xs leading-[var(--titlebar-height)] opacity-55">
+          Edit
+        </span>
+        <span class="cursor-default px-2.5 text-xs leading-[var(--titlebar-height)] opacity-55">
+          View
+        </span>
+        <span class="cursor-default px-2.5 text-xs leading-[var(--titlebar-height)] opacity-55">
+          Help
+        </span>
       </div>
-      <div class="titlebar-center text-base-content/60">
-        <AppLogo size={16} class="titlebar-logo" />
-        <span class="titlebar-title">{props.title()}</span>
+      <div class="flex min-w-0 flex-1 items-center justify-center gap-2 px-20 text-xs text-base-content/60">
+        <AppLogo size={16} class="shrink-0" />
+        <span class="truncate">{props.title()}</span>
       </div>
-      <div class="titlebar-controls">
+      <div class="flex [-webkit-app-region:no-drag]">
         <button
           type="button"
-          class="titlebar-btn hover:bg-base-300"
+          class="btn btn-ghost btn-xs h-[var(--titlebar-height)] min-h-[var(--titlebar-height)] w-[46px] rounded-none"
           aria-label="Minimize"
           onClick={() => window.api.window.minimize()}
         >
@@ -41,7 +47,7 @@ const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (
         </button>
         <button
           type="button"
-          class="titlebar-btn hover:bg-base-300"
+          class="btn btn-ghost btn-xs h-[var(--titlebar-height)] min-h-[var(--titlebar-height)] w-[46px] rounded-none"
           aria-label={maximized() ? 'Restore' : 'Maximize'}
           onClick={() => window.api.window.toggleMaximize()}
         >
@@ -51,7 +57,7 @@ const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (
         </button>
         <button
           type="button"
-          class="titlebar-btn hover:bg-error hover:text-error-content"
+          class="btn btn-ghost btn-xs h-[var(--titlebar-height)] min-h-[var(--titlebar-height)] w-[46px] rounded-none hover:bg-error hover:text-error-content"
           aria-label="Close"
           onClick={() => window.api.window.close()}
         >

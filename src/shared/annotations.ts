@@ -1,5 +1,4 @@
 export type ImageStatus = 'todo' | 'in_progress' | 'done' | 'skipped'
-export type ShapeType = 'rectangle' | 'mask'
 export type MaskFormat = 'bitmap'
 
 export interface Label {

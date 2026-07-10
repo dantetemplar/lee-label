@@ -1,10 +1,10 @@
+import type { IconTypes } from 'solid-icons'
 import type { Component } from 'solid-js'
 import { For } from 'solid-js'
-import type { IconTypes } from 'solid-icons'
 import {
-  BrushToolIcon,
-  CursorToolIcon,
-  RectangleToolIcon
+    BrushToolIcon,
+    CursorToolIcon,
+    RectangleToolIcon
 } from '../lib/annotation-tool-icons'
 
 export type AnnotationTool = 'cursor' | 'rectangle' | 'mask'
@@ -21,15 +21,19 @@ const AnnotationToolbar: Component<{
   activeTool: () => AnnotationTool
   onToolChange: (tool: AnnotationTool) => void
 }> = (props) => (
-  <aside class="annotation-toolbar border-base-300 bg-base-200 border-l" aria-label="Annotation tools">
-    <div class="annotation-toolbar-tools">
+  <aside
+    class="flex w-[var(--toolbar-width)] min-w-[var(--toolbar-width)] shrink-0 flex-col border-base-300 bg-base-200 border-l"
+    aria-label="Annotation tools"
+  >
+    <div class="flex flex-col py-1.5">
       <For each={TOOLS}>
         {(tool) => (
           <button
             type="button"
-            class="annotation-toolbar-btn text-base-content"
+            class="btn btn-square btn-ghost h-10 w-full rounded-none"
             classList={{
-              'annotation-toolbar-btn--selected': props.activeTool() === tool.id
+              'btn-active bg-primary/15 shadow-[inset_-3px_0_0_var(--color-primary)]':
+                props.activeTool() === tool.id
             }}
             title={tool.label}
             aria-label={tool.label}

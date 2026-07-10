@@ -1,12 +1,9 @@
-import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY } from '../../../../shared/annotations'
 import { usesPixelBrushShape } from './brush-shapes'
 
 export const DEFAULT_BRUSH_DIAMETER_IMAGE_PX = 40
 export const MIN_BRUSH_DIAMETER_IMAGE_PX = 1
 export const MAX_BRUSH_DIAMETER_IMAGE_PX = 200
 export const BRUSH_SIZE_SLIDER_STEPS = 1000
-
-export { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY }
 
 export function brushSizeToSliderValue(size: number): number {
   const min = MIN_BRUSH_DIAMETER_IMAGE_PX
@@ -40,7 +37,6 @@ export const BRUSH_PREVIEW_STROKE_IMAGE_PX = 4
 export const BRUSH_PREVIEW_INNER_STROKE_IMAGE_PX = 2
 export const BRUSH_PREVIEW_OUTER_OPACITY = 0.8
 export const BRUSH_PREVIEW_INNER_OPACITY = 0.4
-export const BRUSH_PREVIEW_SVG_MAX_DIAMETER_PX = 4
 
 export { usesPixelBrushShape } from './brush-shapes'
 
