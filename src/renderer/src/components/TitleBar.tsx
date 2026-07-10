@@ -14,7 +14,8 @@ const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (
 
   return (
     <header class="flex h-[var(--titlebar-height)] min-h-[var(--titlebar-height)] items-center border-base-300 bg-base-200 text-base-content border-b [-webkit-app-region:drag]">
-      <div class="flex items-center pl-2 [-webkit-app-region:no-drag]">
+      <div class="flex items-center gap-1 pl-2 [-webkit-app-region:no-drag]">
+        <AppLogo size={16} class="mx-1 shrink-0" />
         <button
           type="button"
           class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
@@ -32,8 +33,7 @@ const TitleBar: Component<{ title: () => string; onOpenFolder: () => void }> = (
           Help
         </span>
       </div>
-      <div class="flex min-w-0 flex-1 items-center justify-center gap-2 px-20 text-xs text-base-content/60">
-        <AppLogo size={16} class="shrink-0" />
+      <div class="flex min-w-0 flex-1 items-center justify-center px-20 text-xs text-base-content/60">
         <span class="truncate">{props.title()}</span>
       </div>
       <div class="flex [-webkit-app-region:no-drag]">

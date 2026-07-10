@@ -40,7 +40,7 @@ const BrushSettings: Component<{
           <span class="inline-flex items-center gap-0.5">
             <input
               type="number"
-              class="input input-bordered input-sm bg-base-100 font-inherit h-8 min-h-8 w-11 px-1 text-right tabular-nums"
+              class="input input-bordered input-sm bg-base-100 font-inherit h-7 min-h-7 w-10 px-1 text-right tabular-nums"
               min={MIN_BRUSH_DIAMETER_IMAGE_PX}
               step={1}
               value={props.brushSize()}

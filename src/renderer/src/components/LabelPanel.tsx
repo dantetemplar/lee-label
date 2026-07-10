@@ -186,9 +186,9 @@ const LabelPanel: Component<{
           )}
         </For>
 
-        <div class="mt-2 flex flex-col gap-1.5">
+        <div class="mt-2 flex items-center gap-1.5">
           <input
-            class="input input-bordered input-sm bg-base-100 font-inherit h-8 min-h-8 w-full"
+            class="input input-bordered input-sm bg-base-100 font-inherit h-8 min-h-8 min-w-0 flex-1"
             placeholder="New label"
             value={newName()}
             onInput={(event) => setNewName(event.currentTarget.value)}
@@ -196,7 +196,12 @@ const LabelPanel: Component<{
               if (event.key === 'Enter') void handleCreate()
             }}
           />
-          <button type="button" class="btn btn-sm btn-outline w-full" onClick={() => void handleCreate()}>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline shrink-0"
+            disabled={!newName().trim()}
+            onClick={() => void handleCreate()}
+          >
             Add
           </button>
         </div>

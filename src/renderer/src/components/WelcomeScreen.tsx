@@ -38,7 +38,11 @@ const WelcomeScreen: Component<{
         </header>
 
         <div class="mb-9 flex w-full justify-start gap-3">
-          <button type="button" class="btn btn-lg btn-primary gap-3" onClick={() => props.onOpenFolder()}>
+          <button
+            type="button"
+            class="flex w-1/3 min-w-[120px] cursor-pointer flex-col items-start justify-center gap-2 rounded-lg border border-base-content/10 bg-[color-mix(in_oklab,var(--color-base-200)_55%,var(--color-base-100))] px-3.5 py-2.5 font-inherit text-[13px] font-medium leading-none text-base-content/88 transition-[background,border-color,color] duration-150 hover:border-base-content/16 hover:bg-base-300 hover:text-base-content focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40"
+            onClick={() => props.onOpenFolder()}
+          >
             <BsFolder2Open size={20} aria-hidden="true" />
             <span>Open project</span>
           </button>

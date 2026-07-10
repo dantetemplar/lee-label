@@ -84,6 +84,17 @@ body {
   outline: none;
 }
 
+.app input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.app input[type='number']::-webkit-outer-spin-button,
+.app input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 .app .tree-scrollbar:focus-visible {
   outline: none;
   @apply ring-1 ring-primary/40 ring-inset;
