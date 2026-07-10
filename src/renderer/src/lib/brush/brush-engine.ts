@@ -8,11 +8,14 @@ import {
     CAPSULE_VERTEX,
     COMPOSITE_FRAGMENT,
     COMPOSITE_VERTEX,
+    PIXEL_BRUSH_FRAGMENT,
+    PIXEL_BRUSH_VERTEX,
     PLACED_MASK_FRAGMENT,
     PLACED_MASK_VERTEX,
     PREVIEW_FRAGMENT,
     PREVIEW_VERTEX
 } from './shaders'
+import { expandPixelBrushStrokeBounds, forEachBrushStrokeCenter } from './brush-shapes'
 
 export interface SavedMaskLayer {
   id: string
@@ -33,6 +36,7 @@ export interface CapsuleSegment {
 }
 
 export type StampTarget = 'active' | 'session'
+export type StampMode = 'paint' | 'erase'
 
 const QUAD_CORNERS = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1])
 const PLACED_CORNERS = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1])
@@ -178,6 +182,7 @@ export class BrushEngine {
   private maskReadFormat: number = 0
 
   private capsuleProgram: WebGLProgram
+  private pixelBrushProgram: WebGLProgram
   private compositeProgram: WebGLProgram
   private previewProgram: WebGLProgram
   private placedMaskProgram: WebGLProgram
@@ -185,6 +190,9 @@ export class BrushEngine {
   private capsuleVao: WebGLVertexArrayObject
   private capsuleCornerBuffer: WebGLBuffer
   private capsuleSegmentBuffer: WebGLBuffer
+
+  private pixelBrushVao: WebGLVertexArrayObject
+  private pixelBrushCornerBuffer: WebGLBuffer
 
   private compositeVao: WebGLVertexArrayObject
   private compositeUvBuffer: WebGLBuffer
@@ -197,6 +205,12 @@ export class BrushEngine {
 
   private capsuleMaskSizePx: WebGLUniformLocation
   private capsuleRadiusPx: WebGLUniformLocation
+  private capsuleStampValue: WebGLUniformLocation
+
+  private pixelBrushMaskSizePx: WebGLUniformLocation
+  private pixelBrushCenterPx: WebGLUniformLocation
+  private pixelBrushSize: WebGLUniformLocation
+  private pixelBrushStampValue: WebGLUniformLocation
 
   private compositeSessionMask: WebGLUniformLocation
   private compositeActiveMask: WebGLUniformLocation
@@ -211,6 +225,7 @@ export class BrushEngine {
   private previewInnerStrokeWidthPx: WebGLUniformLocation
   private previewOuterOpacity: WebGLUniformLocation
   private previewInnerOpacity: WebGLUniformLocation
+  private previewFilled: WebGLUniformLocation
 
   private placedImageSizePx: WebGLUniformLocation
   private placedBounds: WebGLUniformLocation
@@ -239,6 +254,7 @@ export class BrushEngine {
     this.gl = gl
 
     this.capsuleProgram = createProgram(gl, CAPSULE_VERTEX, CAPSULE_FRAGMENT)
+    this.pixelBrushProgram = createProgram(gl, PIXEL_BRUSH_VERTEX, PIXEL_BRUSH_FRAGMENT)
     this.compositeProgram = createProgram(gl, COMPOSITE_VERTEX, COMPOSITE_FRAGMENT)
     this.previewProgram = createProgram(gl, PREVIEW_VERTEX, PREVIEW_FRAGMENT)
     this.placedMaskProgram = createProgram(gl, PLACED_MASK_VERTEX, PLACED_MASK_FRAGMENT)
@@ -263,6 +279,16 @@ export class BrushEngine {
     gl.vertexAttribPointer(capsuleEndLoc, 2, gl.FLOAT, false, 16, 8)
     gl.vertexAttribDivisor(capsuleStartLoc, 1)
     gl.vertexAttribDivisor(capsuleEndLoc, 1)
+    gl.bindVertexArray(null)
+
+    this.pixelBrushVao = gl.createVertexArray()!
+    this.pixelBrushCornerBuffer = gl.createBuffer()!
+    gl.bindVertexArray(this.pixelBrushVao)
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.pixelBrushCornerBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, PLACED_CORNERS, gl.STATIC_DRAW)
+    const pixelBrushCornerLoc = gl.getAttribLocation(this.pixelBrushProgram, 'aCorner')
+    gl.enableVertexAttribArray(pixelBrushCornerLoc)
+    gl.vertexAttribPointer(pixelBrushCornerLoc, 2, gl.FLOAT, false, 0, 0)
     gl.bindVertexArray(null)
 
     this.compositeVao = gl.createVertexArray()!
@@ -295,6 +321,12 @@ export class BrushEngine {
 
     this.capsuleMaskSizePx = gl.getUniformLocation(this.capsuleProgram, 'uMaskSizePx')!
     this.capsuleRadiusPx = gl.getUniformLocation(this.capsuleProgram, 'uRadiusPx')!
+    this.capsuleStampValue = gl.getUniformLocation(this.capsuleProgram, 'uStampValue')!
+
+    this.pixelBrushMaskSizePx = gl.getUniformLocation(this.pixelBrushProgram, 'uMaskSizePx')!
+    this.pixelBrushCenterPx = gl.getUniformLocation(this.pixelBrushProgram, 'uCenterPx')!
+    this.pixelBrushSize = gl.getUniformLocation(this.pixelBrushProgram, 'uBrushSize')!
+    this.pixelBrushStampValue = gl.getUniformLocation(this.pixelBrushProgram, 'uStampValue')!
 
     this.compositeSessionMask = gl.getUniformLocation(this.compositeProgram, 'uSessionMask')!
     this.compositeActiveMask = gl.getUniformLocation(this.compositeProgram, 'uActiveStrokeMask')!
@@ -309,6 +341,7 @@ export class BrushEngine {
     this.previewInnerStrokeWidthPx = gl.getUniformLocation(this.previewProgram, 'uInnerStrokeWidthPx')!
     this.previewOuterOpacity = gl.getUniformLocation(this.previewProgram, 'uOuterOpacity')!
     this.previewInnerOpacity = gl.getUniformLocation(this.previewProgram, 'uInnerOpacity')!
+    this.previewFilled = gl.getUniformLocation(this.previewProgram, 'uFilledPreview')!
 
     this.placedImageSizePx = gl.getUniformLocation(this.placedMaskProgram, 'uImageSizePx')!
     this.placedBounds = gl.getUniformLocation(this.placedMaskProgram, 'uBounds')!
@@ -343,12 +376,15 @@ export class BrushEngine {
     this.disposeMaskTargets()
     this.disposeSavedMaskCache()
     gl.deleteProgram(this.capsuleProgram)
+    gl.deleteProgram(this.pixelBrushProgram)
     gl.deleteProgram(this.compositeProgram)
     gl.deleteProgram(this.previewProgram)
     gl.deleteProgram(this.placedMaskProgram)
     gl.deleteVertexArray(this.capsuleVao)
     gl.deleteBuffer(this.capsuleCornerBuffer)
     gl.deleteBuffer(this.capsuleSegmentBuffer)
+    gl.deleteVertexArray(this.pixelBrushVao)
+    gl.deleteBuffer(this.pixelBrushCornerBuffer)
     gl.deleteVertexArray(this.compositeVao)
     gl.deleteBuffer(this.compositeUvBuffer)
     gl.deleteVertexArray(this.previewVao)
@@ -396,7 +432,12 @@ export class BrushEngine {
     this.resetDirtyBounds()
   }
 
-  stampCapsules(segments: CapsuleSegment[], radiusPx: number, target: StampTarget): void {
+  stampCapsules(
+    segments: CapsuleSegment[],
+    radiusPx: number,
+    target: StampTarget,
+    mode: StampMode = 'paint'
+  ): void {
     if (segments.length === 0 || !this.sessionTexture || !this.activeTexture) return
 
     const { gl } = this
@@ -411,11 +452,16 @@ export class BrushEngine {
     gl.viewport(0, 0, this.width, this.height)
     gl.useProgram(this.capsuleProgram)
     gl.enable(gl.BLEND)
-    gl.blendEquation(gl.MAX)
+    if (mode === 'paint') {
+      gl.blendEquation(gl.MAX)
+    } else {
+      gl.blendEquation(gl.MIN)
+    }
     gl.blendFunc(gl.ONE, gl.ONE)
     gl.colorMask(true, true, true, true)
     gl.uniform2f(this.capsuleMaskSizePx, this.width, this.height)
     gl.uniform1f(this.capsuleRadiusPx, radiusPx)
+    gl.uniform1f(this.capsuleStampValue, mode === 'paint' ? 1 : 0)
 
     this.uploadSegments(segments)
     gl.bindVertexArray(this.capsuleVao)
@@ -425,8 +471,79 @@ export class BrushEngine {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
 
-  stampCapsule(from: Point2D, to: Point2D, radiusPx: number, target: StampTarget): void {
-    this.stampCapsules([{ from, to }], radiusPx, target)
+  stampCapsule(
+    from: Point2D,
+    to: Point2D,
+    radiusPx: number,
+    target: StampTarget,
+    mode: StampMode = 'paint'
+  ): void {
+    this.stampCapsules([{ from, to }], radiusPx, target, mode)
+  }
+
+  stampPixelBrushAt(
+    center: Point2D,
+    brushSize: number,
+    target: StampTarget,
+    mode: StampMode = 'paint'
+  ): void {
+    if (!this.sessionTexture || !this.activeTexture) return
+
+    const { gl } = this
+    const framebuffer = target === 'session' ? this.sessionFramebuffer : this.activeFramebuffer
+    if (!framebuffer) return
+
+    const bounds = expandPixelBrushStrokeBounds(center.x, center.y, center.x, center.y, brushSize)
+    this.expandDirtyBounds(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+    gl.viewport(0, 0, this.width, this.height)
+    gl.useProgram(this.pixelBrushProgram)
+    gl.enable(gl.BLEND)
+    if (mode === 'paint') {
+      gl.blendEquation(gl.MAX)
+    } else {
+      gl.blendEquation(gl.MIN)
+    }
+    gl.blendFunc(gl.ONE, gl.ONE)
+    gl.colorMask(true, true, true, true)
+    gl.uniform2f(this.pixelBrushMaskSizePx, this.width, this.height)
+    gl.uniform2f(this.pixelBrushCenterPx, center.x, center.y)
+    gl.uniform1f(this.pixelBrushSize, brushSize)
+    gl.uniform1f(this.pixelBrushStampValue, mode === 'paint' ? 1 : 0)
+    gl.bindVertexArray(this.pixelBrushVao)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    gl.bindVertexArray(null)
+    gl.disable(gl.BLEND)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  }
+
+  stampPixelBrushStroke(
+    from: Point2D,
+    to: Point2D,
+    brushSize: number,
+    target: StampTarget,
+    mode: StampMode = 'paint'
+  ): void {
+    if (!this.sessionTexture || !this.activeTexture) return
+
+    const bounds = expandPixelBrushStrokeBounds(from.x, from.y, to.x, to.y, brushSize)
+    this.expandDirtyBounds(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
+
+    forEachBrushStrokeCenter(from.x, from.y, to.x, to.y, (centerX, centerY) => {
+      this.stampPixelBrushAt({ x: centerX, y: centerY }, brushSize, target, mode)
+    })
+  }
+
+  stampPixelBrushStrokes(
+    segments: CapsuleSegment[],
+    brushSize: number,
+    target: StampTarget,
+    mode: StampMode = 'paint'
+  ): void {
+    for (const segment of segments) {
+      this.stampPixelBrushStroke(segment.from, segment.to, brushSize, target, mode)
+    }
   }
 
   clearDisplay(): void {
@@ -448,6 +565,7 @@ export class BrushEngine {
       innerStrokeWidthPx: number
       outerOpacity: number
       innerOpacity: number
+      filled: boolean
     },
     _selectedMaskId?: string | null
   ): void {
@@ -490,6 +608,7 @@ export class BrushEngine {
       gl.uniform1f(this.previewInnerStrokeWidthPx, preview.innerStrokeWidthPx)
       gl.uniform1f(this.previewOuterOpacity, preview.outerOpacity)
       gl.uniform1f(this.previewInnerOpacity, preview.innerOpacity)
+      gl.uniform1f(this.previewFilled, preview.filled ? 1 : 0)
       gl.bindVertexArray(this.previewVao)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
       gl.bindVertexArray(null)
@@ -601,11 +720,7 @@ export class BrushEngine {
     this.dirtyMaxY = 0
   }
 
-  private expandDirtyBoundsForSegment(from: Point2D, to: Point2D, radius: number): void {
-    const minX = Math.min(from.x, to.x) - radius
-    const minY = Math.min(from.y, to.y) - radius
-    const maxX = Math.max(from.x, to.x) + radius
-    const maxY = Math.max(from.y, to.y) + radius
+  private expandDirtyBounds(minX: number, minY: number, maxX: number, maxY: number): void {
     if (!this.hasDirty) {
       this.dirtyMinX = minX
       this.dirtyMinY = minY
@@ -618,6 +733,14 @@ export class BrushEngine {
     this.dirtyMinY = Math.min(this.dirtyMinY, minY)
     this.dirtyMaxX = Math.max(this.dirtyMaxX, maxX)
     this.dirtyMaxY = Math.max(this.dirtyMaxY, maxY)
+  }
+
+  private expandDirtyBoundsForSegment(from: Point2D, to: Point2D, radius: number): void {
+    const minX = Math.min(from.x, to.x) - radius
+    const minY = Math.min(from.y, to.y) - radius
+    const maxX = Math.max(from.x, to.x) + radius
+    const maxY = Math.max(from.y, to.y) + radius
+    this.expandDirtyBounds(minX, minY, maxX, maxY)
   }
 
   private uploadSegments(segments: CapsuleSegment[]): void {

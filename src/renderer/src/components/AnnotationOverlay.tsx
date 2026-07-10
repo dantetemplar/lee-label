@@ -7,20 +7,28 @@ import {
     clampToImage,
     computeMaskBounds,
     cropMaskBitmap,
+    eraseCapsuleFromMaskData,
+  erasePixelBrushStrokeFromMaskData,
     hitTestMaskBounds,
     hitTestRectangle,
     snapPointToImagePixel,
+    tightenMaskBitmap,
     viewportToImage
 } from '../lib/annotation-coords'
 import type { WorkingShape } from '../lib/annotation-store'
 import { AnnotationStore } from '../lib/annotation-store'
-import { BrushEngine, type CapsuleSegment, type Point2D, type SavedMaskLayer } from '../lib/brush/brush-engine'
+import { BrushEngine, type CapsuleSegment, type Point2D, type SavedMaskLayer, type StampMode } from '../lib/brush/brush-engine'
 import {
-  BRUSH_PREVIEW_INNER_OPACITY,
-  BRUSH_PREVIEW_INNER_STROKE_IMAGE_PX,
-  BRUSH_PREVIEW_OUTER_OPACITY,
-  BRUSH_PREVIEW_STROKE_IMAGE_PX
+  BRUSH_PREVIEW_FILLED_OPACITY,
+  getBrushPreviewSettings,
+  getEffectiveBrushDiameter,
+  usesPixelBrushShape,
+  usesSvgBrushPreview
 } from '../lib/brush/constants'
+import {
+  forEachPixelBrushPixel,
+  usesPixelBrushShape as isPixelBrushShape
+} from '../lib/brush/brush-shapes'
 import type { AnnotationTool } from './AnnotationToolbar'
 
 const MIN_RECT_SIZE = 3
@@ -72,6 +80,7 @@ const AnnotationOverlay: Component<{
   activeTool: () => AnnotationTool
   activeLabelId: () => string | null
   brushSize: () => number
+  shrinkBrushAtMaxZoom: () => boolean
   labels: () => Label[]
   store: AnnotationStore
 }> = (props) => {
@@ -87,6 +96,8 @@ const AnnotationOverlay: Component<{
   const [interacting, setInteracting] = createSignal(false)
   const [hoverPoint, setHoverPoint] = createSignal<Point2D | null>(null)
 
+  let lastPointerClient: { x: number; y: number } | null = null
+
   let dragMode: 'none' | 'draw-rect' | 'move-rect' = 'none'
   let dragStart = { x: 0, y: 0 }
   let moveShapeId: string | null = null
@@ -96,8 +107,10 @@ const AnnotationOverlay: Component<{
   let isDrawing = false
   let strokeSegments: CapsuleSegment[] = []
   let lastPoint: Point2D | null = null
-  let lockedBrushRadiusImagePx = 0
+  let lockedBrushDiameterImagePx = 1
   let sessionUndoPushed = false
+  let brushStrokeMode: StampMode = 'paint'
+  let savedMasksErased = false
   let renderFrame = 0
 
   const labelMap = createMemo(() => new Map(props.labels().map((label) => [label.id, label])))
@@ -105,13 +118,13 @@ const AnnotationOverlay: Component<{
     props.store.shapes[0]().filter((shape): shape is RectangleShape => shape.type === 'rectangle')
   )
 
-  const getImagePoint = (event: MouseEvent | PointerEvent): Point2D | null => {
+  const getImagePointAt = (clientX: number, clientY: number): Point2D | null => {
     const viewport = props.viewportRef()
     const size = props.imageSize()
     if (!viewport || !size) return null
     const point = viewportToImage(
-      event.clientX,
-      event.clientY,
+      clientX,
+      clientY,
       viewport.getBoundingClientRect(),
       props.transform()
     )
@@ -122,7 +135,42 @@ const AnnotationOverlay: Component<{
     )
   }
 
-  const brushRadiusImagePx = (): number => props.brushSize() / 2
+  const getImagePoint = (event: MouseEvent | PointerEvent): Point2D | null =>
+    getImagePointAt(event.clientX, event.clientY)
+
+  const syncHoverFromLastPointer = (): void => {
+    if (!lastPointerClient || props.activeTool() !== 'mask') return
+    setHoverPoint(getImagePointAt(lastPointerClient.x, lastPointerClient.y))
+  }
+
+  const effectiveBrushDiameter = (): number =>
+    getEffectiveBrushDiameter(
+      props.brushSize(),
+      props.transform().scale,
+      props.transform().maxScale,
+      props.shrinkBrushAtMaxZoom()
+    )
+
+  const brushRadiusImagePx = (): number => effectiveBrushDiameter() / 2
+
+  const brushSvgPreview = createMemo(() => {
+    if (props.activeTool() !== 'mask') return null
+    const hover = hoverPoint()
+    if (!hover) return null
+
+    const diameter = effectiveBrushDiameter()
+    if (!isPixelBrushShape(diameter)) return null
+
+    const pixels: Array<{ x: number; y: number }> = []
+    forEachPixelBrushPixel(hover.x, hover.y, diameter, (x, y) => {
+      pixels.push({ x, y })
+    })
+
+    return {
+      pixels,
+      opacity: BRUSH_PREVIEW_FILLED_OPACITY
+    }
+  })
 
   const activeLabelColor = createMemo(() => {
     const labelId = props.activeLabelId()
@@ -192,19 +240,23 @@ const AnnotationOverlay: Component<{
     const hover = hoverPoint()
     const previewRadius = brushRadiusImagePx()
     const color = activeLabelColor()
+    const preview = getBrushPreviewSettings(effectiveBrushDiameter())
+    const useGlPreview =
+      maskToolActive && Boolean(hover) && !usesSvgBrushPreview(effectiveBrushDiameter())
 
     engine.renderScene(
       savedMaskLayers(),
       hexToRgbNormalized(color),
-      maskToolActive && Boolean(hover),
-      hover
+      useGlPreview,
+      useGlPreview && hover
         ? {
             center: hover,
             radiusPx: previewRadius,
-            strokeWidthPx: BRUSH_PREVIEW_STROKE_IMAGE_PX,
-            innerStrokeWidthPx: BRUSH_PREVIEW_INNER_STROKE_IMAGE_PX,
-            outerOpacity: BRUSH_PREVIEW_OUTER_OPACITY,
-            innerOpacity: BRUSH_PREVIEW_INNER_OPACITY
+            strokeWidthPx: preview.strokeWidthPx,
+            innerStrokeWidthPx: preview.innerStrokeWidthPx,
+            outerOpacity: preview.outerOpacity,
+            innerOpacity: preview.innerOpacity,
+            filled: preview.mode === 'filled'
           }
         : undefined,
       props.store.selectedShapeId[0]()
@@ -216,15 +268,105 @@ const AnnotationOverlay: Component<{
     strokeSegments = []
     lastPoint = null
     sessionUndoPushed = false
+    brushStrokeMode = 'paint'
+    savedMasksErased = false
     brushEngine?.clearSession()
     brushEngine?.clearActiveStroke()
     requestOverlayRender()
   }
 
+  const eraseFromSavedMasks = (from: Point2D, to: Point2D): void => {
+    const size = props.imageSize()
+    if (!size) return
+
+    let changed = false
+    for (const shape of props.store.shapes[0]()) {
+      if (shape.type !== 'mask') continue
+      const erased = usesPixelBrushShape(lockedBrushDiameterImagePx)
+        ? erasePixelBrushStrokeFromMaskData(
+            shape.data,
+            shape.bounds,
+            from,
+            to,
+            lockedBrushDiameterImagePx
+          )
+        : eraseCapsuleFromMaskData(
+            shape.data,
+            shape.bounds,
+            from,
+            to,
+            lockedBrushDiameterImagePx / 2
+          )
+      if (erased) changed = true
+    }
+
+    if (changed) {
+      savedMasksErased = true
+      requestOverlayRender()
+    }
+  }
+
+  const finalizeErasedMasks = (): void => {
+    if (!savedMasksErased) return
+
+    const size = props.imageSize()
+    if (!size) return
+
+    const now = new Date().toISOString()
+    const nextShapes: WorkingShape[] = []
+
+    for (const shape of props.store.shapes[0]()) {
+      if (shape.type !== 'mask') {
+        nextShapes.push(shape)
+        continue
+      }
+
+      const tightened = tightenMaskBitmap(shape, size.width, size.height)
+      if (!tightened) continue
+      nextShapes.push({ ...tightened, updatedAt: now })
+    }
+
+    props.store.setShapes(nextShapes)
+    savedMasksErased = false
+  }
+
   const addStrokeSegment = (from: Point2D, to: Point2D): void => {
     const segment = { from, to }
     strokeSegments.push(segment)
-    brushEngine?.stampCapsule(from, to, lockedBrushRadiusImagePx, 'active')
+
+    if (usesPixelBrushShape(lockedBrushDiameterImagePx)) {
+      if (brushStrokeMode === 'erase') {
+        brushEngine?.stampPixelBrushStroke(
+          from,
+          to,
+          lockedBrushDiameterImagePx,
+          'session',
+          'erase'
+        )
+        brushEngine?.stampPixelBrushStroke(
+          from,
+          to,
+          lockedBrushDiameterImagePx,
+          'active',
+          'erase'
+        )
+        eraseFromSavedMasks(from, to)
+        return
+      }
+
+      brushEngine?.stampPixelBrushStroke(from, to, lockedBrushDiameterImagePx, 'active', 'paint')
+      return
+    }
+
+    const radius = lockedBrushDiameterImagePx / 2
+    if (brushStrokeMode === 'erase') {
+      brushEngine?.stampCapsule(from, to, radius, 'session', 'erase')
+      brushEngine?.stampCapsule(from, to, radius, 'active', 'erase')
+      eraseFromSavedMasks(from, to)
+      return
+    }
+
+    brushEngine?.stampCapsule(from, to, radius, 'active', 'paint')
   }
 
   const commitSessionMask = (): void => {
@@ -266,8 +408,18 @@ const AnnotationOverlay: Component<{
 
   createEffect(() => {
     props.activeTool()
-    props.brushSize()
+    lastPointerClient = null
     setHoverPoint(null)
+    requestOverlayRender()
+  })
+
+  createEffect(() => {
+    props.brushSize()
+    props.shrinkBrushAtMaxZoom()
+    props.transform().scale
+    props.transform().panX
+    props.transform().panY
+    syncHoverFromLastPointer()
     requestOverlayRender()
   })
 
@@ -288,12 +440,30 @@ const AnnotationOverlay: Component<{
       overlayRef.releasePointerCapture(event.pointerId)
     }
 
-    if (strokeSegments.length > 0) {
-      brushEngine?.stampCapsules(strokeSegments, lockedBrushRadiusImagePx, 'session')
+    if (strokeSegments.length > 0 && brushStrokeMode === 'paint') {
+      if (usesPixelBrushShape(lockedBrushDiameterImagePx)) {
+        brushEngine?.stampPixelBrushStrokes(
+          strokeSegments,
+          lockedBrushDiameterImagePx,
+          'session',
+          'paint'
+        )
+      } else {
+        brushEngine?.stampCapsules(
+          strokeSegments,
+          lockedBrushDiameterImagePx / 2,
+          'session',
+          'paint'
+        )
+      }
+    }
+    if (brushStrokeMode === 'erase') {
+      finalizeErasedMasks()
     }
     brushEngine?.clearActiveStroke()
     strokeSegments = []
     lastPoint = null
+    brushStrokeMode = 'paint'
     requestOverlayRender()
   }
 
@@ -352,13 +522,16 @@ const AnnotationOverlay: Component<{
   }
 
   const handleOverlayPointerDown = (event: PointerEvent): void => {
-    if (event.button !== 0) return
-
     if (props.activeTool() === 'mask') {
+      if (event.button !== 0 && event.button !== 2) return
+
       event.preventDefault()
+      brushStrokeMode = event.button === 2 ? 'erase' : 'paint'
+
       const point = getImagePoint(event)
       const labelId = props.activeLabelId()
-      if (!point || !labelId || !ensureBrushEngine()) return
+      if (!point || !ensureBrushEngine()) return
+      if (brushStrokeMode === 'paint' && !labelId) return
 
       if (!sessionUndoPushed) {
         props.store.pushUndo()
@@ -367,9 +540,10 @@ const AnnotationOverlay: Component<{
 
       overlayRef?.setPointerCapture(event.pointerId)
       isDrawing = true
+      savedMasksErased = false
       setHoverPoint(point)
       strokeSegments = []
-      lockedBrushRadiusImagePx = brushRadiusImagePx()
+      lockedBrushDiameterImagePx = effectiveBrushDiameter()
       brushEngine?.clearActiveStroke()
       addStrokeSegment(point, point)
       lastPoint = point
@@ -377,6 +551,8 @@ const AnnotationOverlay: Component<{
       requestOverlayRender()
       return
     }
+
+    if (event.button !== 0) return
 
     event.preventDefault()
     const point = getImagePoint(event)
@@ -413,6 +589,7 @@ const AnnotationOverlay: Component<{
   const handleOverlayPointerMove = (event: PointerEvent): void => {
     if (props.activeTool() !== 'mask') return
 
+    lastPointerClient = { x: event.clientX, y: event.clientY }
     const point = getImagePoint(event)
     if (!point) {
       setHoverPoint(null)
@@ -449,6 +626,7 @@ const AnnotationOverlay: Component<{
       setInteracting(false)
       return
     }
+    lastPointerClient = null
     setHoverPoint(null)
     requestOverlayRender()
   }
@@ -523,6 +701,9 @@ const AnnotationOverlay: Component<{
           onPointerMove={handleOverlayPointerMove}
           onPointerUp={handleOverlayPointerUp}
           onPointerLeave={handleOverlayPointerLeave}
+          onContextMenu={(event) => {
+            if (props.activeTool() === 'mask') event.preventDefault()
+          }}
         >
           <canvas ref={glCanvasRef} class="annotation-overlay__gl-canvas" />
           <svg
@@ -563,6 +744,22 @@ const AnnotationOverlay: Component<{
                   stroke-width={1.5}
                   stroke-dasharray="4 3"
                 />
+              )}
+            </Show>
+            <Show when={brushSvgPreview()}>
+              {(preview) => (
+                <For each={preview().pixels}>
+                  {(pixel) => (
+                    <rect
+                      x={pixel.x}
+                      y={pixel.y}
+                      width={1}
+                      height={1}
+                      fill="#ffffff"
+                      fill-opacity={preview().opacity}
+                    />
+                  )}
+                </For>
               )}
             </Show>
           </svg>

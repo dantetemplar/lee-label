@@ -116,6 +116,7 @@ const ImageViewer: Component<{
   labels: () => Label[]
   activeLabelId: () => string | null
   brushSize: () => number
+  shrinkBrushAtMaxZoom: () => boolean
   annotationStore: AnnotationStore | null
   onLoad: (dims: { width: number; height: number }) => void
   onError: () => void
@@ -603,6 +604,7 @@ const ImageViewer: Component<{
           activeTool={props.activeTool}
           activeLabelId={props.activeLabelId}
           brushSize={props.brushSize}
+          shrinkBrushAtMaxZoom={props.shrinkBrushAtMaxZoom}
           labels={props.labels}
           store={props.annotationStore!}
         />

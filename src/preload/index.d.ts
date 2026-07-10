@@ -4,6 +4,7 @@ import type {
   ImageRecord,
   ImageStatus,
   Label,
+  LabelDeleteStats,
   MaskBlob,
   MaskShape,
   RectangleShape,
@@ -41,6 +42,7 @@ export interface AppAPI {
     create: (input: CreateLabelInput) => Promise<Label>
     update: (input: UpdateLabelInput) => Promise<Label>
     delete: (id: string) => Promise<void>
+    getDeleteStats: (id: string) => Promise<LabelDeleteStats>
   }
   images: {
     getOrCreate: (relativePath: string, width?: number, height?: number) => Promise<ImageRecord>

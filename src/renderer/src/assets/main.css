@@ -365,6 +365,48 @@ button.titlebar-menu {
   @apply text-base-content/70;
 }
 
+.brush-settings-input-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.brush-settings-input {
+  width: 44px;
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: 4px;
+  background: var(--color-base-100);
+  padding: 2px 4px;
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.brush-settings-input-suffix {
+  font-size: 12px;
+  @apply text-base-content/70;
+}
+
+.brush-settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.brush-settings-toggle-label {
+  line-height: 1.3;
+}
+
+.brush-settings-toggle {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .label-panel-header {
   padding: 10px 12px 8px;
   font-size: 11px;
@@ -410,35 +452,97 @@ button.titlebar-menu {
   cursor: pointer;
 }
 
+.label-panel-swatch-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.label-panel-swatch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 6px 4px;
+  cursor: pointer;
+}
+
 .label-panel-swatch {
   width: 12px;
   height: 12px;
   border-radius: 2px;
   flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-base-content) 18%, transparent);
+}
+
+.label-panel-color-palette {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  width: 156px;
+  padding: 6px;
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: 6px;
+  background: var(--color-base-100);
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--color-base-content) 12%, transparent);
+}
+
+.label-panel-color-option {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-base-content) 14%, transparent);
+}
+
+.label-panel-color-option--active {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, var(--color-base-content) 14%, transparent),
+    0 0 0 2px var(--color-base-100),
+    0 0 0 3px var(--color-primary);
+}
+
+.label-panel-edit-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  color: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+}
+
+.label-panel-edit-btn:hover {
+  color: var(--color-base-content);
+}
+
+.label-panel-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  color: color-mix(in oklab, var(--color-error) 55%, transparent);
+}
+
+.label-panel-delete-btn:hover {
+  color: var(--color-error);
 }
 
 .label-panel-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.label-panel-actions {
-  display: flex;
-  gap: 2px;
-}
-
-.label-panel-action {
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.label-panel-action--danger {
-  @apply text-error;
 }
 
 .label-panel-create {
@@ -448,8 +552,7 @@ button.titlebar-menu {
   margin-top: 8px;
 }
 
-.label-panel-input,
-.label-panel-color {
+.label-panel-input {
   width: 100%;
   border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
   border-radius: 4px;
@@ -457,6 +560,11 @@ button.titlebar-menu {
   padding: 6px 8px;
   font-family: inherit;
   font-size: 12px;
+}
+
+.label-panel-input--inline {
+  flex: 1;
+  min-width: 0;
 }
 
 .label-panel-add {
@@ -798,4 +906,79 @@ button.titlebar-menu {
   text-align: right;
   font-size: 12px;
   color: color-mix(in oklab, var(--color-base-content) 48%, transparent);
+}
+
+.confirm-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in oklab, var(--color-base-content) 18%, transparent);
+}
+
+.confirm-dialog {
+  width: min(100%, 420px);
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent);
+  border-radius: 8px;
+  background: var(--color-base-100);
+  padding: 20px 22px 18px;
+  box-shadow: 0 16px 40px color-mix(in oklab, var(--color-base-content) 16%, transparent);
+}
+
+.confirm-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.confirm-dialog-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--color-warning);
+}
+
+.confirm-dialog-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-base-content);
+}
+
+.confirm-dialog-message {
+  margin: 10px 0 0 34px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: color-mix(in oklab, var(--color-base-content) 78%, transparent);
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.confirm-dialog-btn {
+  min-width: 72px;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.confirm-dialog-btn--cancel {
+  border: 1px solid color-mix(in oklab, var(--color-base-content) 14%, transparent);
+  background: var(--color-base-100);
+  color: var(--color-base-content);
+}
+
+.confirm-dialog-btn--confirm {
+  border: 1px solid var(--color-error);
+  background: var(--color-error);
+  color: var(--color-error-content);
 }

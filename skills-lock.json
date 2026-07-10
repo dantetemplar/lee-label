@@ -12,6 +12,102 @@
       "sourceType": "github",
       "skillPath": "skills/electron-development/SKILL.md",
       "computedHash": "77f6ad9152c7224766365dae3b962bad3a1211b5cf7bb6626c293499f1e38596"
+    },
+    "solid-agents-project-scaffolder": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-agents/solid-agents-project-scaffolder/SKILL.md",
+      "computedHash": "c15dde99f4fd4da623eb1dc81d91b2d020f2ef40ee5c52894bdac102bfeb231d"
+    },
+    "solid-agents-review": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-agents/solid-agents-review/SKILL.md",
+      "computedHash": "c9846c14eed5d9943ecb367208f1a11a886d9f0497f8a1169b17cc9809420064"
+    },
+    "solid-core-overview": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-core/solid-core-overview/SKILL.md",
+      "computedHash": "f4d56781b0b8ba72082781dff69665cd3a66906489a9da7f0599c07d5f70c298"
+    },
+    "solid-core-reactivity-model": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-core/solid-core-reactivity-model/SKILL.md",
+      "computedHash": "a04395ca5e3d7d8a8e9113ac2e9b3f2dce9ae667960a90534af8b7f130d51efe"
+    },
+    "solid-errors-error-handling": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-errors/solid-errors-error-handling/SKILL.md",
+      "computedHash": "e99574fa697d43efc5f4bb4e68d3f652fb3bd0f320414b1e70a2729ed06a5f9f"
+    },
+    "solid-errors-react-contamination": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-errors/solid-errors-react-contamination/SKILL.md",
+      "computedHash": "8fe4d38ba2931cc87ed58d8381e18e0840f5c7ce947d53ef37f0d781d3c7c31d"
+    },
+    "solid-errors-reactivity-debugging": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-errors/solid-errors-reactivity-debugging/SKILL.md",
+      "computedHash": "6c09fffcd9783484090fc4a6087225358748f190ef5e455537dd668f2e4fdd14"
+    },
+    "solid-impl-routing": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-impl/solid-impl-routing/SKILL.md",
+      "computedHash": "1ab6f119b94771dc668355b36d624d621a9fac9304fb453015e9486285c4f20e"
+    },
+    "solid-impl-solidstart": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-impl/solid-impl-solidstart/SKILL.md",
+      "computedHash": "2b0a188cc8fc3c043249a9a95794f8e3f244567a607e6884782e2209bc3b0c05"
+    },
+    "solid-impl-state-patterns": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-impl/solid-impl-state-patterns/SKILL.md",
+      "computedHash": "b2d532d0a450be1cd990c93b50da50600c251a4e112d380395554b0ffee40a26"
+    },
+    "solid-impl-testing": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-impl/solid-impl-testing/SKILL.md",
+      "computedHash": "c9058c41c9c997a0c92e4546b2fd382bc6306796fd9317a12ccd096485b92e22"
+    },
+    "solid-syntax-components": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-syntax/solid-syntax-components/SKILL.md",
+      "computedHash": "a08fd10e368b4d32f3570d421dc08360789220f5830b4aef7cfe95175378d661"
+    },
+    "solid-syntax-context": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-syntax/solid-syntax-context/SKILL.md",
+      "computedHash": "0191756da180584604c5823a7144aab37867771176e8cb3f3f8e264abb1639d2"
+    },
+    "solid-syntax-jsx": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-syntax/solid-syntax-jsx/SKILL.md",
+      "computedHash": "ca42fc816bc0948f0e8ebdb07ba170d26ea9678ebfa796f6aa8ace2f02ddc38c"
+    },
+    "solid-syntax-signals": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-syntax/solid-syntax-signals/SKILL.md",
+      "computedHash": "bde9ebbed1e36cc582191aba85d92cb73b30234026c6909ceecbfe1f7dae78cd"
+    },
+    "solid-syntax-stores": {
+      "source": "Impertio-Studio/SolidJS-Claude-Skill-Package",
+      "sourceType": "github",
+      "skillPath": "skills/source/solid-syntax/solid-syntax-stores/SKILL.md",
+      "computedHash": "167e7b8c58d8d6470655354137b96cda2735249abc40dd1640d6f8764b63ff5e"
     }
   }
 }

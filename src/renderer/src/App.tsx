@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js'
 import { createEffect, createSignal, on, onMount, Show, untrack } from 'solid-js'
 import type { FileEntry, RecentProject } from '../../shared/types'
-import type { ImageStatus, Label } from '../../shared/annotations'
+import type { ImageStatus, Label, LabelDeleteStats } from '../../shared/annotations'
 import { getFileKind, type FileKind } from '../../shared/file-types'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
@@ -12,6 +12,7 @@ import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
 import WelcomeScreen from './components/WelcomeScreen'
+import ConfirmDialog from './components/ConfirmDialog'
 import type { ImageLayers } from '../../shared/image-layers'
 import { getAdjacentImagePaths } from './lib/tree-nav'
 import { APP_DISPLAY_NAME } from '../../shared/app-name'
@@ -34,8 +35,13 @@ const App: Component = () => {
   const [activeLabelId, setActiveLabelId] = createSignal<string | null>(null)
   const [imageStatuses, setImageStatuses] = createSignal<Record<string, ImageStatus>>({})
   const [labelError, setLabelError] = createSignal<string | null>(null)
+  const [labelDeletePrompt, setLabelDeletePrompt] = createSignal<{
+    label: Label
+    stats: LabelDeleteStats
+  } | null>(null)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
+  const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
 
   const annotationStore = new AnnotationStore(undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
@@ -309,14 +315,50 @@ const App: Component = () => {
     }
   }
 
-  const handleDeleteLabel = async (id: string): Promise<void> => {
+  const handleRequestDeleteLabel = async (id: string): Promise<void> => {
     setLabelError(null)
+    const label = labels().find((item) => item.id === id)
+    if (!label) return
+
+    try {
+      const stats = await window.api.labels.getDeleteStats(id)
+      setLabelDeletePrompt({ label, stats })
+    } catch (error: unknown) {
+      setLabelError(error instanceof Error ? error.message : 'Failed to load delete details')
+    }
+  }
+
+  const handleCancelDeleteLabel = (): void => {
+    setLabelDeletePrompt(null)
+  }
+
+  const handleConfirmDeleteLabel = async (): Promise<void> => {
+    const prompt = labelDeletePrompt()
+    if (!prompt) return
+
+    setLabelError(null)
+    const id = prompt.label.id
+
     try {
       await window.api.labels.delete(id)
-      setLabels((current) => current.filter((item) => item.id !== id))
-      if (activeLabelId() === id) {
-        setActiveLabelId(labels()[0]?.id ?? null)
+      setLabels((current) => {
+        const next = current.filter((item) => item.id !== id)
+        if (activeLabelId() === id) {
+          setActiveLabelId(next[0]?.id ?? null)
+        }
+        return next
+      })
+
+      const relativePath = currentImageRelativePath()
+      const info = fileInfo()
+      if (relativePath && info?.width && info?.height) {
+        await annotationStore.loadForImage(relativePath, {
+          width: info.width,
+          height: info.height
+        })
       }
+
+      setLabelDeletePrompt(null)
     } catch (error: unknown) {
       setLabelError(error instanceof Error ? error.message : 'Failed to delete label')
     }
@@ -399,7 +441,12 @@ const App: Component = () => {
           >
             <aside class="sidebar border-base-300 bg-base-200 border-r">
               <Show when={activeTool() === 'mask'}>
-                <BrushSettings brushSize={brushSize} onBrushSizeChange={setBrushSize} />
+                <BrushSettings
+                  brushSize={brushSize}
+                  onBrushSizeChange={setBrushSize}
+                  shrinkAtMaxZoom={shrinkBrushAtMaxZoom}
+                  onShrinkAtMaxZoomChange={setShrinkBrushAtMaxZoom}
+                />
               </Show>
               <LabelPanel
                 labels={labels}
@@ -407,7 +454,7 @@ const App: Component = () => {
                 onSelect={setActiveLabelId}
                 onCreate={handleCreateLabel}
                 onUpdate={handleUpdateLabel}
-                onDelete={handleDeleteLabel}
+                onDelete={handleRequestDeleteLabel}
                 error={labelError}
               />
               <div class="annotation-status-actions">
@@ -435,6 +482,7 @@ const App: Component = () => {
               activeTool={activeTool}
               onToolChange={setActiveTool}
               brushSize={brushSize}
+              shrinkBrushAtMaxZoom={shrinkBrushAtMaxZoom}
               onImageLoad={handleImageLoad}
               onTextChange={setTextDraft}
               textDraft={textDraft}
@@ -451,6 +499,26 @@ const App: Component = () => {
         </Show>
       </div>
       <StatusBar info={fileInfo} />
+      <ConfirmDialog
+        open={() => labelDeletePrompt() !== null}
+        title={() => {
+          const label = labelDeletePrompt()?.label
+          return label ? `Do you want to delete "${label.name}" label?` : ''
+        }}
+        message={() => {
+          const prompt = labelDeletePrompt()
+          if (!prompt) return ''
+          const { fileCount, instanceCount } = prompt.stats
+          return (
+            <>
+              This action cannot be undone. All annotations ({fileCount} files, {instanceCount}{' '}
+              instances) associated to the label will be deleted.
+            </>
+          )
+        }}
+        onCancel={handleCancelDeleteLabel}
+        onConfirm={() => void handleConfirmDeleteLabel()}
+      />
     </div>
   )
 }

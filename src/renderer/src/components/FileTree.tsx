@@ -1,5 +1,12 @@
 import type { Component } from 'solid-js'
 import { For, Show, createEffect, createSignal, on, onCleanup } from 'solid-js'
+import {
+  BsChevronRight,
+  BsFileEarmark,
+  BsFileEarmarkImage,
+  BsFileEarmarkText,
+  BsFolderFill
+} from 'solid-icons/bs'
 import type { FileEntry } from '../../../shared/types'
 import type { ImageStatus } from '../../../shared/annotations'
 import { getFileKind } from '../../../shared/file-types'
@@ -12,81 +19,30 @@ import {
 } from '../lib/tree-nav'
 
 const TREE_ROW_HEIGHT = 22
+const TREE_ICON_SIZE = 16
 
 const Chevron: Component<{ expanded: boolean }> = (props) => (
-  <svg
+  <BsChevronRight
     class="tree-chevron text-base-content/50"
     classList={{ 'tree-chevron--expanded': props.expanded }}
-    width="16"
-    height="16"
-    viewBox="0 0 16 16"
-  >
-    <path d="M6 4L10 8L6 12" fill="none" stroke="currentColor" stroke-width="1.2" />
-  </svg>
-)
-
-const FolderIcon: Component = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16">
-    <path
-      d="M2 3C2 2.45 2.45 2 3 2H6L8 4H13C13.55 4 14 4.45 14 5V13C14 13.55 13.55 14 13 14H3C2.45 14 2 13.55 2 13V3Z"
-      fill="currentColor"
-      opacity="0.85"
-    />
-  </svg>
-)
-
-const ImageFileIcon: Component = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16">
-    <rect
-      x="2"
-      y="3"
-      width="12"
-      height="10"
-      rx="1"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1"
-    />
-    <circle cx="6" cy="7" r="1.5" fill="currentColor" />
-    <path d="M2 11L5.5 8L8 10L11 7L14 10" stroke="currentColor" stroke-width="1" />
-  </svg>
-)
-
-const TextFileIcon: Component = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16">
-    <path
-      d="M4 2h5l3 3v9c0 .55-.45 1-1 1H4c-.55 0-1-.45-1-1V3c0-.55.45-1 1-1z"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1"
-    />
-    <path d="M9 2v3h3" fill="none" stroke="currentColor" stroke-width="1" />
-    <path d="M5 8h6M5 10h6M5 12h4" stroke="currentColor" stroke-width="1" stroke-linecap="round" />
-  </svg>
-)
-
-const GenericFileIcon: Component = () => (
-  <svg width="16" height="16" viewBox="0 0 16 16">
-    <path
-      d="M4 2h5l3 3v9c0 .55-.45 1-1 1H4c-.55 0-1-.45-1-1V3c0-.55.45-1 1-1z"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1"
-    />
-    <path d="M9 2v3h3" fill="none" stroke="currentColor" stroke-width="1" />
-  </svg>
+    size={TREE_ICON_SIZE}
+    aria-hidden="true"
+  />
 )
 
 const FileIcon: Component<{ name: string }> = (props) => (
   <Show
     when={getFileKind(props.name) === 'image'}
     fallback={
-      <Show when={getFileKind(props.name) === 'text'} fallback={<GenericFileIcon />}>
-        <TextFileIcon />
+      <Show
+        when={getFileKind(props.name) === 'text'}
+        fallback={<BsFileEarmark size={TREE_ICON_SIZE} aria-hidden="true" />}
+      >
+        <BsFileEarmarkText size={TREE_ICON_SIZE} aria-hidden="true" />
       </Show>
     }
   >
-    <ImageFileIcon />
+    <BsFileEarmarkImage size={TREE_ICON_SIZE} aria-hidden="true" />
   </Show>
 )
 
@@ -165,7 +121,7 @@ const TreeNode: Component<{
             when={props.node.type === 'directory'}
             fallback={<FileIcon name={props.node.name} />}
           >
-            <FolderIcon />
+            <BsFolderFill size={TREE_ICON_SIZE} aria-hidden="true" />
           </Show>
         </span>
         <span class="tree-item-label">{props.node.name}</span>

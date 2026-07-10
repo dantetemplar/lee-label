@@ -60,6 +60,7 @@ const FileViewer: Component<{
   activeTool: () => AnnotationTool
   onToolChange: (tool: AnnotationTool) => void
   brushSize: () => number
+  shrinkBrushAtMaxZoom: () => boolean
 }> = (props) => {
   const [imageError, setImageError] = createSignal(false)
   const [imageDimensions, setImageDimensions] = createSignal<{ width: number; height: number } | null>(
@@ -156,6 +157,7 @@ const FileViewer: Component<{
                       labels={props.labels}
                       activeLabelId={props.activeLabelId}
                       brushSize={props.brushSize}
+                      shrinkBrushAtMaxZoom={props.shrinkBrushAtMaxZoom}
                       annotationStore={props.annotationStore}
                       onLoad={handleImageLoad}
                       onError={() => setImageError(true)}

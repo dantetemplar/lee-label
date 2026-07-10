@@ -97,6 +97,11 @@ export interface UpdateLabelInput {
   shortcut?: string
 }
 
+export interface LabelDeleteStats {
+  fileCount: number
+  instanceCount: number
+}
+
 // CVAT cvat-core/src/enums.ts
 export const LABEL_COLORS = [
   '#33ddff',

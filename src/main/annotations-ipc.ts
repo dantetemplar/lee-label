@@ -45,6 +45,11 @@ export function registerAnnotationsIpc(): void {
     projectDatabase.deleteLabel(id)
   })
 
+  ipcMain.handle('labels:get-delete-stats', (_, id: string) => {
+    requireOpenProject()
+    return projectDatabase.getLabelDeleteStats(id)
+  })
+
   ipcMain.handle(
     'images:get-or-create',
     (_, relativePath: string, width?: number, height?: number) => {

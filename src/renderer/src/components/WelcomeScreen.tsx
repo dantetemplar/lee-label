@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js'
 import { For, Show, createSignal } from 'solid-js'
+import { BsFolder2Open } from 'solid-icons/bs'
 import type { RecentProject } from '../../../shared/types'
 import { APP_DISPLAY_NAME } from '../../../shared/app-name'
 import AppLogo from './AppLogo'
@@ -10,17 +11,6 @@ import {
 } from '../lib/recent-project-path'
 
 const RECENT_PREVIEW_COUNT = 5
-
-const FolderIcon: Component = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-    <path
-      d="M3 7C3 5.9 3.9 5 5 5H9.5L11.5 7H19C20.1 7 21 7.9 21 9V19C21 20.1 20.1 21 19 21H5C3.9 21 3 20.1 3 19V7Z"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.5"
-    />
-  </svg>
-)
 
 const WelcomeScreen: Component<{
   recentProjects: () => RecentProject[]
@@ -49,7 +39,7 @@ const WelcomeScreen: Component<{
 
         <div class="welcome-actions">
           <button type="button" class="welcome-action" onClick={() => props.onOpenFolder()}>
-            <FolderIcon />
+            <BsFolder2Open size={20} aria-hidden="true" />
             <span>Open project</span>
           </button>
         </div>

@@ -47,7 +47,11 @@ const api = {
       ipcRenderer.invoke('labels:create', input),
     update: (input: UpdateLabelInput): Promise<import('../shared/annotations').Label> =>
       ipcRenderer.invoke('labels:update', input),
-    delete: (id: string): Promise<void> => ipcRenderer.invoke('labels:delete', id)
+    delete: (id: string): Promise<void> => ipcRenderer.invoke('labels:delete', id),
+    getDeleteStats: (
+      id: string
+    ): Promise<import('../shared/annotations').LabelDeleteStats> =>
+      ipcRenderer.invoke('labels:get-delete-stats', id)
   },
   images: {
     getOrCreate: (

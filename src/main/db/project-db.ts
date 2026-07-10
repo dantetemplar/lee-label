@@ -6,6 +6,7 @@ import type {
   ImageRecord,
   ImageStatus,
   Label,
+  LabelDeleteStats,
   MaskBlob,
   MaskShape,
   RectangleShape,
@@ -191,15 +192,39 @@ export class ProjectDatabase {
 
   deleteLabel(id: string): void {
     const db = this.requireDb()
-    const usage = db.prepare('SELECT COUNT(*) AS count FROM shapes WHERE label_id = ?').get(id) as {
-      count: number
-    }
-    if (usage.count > 0) {
-      throw new Error('Cannot delete label that is used by annotations')
-    }
-    const result = db.prepare('DELETE FROM labels WHERE id = ?').run(id)
-    if (result.changes === 0) throw new Error('Label not found')
+    const existing = db.prepare('SELECT id FROM labels WHERE id = ?').get(id) as { id: string } | undefined
+    if (!existing) throw new Error('Label not found')
+
+    const deleteShapes = db.prepare('DELETE FROM shapes WHERE label_id = ?')
+    const deleteLabelRow = db.prepare('DELETE FROM labels WHERE id = ?')
+
+    const tx = db.transaction(() => {
+      deleteShapes.run(id)
+      deleteLabelRow.run(id)
+    })
+    tx()
     this.touchProject()
+  }
+
+  getLabelDeleteStats(id: string): LabelDeleteStats {
+    const db = this.requireDb()
+    const existing = db.prepare('SELECT id FROM labels WHERE id = ?').get(id) as { id: string } | undefined
+    if (!existing) throw new Error('Label not found')
+
+    const row = db
+      .prepare(
+        `SELECT
+          COUNT(*) AS instanceCount,
+          COUNT(DISTINCT image_id) AS fileCount
+        FROM shapes
+        WHERE label_id = ?`
+      )
+      .get(id) as { instanceCount: number; fileCount: number }
+
+    return {
+      fileCount: row.fileCount,
+      instanceCount: row.instanceCount
+    }
   }
 
   getOrCreateImage(relativePath: string, width?: number, height?: number): ImageRecord {
