@@ -28,12 +28,12 @@ body {
 }
 
 /* Subtle focus — no heavy DaisyUI rings on click; light hint for keyboard nav */
-.app :is(.btn, button:not([data-tree-item]), input:not([type='range']), textarea):focus {
+.app :is(.btn, button:not([data-tree-item]):not([data-color-swatch]), input:not([type='range']), textarea):focus {
   outline: none;
   box-shadow: none;
 }
 
-.app :is(.btn, button:not([data-tree-item])):focus:not(:focus-visible) {
+.app :is(.btn, button:not([data-tree-item]):not([data-color-swatch])):focus:not(:focus-visible) {
   outline: none;
   box-shadow: none;
 }
@@ -43,7 +43,7 @@ body {
   box-shadow: none;
 }
 
-.app :is(.btn, button:not([data-tree-item])):focus-visible {
+.app :is(.btn, button:not([data-tree-item]):not([data-color-swatch])):focus-visible {
   outline: none;
   box-shadow: none;
 }
@@ -74,9 +74,10 @@ body {
 
 .app .input.input-bordered:focus,
 .app .input.input-bordered:focus-visible {
-  outline: none;
+  outline: 2px solid transparent;
+  outline-offset: 0;
   box-shadow: none;
-  @apply border-base-content/20;
+  @apply border-base-content/20 ring-1 ring-primary/40;
 }
 
 .app .field-readonly {

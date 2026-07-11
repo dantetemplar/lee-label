@@ -27,11 +27,6 @@ export function registerAnnotationsIpc(): void {
     projectDatabase.close()
   })
 
-  ipcMain.handle('project:get', () => {
-    requireOpenProject()
-    return projectDatabase.getProject()
-  })
-
   ipcMain.handle(
     'project:update',
     (
@@ -129,11 +124,6 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('masks:get', (_, shapeId: string) => {
     requireOpenProject()
     return projectDatabase.getMaskBlob(shapeId)
-  })
-
-  ipcMain.handle('polygons:get', (_, shapeId: string) => {
-    requireOpenProject()
-    return projectDatabase.getPolygonPoints(shapeId)
   })
 
   ipcMain.handle('semantic-masks:get', (_, relativePath: string) => {

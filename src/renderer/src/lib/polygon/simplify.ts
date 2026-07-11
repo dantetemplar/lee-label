@@ -1,5 +1,5 @@
 import type { PolygonSimplificationSettings } from '../../../../shared/segmentation'
-import type { Point2D } from './contour-trace'
+import type { Point2D } from '../../../../shared/geometry'
 
 function perpendicularDistance(point: Point2D, start: Point2D, end: Point2D): number {
   const dx = end.x - start.x
@@ -36,7 +36,7 @@ function douglasPeucker(points: Point2D[], epsilon: number): Point2D[] {
 }
 
 /** Closed contour perimeter (OpenCV `arcLength(contour, closed=True)`). */
-export function contourArcLength(contour: Point2D[]): number {
+function contourArcLength(contour: Point2D[]): number {
   if (contour.length < 2) return 0
 
   let length = 0
@@ -51,7 +51,7 @@ export function contourArcLength(contour: Point2D[]): number {
  * Ramer–Douglas–Peucker polygon approximation (OpenCV `approxPolyDP`).
  * `epsilon` is the maximum perpendicular distance tolerance in image pixels.
  */
-export function approxPolyDP(contour: Point2D[], epsilon: number, closed = true): Point2D[] {
+function approxPolyDP(contour: Point2D[], epsilon: number, closed = true): Point2D[] {
   if (contour.length <= 2) return contour.slice()
   if (!closed) return douglasPeucker(contour, epsilon)
   if (contour.length === 3) return contour.slice()

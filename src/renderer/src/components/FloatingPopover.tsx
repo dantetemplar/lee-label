@@ -14,6 +14,7 @@ const FloatingPopover: Component<{
   anchor?: () => { x: number; y: number } | undefined
   placement?: FloatingPositionOptions['placement']
   panelClass?: string
+  fitContent?: boolean
   children: JSX.Element
 }> = (props) => {
   const [floatingEl, setFloatingEl] = createSignal<HTMLDivElement | undefined>()
@@ -48,16 +49,19 @@ const FloatingPopover: Component<{
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') props.onClose()
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      props.onClose()
     }
 
     document.addEventListener('click', handleClick)
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', handleKeyDown, true)
 
     onCleanup(() => {
       cleanupPosition()
       document.removeEventListener('click', handleClick)
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
     })
   })
 
@@ -66,7 +70,7 @@ const FloatingPopover: Component<{
       <Portal>
         <div
           ref={setFloatingEl}
-          class={`z-50 min-w-[180px] rounded-lg border border-base-content/10 bg-base-100 shadow-lg ${props.panelClass ?? 'p-1'}`}
+          class={`app z-50 rounded-lg border border-base-content/10 bg-base-100 shadow-lg ${props.fitContent ? 'w-fit' : 'min-w-[180px]'} ${props.panelClass ?? 'p-1'}`}
           role="menu"
           onMouseDown={(event) => event.stopPropagation()}
         >

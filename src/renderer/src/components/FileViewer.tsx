@@ -2,13 +2,10 @@ import type { Component } from 'solid-js'
 import { Match, Show, Switch, createEffect, createSignal, on } from 'solid-js'
 import type { FileKind } from '../../../shared/file-types'
 import type { ImageLayers } from '../../../shared/image-layers'
-import type { Label } from '../../../shared/annotations'
-import type { SegmentationMode } from '../../../shared/segmentation'
-import AnnotationToolbar, { type AnnotationTool } from './AnnotationToolbar'
-import ImageViewer from './ImageViewer'
-import type { AnnotationStore } from '../lib/annotation-store'
-import type { SemanticMapStore } from '../lib/semantic-map-store'
 import { toRelativePath } from '../../../shared/paths'
+import { useProjectContext } from '../lib/project-context'
+import AnnotationToolbar from './AnnotationToolbar'
+import ImageViewer from './ImageViewer'
 
 export interface FileInfo {
   name: string
@@ -53,19 +50,11 @@ const FileViewer: Component<{
   textLoading: () => boolean
   textDraft: () => string
   error: () => string | null
-  labels: () => Label[]
-  activeLabelId: () => string | null
-  annotationStore: AnnotationStore | null
-  semanticStore: SemanticMapStore | null
-  segmentationMode: () => SegmentationMode
   onImageLoad: (dims: { width: number; height: number }) => void
   onTextChange: (value: string) => void
   onTextSave: () => void
-  activeTool: () => AnnotationTool
-  onToolChange: (tool: AnnotationTool) => void
-  brushSize: () => number
-  shrinkBrushAtMaxZoom: () => boolean
 }> = (props) => {
+  const project = useProjectContext()
   const [imageError, setImageError] = createSignal(false)
   const [imageDimensions, setImageDimensions] = createSignal<{ width: number; height: number } | null>(
     null
@@ -87,15 +76,15 @@ const FileViewer: Component<{
         return {
           relativePath: toRelativePath(root, layers.currentPath),
           dims,
-          mode: props.segmentationMode()
+          mode: project.projectSettings().segmentationMode
         }
       },
       (payload) => {
         if (!payload) return
         if (payload.mode === 'semantic') {
-          void props.semanticStore?.loadForImage(payload.relativePath, payload.dims)
+          void project.semanticStore.loadForImage(payload.relativePath, payload.dims)
         } else {
-          void props.annotationStore?.loadForImage(payload.relativePath, payload.dims)
+          void project.annotationStore.loadForImage(payload.relativePath, payload.dims)
         }
       }
     )
@@ -161,22 +150,14 @@ const FileViewer: Component<{
                   <Show when={!imageError()}>
                     <ImageViewer
                       layers={layers()}
-                      activeTool={props.activeTool}
-                      labels={props.labels}
-                      activeLabelId={props.activeLabelId}
-                      brushSize={props.brushSize}
-                      shrinkBrushAtMaxZoom={props.shrinkBrushAtMaxZoom}
-                      annotationStore={props.annotationStore}
-                      semanticStore={props.semanticStore}
-                      segmentationMode={props.segmentationMode}
                       onLoad={handleImageLoad}
                       onError={() => setImageError(true)}
                     />
                   </Show>
                   <AnnotationToolbar
-                    activeTool={props.activeTool}
-                    segmentationMode={props.segmentationMode}
-                    onToolChange={props.onToolChange}
+                    activeTool={project.activeTool}
+                    segmentationMode={() => project.projectSettings().segmentationMode}
+                    onToolChange={project.setActiveTool}
                   />
                 </div>
               )}

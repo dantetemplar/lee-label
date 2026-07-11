@@ -40,14 +40,12 @@ const api = {
     exists: (path: string): Promise<boolean> => ipcRenderer.invoke('recent:exists', path)
   },
   paths: {
-    getHome: (): Promise<string> => ipcRenderer.invoke('paths:get-home'),
     formatDisplay: (path: string): Promise<string> => ipcRenderer.invoke('paths:format-display', path)
   },
   project: {
     open: (rootPath: string): Promise<{ rootPath: string } & ProjectSettings> =>
       ipcRenderer.invoke('project:open', rootPath),
     close: (): Promise<void> => ipcRenderer.invoke('project:close'),
-    get: (): Promise<ProjectSettings> => ipcRenderer.invoke('project:get'),
     update: (input: {
       name?: string
       segmentationMode?: SegmentationMode
@@ -107,10 +105,6 @@ const api = {
   masks: {
     get: (shapeId: string): Promise<import('../shared/annotations').MaskBlob | null> =>
       ipcRenderer.invoke('masks:get', shapeId)
-  },
-  polygons: {
-    get: (shapeId: string): Promise<{ x: number; y: number }[] | null> =>
-      ipcRenderer.invoke('polygons:get', shapeId)
   },
   semanticMasks: {
     get: (

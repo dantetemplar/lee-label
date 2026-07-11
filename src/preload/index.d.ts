@@ -36,13 +36,11 @@ export interface AppAPI {
     exists: (path: string) => Promise<boolean>
   }
   paths: {
-    getHome: () => Promise<string>
     formatDisplay: (path: string) => Promise<string>
   }
   project: {
     open: (rootPath: string) => Promise<{ rootPath: string } & ProjectSettings>
     close: () => Promise<void>
-    get: () => Promise<ProjectSettings>
     update: (input: {
       name?: string
       segmentationMode?: SegmentationMode
@@ -74,9 +72,6 @@ export interface AppAPI {
   }
   masks: {
     get: (shapeId: string) => Promise<MaskBlob | null>
-  }
-  polygons: {
-    get: (shapeId: string) => Promise<{ x: number; y: number }[] | null>
   }
   semanticMasks: {
     get: (

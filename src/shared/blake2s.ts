@@ -105,7 +105,7 @@ function finalize(ctx: Blake2sContext): Uint8Array {
   return out
 }
 
-export function blake2s(input: Uint8Array, outlen: number): Uint8Array {
+function blake2s(input: Uint8Array, outlen: number): Uint8Array {
   const ctx = init(outlen)
   update(ctx, input)
   return finalize(ctx)

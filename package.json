@@ -20,10 +20,10 @@
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "build:linux": "electron-vite build && electron-builder --linux",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.6",
     "better-sqlite3": "^12.11.1",
@@ -48,6 +48,7 @@
     "tailwindcss": "^4.3.2",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
-    "vite-plugin-solid": "^2.11.10"
+    "vite-plugin-solid": "^2.11.10",
+    "vitest": "^4.1.10"
   }
 }

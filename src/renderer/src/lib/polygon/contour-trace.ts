@@ -1,7 +1,6 @@
-export interface Point2D {
-  x: number
-  y: number
-}
+import type { Point2D } from '../../../../shared/geometry'
+
+export type { Point2D }
 
 export interface MaskRegion {
   pixels: Point2D[]
@@ -142,7 +141,7 @@ function findStartPixel(data: Uint8Array, width: number, height: number): Point2
   return null
 }
 
-export function traceOuterBoundary(
+function traceOuterBoundary(
   data: Uint8Array,
   width: number,
   height: number

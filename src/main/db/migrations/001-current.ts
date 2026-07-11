@@ -1,4 +1,4 @@
-export const MIGRATION_001 = `
+export const MIGRATION_CURRENT = `
 CREATE TABLE IF NOT EXISTS schema_meta (
   version INTEGER PRIMARY KEY,
   applied_at TEXT NOT NULL
@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS labels (
   name TEXT NOT NULL,
   color TEXT NOT NULL,
   sort_order INTEGER NOT NULL,
-  shortcut TEXT
+  shortcut TEXT,
+  class_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS images (
@@ -40,7 +41,7 @@ CREATE INDEX IF NOT EXISTS idx_images_path ON images(relative_path);
 CREATE TABLE IF NOT EXISTS shapes (
   id TEXT PRIMARY KEY,
   image_id INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('rectangle', 'mask')),
+  type TEXT NOT NULL CHECK (type IN ('rectangle', 'mask', 'polygon')),
   label_id TEXT NOT NULL REFERENCES labels(id),
   z_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
@@ -62,6 +63,19 @@ CREATE TABLE IF NOT EXISTS mask_data (
   width INTEGER NOT NULL,
   height INTEGER NOT NULL,
   format TEXT NOT NULL DEFAULT 'bitmap' CHECK (format = 'bitmap'),
+  data BLOB NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS polygon_data (
+  shape_id TEXT PRIMARY KEY REFERENCES shapes(id) ON DELETE CASCADE,
+  rings_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS semantic_masks (
+  image_id INTEGER PRIMARY KEY REFERENCES images(id) ON DELETE CASCADE,
+  width INTEGER NOT NULL,
+  height INTEGER NOT NULL,
+  format TEXT NOT NULL DEFAULT 'png16' CHECK (format = 'png16'),
   data BLOB NOT NULL
 );
 `

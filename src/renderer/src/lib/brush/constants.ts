@@ -92,7 +92,7 @@ export function getBrushPreviewSettings(brushDiameterPx: number): BrushPreviewSe
   }
 }
 
-export function getBrushPreviewStrokeWidths(brushDiameterPx: number): {
+function getBrushPreviewStrokeWidths(brushDiameterPx: number): {
   strokeWidthPx: number
   innerStrokeWidthPx: number
 } {

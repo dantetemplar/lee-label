@@ -2,11 +2,11 @@ import {
   MIN_TOPOLOGY_HOLE_PIXELS,
   MIN_TOPOLOGY_ISLAND_PIXELS
 } from '../../../../shared/segmentation'
+import type { Point2D } from '../../../../shared/geometry'
 import {
   extractComponentMask,
   findConnectedComponents,
-  findHolePixels,
-  type Point2D
+  findHolePixels
 } from './contour-trace'
 
 export interface MaskTopologyIssue {
@@ -95,7 +95,7 @@ function segmentsIntersect(a1: Point2D, a2: Point2D, b1: Point2D, b2: Point2D): 
   return false
 }
 
-export function hasSelfIntersection(points: Point2D[]): boolean {
+function hasSelfIntersection(points: Point2D[]): boolean {
   const count = points.length
   if (count < 4) return false
 

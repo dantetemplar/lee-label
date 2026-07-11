@@ -10,6 +10,8 @@ import type {
   SaveRectangleInput
 } from '../../../shared/annotations'
 import type { SegmentationMode } from '../../../shared/segmentation'
+import type { AppAPI } from '../../../preload/index.d'
+import { PERSISTED_UNDO_STACK_LIMIT, PersistedImageStore } from './persisted-store'
 
 export interface WorkingMask extends MaskShape {
   data: Uint8Array
@@ -42,25 +44,21 @@ function isWorkingMask(shape: WorkingShape): shape is WorkingMask {
   return shape.type === 'mask'
 }
 
-export class AnnotationStore {
+export class AnnotationStore extends PersistedImageStore {
   readonly shapes = createSignal<WorkingShape[]>([])
   readonly selectedShapeId = createSignal<string | null>(null)
-  readonly dirty = createSignal(false)
-  readonly loading = createSignal(false)
-  readonly currentRelativePath = createSignal<string | null>(null)
-  readonly imageStatus = createSignal<ImageStatus>('todo')
   readonly segmentationMode = createSignal<SegmentationMode>('instance')
 
   private undoStack: AnnotationSnapshot[] = []
   private redoStack: AnnotationSnapshot[] = []
-  private saveTimer: ReturnType<typeof setTimeout> | undefined
-  private imageWidth = 0
-  private imageHeight = 0
 
   constructor(
-    private readonly onDirtyChange?: (dirty: boolean) => void,
-    private readonly onStatusChange?: (relativePath: string, status: ImageStatus) => void
-  ) {}
+    api?: AppAPI,
+    onDirtyChange?: (dirty: boolean) => void,
+    onStatusChange?: (relativePath: string, status: ImageStatus) => void
+  ) {
+    super(api, onDirtyChange, onStatusChange)
+  }
 
   setSegmentationMode(mode: SegmentationMode): void {
     this.segmentationMode[1](mode)
@@ -75,7 +73,7 @@ export class AnnotationStore {
 
   pushUndo(): void {
     this.undoStack.push(this.snapshot())
-    if (this.undoStack.length > 50) this.undoStack.shift()
+    if (this.undoStack.length > PERSISTED_UNDO_STACK_LIMIT) this.undoStack.shift()
     this.redoStack = []
   }
 
@@ -100,26 +98,7 @@ export class AnnotationStore {
   }
 
   markDirty(): void {
-    if (!this.dirty[0]()) {
-      this.dirty[1](true)
-      this.onDirtyChange?.(true)
-    }
-    const relativePath = this.currentRelativePath[0]()
-    if (relativePath && this.imageStatus[0]() === 'todo') {
-      this.imageStatus[1]('in_progress')
-      void window.api.images.setStatus(relativePath, 'in_progress').then((record) => {
-        this.imageStatus[1](record.status)
-        this.onStatusChange?.(relativePath, record.status)
-      })
-    }
-    this.scheduleSave()
-  }
-
-  private scheduleSave(): void {
-    if (this.saveTimer) clearTimeout(this.saveTimer)
-    this.saveTimer = setTimeout(() => {
-      void this.saveCurrent()
-    }, 1000)
+    this.markDirtyAndSchedule(() => this.saveCurrent())
   }
 
   async loadForImage(
@@ -127,16 +106,13 @@ export class AnnotationStore {
     dimensions: { width: number; height: number }
   ): Promise<void> {
     await this.saveCurrent()
-    this.loading[1](true)
-    this.currentRelativePath[1](relativePath)
-    this.imageWidth = dimensions.width
-    this.imageHeight = dimensions.height
+    this.beginLoad(relativePath, dimensions)
     this.undoStack = []
     this.redoStack = []
 
     const [imageRecord, shapeList] = await Promise.all([
-      window.api.images.getOrCreate(relativePath, dimensions.width, dimensions.height),
-      window.api.shapes.list(relativePath)
+      this.api.images.getOrCreate(relativePath, dimensions.width, dimensions.height),
+      this.api.shapes.list(relativePath)
     ])
 
     this.imageStatus[1](imageRecord.status)
@@ -147,7 +123,7 @@ export class AnnotationStore {
         working.push(shape)
         continue
       }
-      const blob = await window.api.masks.get(shape.id)
+      const blob = await this.api.masks.get(shape.id)
       if (!blob) continue
       working.push({
         ...shape,
@@ -157,28 +133,19 @@ export class AnnotationStore {
 
     this.shapes[1](working)
     this.selectedShapeId[1](null)
-    this.dirty[1](false)
-    this.onDirtyChange?.(false)
-    this.loading[1](false)
+    this.finishLoad()
   }
 
   clear(): void {
-    if (this.saveTimer) clearTimeout(this.saveTimer)
-    this.currentRelativePath[1](null)
+    this.clearCommon()
     this.shapes[1]([])
     this.selectedShapeId[1](null)
-    this.dirty[1](false)
-    this.onDirtyChange?.(false)
-    this.imageStatus[1]('todo')
     this.undoStack = []
     this.redoStack = []
   }
 
   async saveCurrent(): Promise<void> {
-    if (this.saveTimer) {
-      clearTimeout(this.saveTimer)
-      this.saveTimer = undefined
-    }
+    this.clearSaveTimer()
     const relativePath = this.currentRelativePath[0]()
     if (!relativePath || !this.dirty[0]()) return
 
@@ -234,7 +201,7 @@ export class AnnotationStore {
       })
     }
 
-    const saved = await window.api.shapes.replaceImage(
+    const saved = await this.api.shapes.replaceImage(
       relativePath,
       rectangles,
       masks,
@@ -281,18 +248,6 @@ export class AnnotationStore {
     this.shapes[1](this.shapes[0]().filter((shape) => shape.id !== selectedId))
     this.selectedShapeId[1](null)
     this.markDirty()
-  }
-
-  async setImageStatus(status: ImageStatus): Promise<void> {
-    const relativePath = this.currentRelativePath[0]()
-    if (!relativePath) return
-    const record = await window.api.images.setStatus(relativePath, status)
-    this.imageStatus[1](record.status)
-    this.onStatusChange?.(relativePath, record.status)
-  }
-
-  getImageDimensions(): { width: number; height: number } {
-    return { width: this.imageWidth, height: this.imageHeight }
   }
 
   createRectangle(

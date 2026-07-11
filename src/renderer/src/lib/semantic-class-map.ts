@@ -4,10 +4,7 @@ import {
   usesPixelBrushShape
 } from './brush/brush-shapes'
 
-export interface Point2D {
-  x: number
-  y: number
-}
+import type { Point2D } from '../../../shared/geometry'
 
 function stampCapsuleOnClassMap(
   map: Uint16Array,
@@ -74,7 +71,7 @@ export function stampClassIdStroke(
   stampCapsuleOnClassMap(map, width, height, from, to, brushDiameter / 2, classId)
 }
 
-export function stampEraseStroke(
+function stampEraseStroke(
   map: Uint16Array,
   width: number,
   height: number,

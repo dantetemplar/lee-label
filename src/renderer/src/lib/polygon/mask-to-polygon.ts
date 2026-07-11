@@ -1,14 +1,14 @@
 import type { PolygonSimplificationSettings } from '../../../../shared/segmentation'
+import type { Point2D } from '../../../../shared/geometry'
 import {
   extractComponentMask,
   extractExternalContour,
-  findConnectedComponents,
-  type Point2D
+  findConnectedComponents
 } from './contour-trace'
 import { approxPolyDPFromSettings } from './simplify'
 import { binarizeMask, isSimplePolygon } from './validate'
 
-export function convexHull(points: Point2D[]): Point2D[] {
+function convexHull(points: Point2D[]): Point2D[] {
   if (points.length <= 3) return points.slice()
 
   const sorted = [...points].sort((left, right) =>

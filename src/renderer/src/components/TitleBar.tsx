@@ -57,15 +57,18 @@ const TitleBar: Component<{
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') closeFileMenu()
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      closeFileMenu()
     }
 
     document.addEventListener('click', handleClick)
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('keydown', handleKeyDown, true)
 
     onCleanup(() => {
       document.removeEventListener('click', handleClick)
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
     })
   })
 

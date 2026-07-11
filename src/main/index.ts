@@ -10,6 +10,7 @@ import { addRecentProject, getRecentProjects, isExistingDirectory, removeRecentP
 import { APP_DISPLAY_NAME } from '../shared/app-name'
 import { formatDisplayPath } from '../shared/paths'
 import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
+import { resolveProjectPath } from './project-fs'
 
 registerImageProtocolSchemes()
 
@@ -79,15 +80,18 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('fs:read-directory-tree', async (_, rootPath: string) => {
-    return readDirTree(rootPath)
+    const resolved = resolveProjectPath(rootPath)
+    return readDirTree(resolved)
   })
 
   ipcMain.handle('fs:read-text-file', async (_, filePath: string) => {
-    return readTextFile(filePath)
+    const resolved = resolveProjectPath(filePath)
+    return readTextFile(resolved)
   })
 
   ipcMain.handle('fs:write-text-file', async (_, filePath: string, content: string) => {
-    return writeTextFile(filePath, content)
+    const resolved = resolveProjectPath(filePath)
+    return writeTextFile(resolved, content)
   })
 
   ipcMain.handle('recent:get', async () => {
@@ -104,10 +108,6 @@ function registerIpc(): void {
 
   ipcMain.handle('recent:exists', async (_, path: string) => {
     return isExistingDirectory(path)
-  })
-
-  ipcMain.handle('paths:get-home', () => {
-    return app.getPath('home')
   })
 
   ipcMain.handle('paths:format-display', (_, path: string) => {

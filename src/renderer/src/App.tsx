@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js'
-import { createEffect, createSignal, on, onMount, Show, untrack } from 'solid-js'
+import { createEffect, createSignal, on, onCleanup, onMount, Show } from 'solid-js'
 import type { FileEntry, RecentProject } from '../../shared/types'
 import type { ImageStatus, Label, LabelDeleteStats } from '../../shared/annotations'
 import type { ProjectSettings } from '../../shared/segmentation'
@@ -21,6 +21,10 @@ import { APP_DISPLAY_NAME } from '../../shared/app-name'
 import { AnnotationStore } from './lib/annotation-store'
 import { SemanticMapStore } from './lib/semantic-map-store'
 import { toRelativePath } from '../../shared/paths'
+import { getActiveStore } from './lib/annotation-backend'
+import { ProjectContext } from './lib/project-context'
+import { useProjectLifecycle } from './lib/useProjectLifecycle'
+import { useTextFileEditor } from './lib/useTextFileEditor'
 
 const App: Component = () => {
   const [folderPath, setFolderPath] = createSignal<string | null>(null)
@@ -29,10 +33,6 @@ const App: Component = () => {
   const [selectedPath, setSelectedPath] = createSignal<string | null>(null)
   const [selectedFile, setSelectedFile] = createSignal<FileEntry | null>(null)
   const [fileInfo, setFileInfo] = createSignal<FileInfo | null>(null)
-  const [textDraft, setTextDraft] = createSignal('')
-  const [textSaved, setTextSaved] = createSignal('')
-  const [textLoading, setTextLoading] = createSignal(false)
-  const [textLoadError, setTextLoadError] = createSignal<string | null>(null)
   const [recentProjects, setRecentProjects] = createSignal<RecentProject[]>([])
   const [labels, setLabels] = createSignal<Label[]>([])
   const [activeLabelId, setActiveLabelId] = createSignal<string | null>(null)
@@ -50,14 +50,70 @@ const App: Component = () => {
     segmentationMode: DEFAULT_SEGMENTATION_MODE
   })
 
-  const annotationStore = new AnnotationStore(undefined, (relativePath, status) => {
+  const annotationStore = new AnnotationStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
   })
-  const semanticStore = new SemanticMapStore(undefined, (relativePath, status) => {
+  const semanticStore = new SemanticMapStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
   })
 
-  let textLoadVersion = 0
+  const textEditor = useTextFileEditor({
+    selectedPath,
+    selectedFile,
+    setFileInfo
+  })
+
+  const resetViewerState = (): void => {
+    setSelectedPath(null)
+    setSelectedFile(null)
+    setFileInfo(null)
+    textEditor.resetForNavigation()
+    annotationStore.clear()
+    semanticStore.clear()
+  }
+
+  const flushAnnotations = async (): Promise<void> => {
+    await annotationStore.flush()
+    await semanticStore.flush()
+  }
+
+  const selectFile = async (node: FileEntry): Promise<void> => {
+    const previousPath = selectedPath()
+    const previousFile = selectedFile()
+
+    if (node.path !== previousPath && previousFile && previousPath) {
+      textEditor.saveTextSnapshot(previousPath, previousFile, textEditor.textDraft(), textEditor.textSaved())
+    }
+
+    if (node.path !== previousPath) {
+      await flushAnnotations()
+    }
+
+    setSelectedPath(node.path)
+    setSelectedFile(node)
+    setFileInfo({
+      name: node.name,
+      size: node.size ?? 0
+    })
+  }
+
+  const lifecycle = useProjectLifecycle({
+    folderPath,
+    setFolderPath,
+    setFolderName,
+    setEntries,
+    setRecentProjects,
+    setProjectSettings,
+    setLabels,
+    setImageStatuses,
+    setActiveLabelId,
+    setLabelError,
+    resetViewerState,
+    selectFile,
+    annotationStore,
+    semanticStore,
+    saveOpenTextIfDirty: () => textEditor.saveOpenTextIfDirty()
+  })
 
   onMount(() => {
     void window.api.recent.get().then(setRecentProjects)
@@ -80,229 +136,12 @@ const App: Component = () => {
     }
   }
 
-  const loadError = (): string | null => {
-    if (selectedKind() === 'text') return textLoadError()
-    return null
-  }
-
-  const updateTextFileInfo = (file: FileEntry, content: string, dirty: boolean): void => {
-    setFileInfo({
-      name: file.name,
-      size: new TextEncoder().encode(content).length,
-      lines: content.split('\n').length,
-      dirty
-    })
-  }
-
-  createEffect(
-    on(
-      () => {
-        const path = selectedPath()
-        const file = selectedFile()
-        if (!path || !file || getFileKind(file.name) !== 'text') return null
-        return path
-      },
-      (path) => {
-        if (!path) {
-          textLoadVersion += 1
-          setTextLoading(false)
-          setTextLoadError(null)
-          return
-        }
-
-        const file = selectedFile()
-        if (!file) return
-
-        const version = ++textLoadVersion
-        setTextLoading(true)
-        setTextLoadError(null)
-        setTextDraft('')
-        setTextSaved('')
-
-        void window.api.files
-          .readTextFile(path)
-          .then((content) => {
-            if (version !== textLoadVersion || untrack(selectedPath) !== path) return
-            setTextDraft(content)
-            setTextSaved(content)
-            updateTextFileInfo(file, content, false)
-            setTextLoading(false)
-          })
-          .catch((error: unknown) => {
-            if (version !== textLoadVersion || untrack(selectedPath) !== path) return
-            setTextLoadError(error instanceof Error ? error.message : 'Failed to load file')
-            setTextLoading(false)
-          })
-      }
-    )
-  )
-
-  const saveTextSnapshot = (
-    path: string,
-    file: FileEntry,
-    content: string,
-    savedContent: string
-  ): void => {
-    if (getFileKind(file.name) !== 'text') return
-    if (content === savedContent) return
-
-    void window.api.files.writeTextFile(path, content).then((size) => {
-      if (untrack(() => selectedPath() === path && textDraft() === content)) {
-        setTextSaved(content)
-        setFileInfo({
-          name: file.name,
-          size,
-          lines: content.split('\n').length,
-          dirty: false
-        })
-      }
-    })
-  }
-
-  const saveOpenTextIfDirty = (): void => {
-    const file = selectedFile()
-    const path = selectedPath()
-    if (!file || !path || getFileKind(file.name) !== 'text') return
-    saveTextSnapshot(path, file, textDraft(), textSaved())
-  }
-
-  const flushAnnotations = async (): Promise<void> => {
-    await annotationStore.flush()
-    await semanticStore.flush()
-  }
-
-  createEffect(
-    on(
-      () => textDraft(),
-      (draft) => {
-        const file = selectedFile()
-        if (!file || getFileKind(file.name) !== 'text') return
-        if (textLoading()) return
-
-        const dirty = draft !== textSaved()
-        setFileInfo((info) =>
-          info
-            ? {
-                ...info,
-                lines: draft.split('\n').length,
-                size: new TextEncoder().encode(draft).length,
-                dirty
-              }
-            : info
-        )
-      }
-    )
-  )
-
-  const resetViewerState = (): void => {
-    setSelectedPath(null)
-    setSelectedFile(null)
-    setFileInfo(null)
-    setTextDraft('')
-    setTextSaved('')
-    setTextLoading(false)
-    setTextLoadError(null)
-    annotationStore.clear()
-    semanticStore.clear()
-  }
-
-  const openAnnotationProject = async (path: string): Promise<void> => {
-    const project = await window.api.project.open(path)
-    const [nextLabels, statuses] = await Promise.all([
-      window.api.labels.list(),
-      window.api.images.listStatuses()
-    ])
-    setProjectSettings({
-      name: project.name,
-      segmentationMode: project.segmentationMode
-    })
-    setFolderName(project.name)
-    annotationStore.setSegmentationMode(project.segmentationMode)
-    setLabels(nextLabels)
-    setImageStatuses(statuses)
-    setActiveLabelId(nextLabels[0]?.id ?? null)
-    setLabelError(null)
-  }
-
-  const closeAnnotationProject = async (): Promise<void> => {
-    await flushAnnotations()
-    await window.api.project.close()
-    setLabels([])
-    setImageStatuses({})
-    setActiveLabelId(null)
-    setLabelError(null)
-  }
-
-  const loadFolderAtPath = async (path: string): Promise<void> => {
-    await closeAnnotationProject()
-    const tree = await window.api.files.readDirectoryTree(path)
-    const recent = await window.api.recent.add(path)
-    setFolderPath(path)
-    setEntries(tree)
-    setRecentProjects(recent)
-    resetViewerState()
-    await openAnnotationProject(path)
-  }
-
-  const openFolder = async (): Promise<void> => {
-    saveOpenTextIfDirty()
-    await flushAnnotations()
-
-    const path = await window.api.files.openFolder()
-    if (!path) return
-
-    await loadFolderAtPath(path)
-  }
-
-  const goToWelcomeScreen = async (): Promise<void> => {
-    if (!folderPath()) return
-
-    saveOpenTextIfDirty()
-    await flushAnnotations()
-    await closeAnnotationProject()
-    setFolderPath(null)
-    setEntries([])
-    resetViewerState()
-  }
-
-  const openRecentProject = async (path: string): Promise<void> => {
-    saveOpenTextIfDirty()
-    await flushAnnotations()
-
-    const exists = await window.api.recent.exists(path)
-    if (!exists) {
-      const recent = await window.api.recent.get()
-      setRecentProjects(recent)
-      return
-    }
-
-    await loadFolderAtPath(path)
-  }
-
-  const selectFile = async (node: FileEntry): Promise<void> => {
-    const previousPath = selectedPath()
-    const previousFile = selectedFile()
-
-    if (node.path !== previousPath && previousFile && previousPath) {
-      saveTextSnapshot(previousPath, previousFile, textDraft(), textSaved())
-    }
-
-    if (node.path !== previousPath) {
-      await flushAnnotations()
-    }
-
-    setSelectedPath(node.path)
-    setSelectedFile(node)
-    setFileInfo({
-      name: node.name,
-      size: node.size ?? 0
-    })
-  }
+  const loadError = (): string | null => textEditor.textLoadErrorForKind(selectedKind())
 
   const handleTreeFocusChange = (focusedPath: string): void => {
     const openPath = selectedPath()
     if (!openPath || focusedPath === openPath) return
-    saveOpenTextIfDirty()
+    textEditor.saveOpenTextIfDirty()
   }
 
   const handleImageLoad = (dims: { width: number; height: number }): void => {
@@ -380,17 +219,15 @@ const App: Component = () => {
       const relativePath = currentImageRelativePath()
       const info = fileInfo()
       if (relativePath && info?.width && info?.height) {
-        if (projectSettings().segmentationMode === 'semantic') {
-          await semanticStore.loadForImage(relativePath, {
-            width: info.width,
-            height: info.height
-          })
-        } else {
-          await annotationStore.loadForImage(relativePath, {
-            width: info.width,
-            height: info.height
-          })
-        }
+        const store = getActiveStore(
+          projectSettings().segmentationMode,
+          annotationStore,
+          semanticStore
+        )
+        await store.loadForImage(relativePath, {
+          width: info.width,
+          height: info.height
+        })
       }
 
       setLabelDeletePrompt(null)
@@ -426,8 +263,7 @@ const App: Component = () => {
   }
 
   const markImageStatus = (status: ImageStatus): void => {
-    const store =
-      projectSettings().segmentationMode === 'semantic' ? semanticStore : annotationStore
+    const store = getActiveStore(projectSettings().segmentationMode, annotationStore, semanticStore)
     void store.setImageStatus(status).then(() => {
       const relativePath = currentImageRelativePath()
       if (relativePath) handleImageStatusChange(relativePath, status)
@@ -460,6 +296,23 @@ const App: Component = () => {
     )
   )
 
+  createEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      if (activeTool() === 'cursor') {
+        if (annotationStore.selectedShapeId[0]()) {
+          event.preventDefault()
+          annotationStore.setSelectedShapeId(null)
+        }
+        return
+      }
+      setActiveTool('cursor')
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    onCleanup(() => document.removeEventListener('keydown', handleKeyDown))
+  })
+
   const handleUpdateProjectSettings = async (settings: {
     name: string
     segmentationMode: ProjectSettings['segmentationMode']
@@ -479,119 +332,127 @@ const App: Component = () => {
     setRecentProjects(recent)
   }
 
+  const projectContextValue = {
+    annotationStore,
+    semanticStore,
+    labels,
+    activeLabelId,
+    setActiveLabelId,
+    projectSettings,
+    activeTool,
+    setActiveTool,
+    brushSize,
+    setBrushSize,
+    shrinkBrushAtMaxZoom,
+    setShrinkBrushAtMaxZoom
+  }
+
   return (
-    <div class="app flex h-screen flex-col bg-base-100 text-base-content">
-      <TitleBar
-        title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
-        hasOpenProject={() => folderPath() !== null}
-        recentProjects={recentProjects}
-        onGoToWelcomeScreen={() => void goToWelcomeScreen()}
-        onOpenFolder={() => void openFolder()}
-        onOpenRecent={(path) => void openRecentProject(path)}
-      />
-      <div class="flex min-h-0 flex-1">
-        <Show when={folderPath()}>
-          <Show
-            when={showLabelSidebar()}
-            fallback={
-              <FileTree
-                rootName={folderName}
-                entries={entries}
-                selectedPath={selectedPath}
-                projectRoot={folderPath}
-                imageStatuses={imageStatuses}
-                onSelect={(node) => void selectFile(node)}
-                onFocusChange={handleTreeFocusChange}
-                onProjectSettingsChange={handleUpdateProjectSettings}
-                projectSettings={projectSettings}
-              />
-            }
-          >
-            <aside class="flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-base-300 bg-base-200 border-r">
-              <Show when={activeTool() === 'mask'}>
-                <BrushSettings
-                  brushSize={brushSize}
-                  onBrushSizeChange={setBrushSize}
-                  shrinkAtMaxZoom={shrinkBrushAtMaxZoom}
-                  onShrinkAtMaxZoomChange={setShrinkBrushAtMaxZoom}
+    <ProjectContext.Provider value={projectContextValue}>
+      <div class="app flex h-screen flex-col bg-base-100 text-base-content">
+        <TitleBar
+          title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
+          hasOpenProject={() => folderPath() !== null}
+          recentProjects={recentProjects}
+          onGoToWelcomeScreen={() => void lifecycle.goToWelcomeScreen()}
+          onOpenFolder={() => void lifecycle.openFolder()}
+          onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
+        />
+        <div class="flex min-h-0 flex-1">
+          <Show when={folderPath()}>
+            <Show
+              when={showLabelSidebar()}
+              fallback={
+                <FileTree
+                  rootName={folderName}
+                  entries={entries}
+                  selectedPath={selectedPath}
+                  projectRoot={folderPath}
+                  imageStatuses={imageStatuses}
+                  onSelect={(node) => void selectFile(node)}
+                  onFocusChange={handleTreeFocusChange}
+                  onProjectSettingsChange={handleUpdateProjectSettings}
+                  projectSettings={projectSettings}
                 />
-              </Show>
-              <LabelPanel
-                labels={labels}
-                activeLabelId={activeLabelId}
-                onSelect={setActiveLabelId}
-                onCreate={handleCreateLabel}
-                onUpdate={handleUpdateLabel}
-                onDelete={handleRequestDeleteLabel}
-                error={labelError}
+              }
+            >
+              <aside class="flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-base-300 bg-base-200 border-r">
+                <Show when={activeTool() === 'mask'}>
+                  <BrushSettings
+                    brushSize={brushSize}
+                    onBrushSizeChange={setBrushSize}
+                    shrinkAtMaxZoom={shrinkBrushAtMaxZoom}
+                    onShrinkAtMaxZoomChange={setShrinkBrushAtMaxZoom}
+                  />
+                </Show>
+                <LabelPanel
+                  labels={labels}
+                  activeLabelId={activeLabelId}
+                  onSelect={setActiveLabelId}
+                  onCreate={handleCreateLabel}
+                  onUpdate={handleUpdateLabel}
+                  onDelete={handleRequestDeleteLabel}
+                  error={labelError}
+                />
+                <div class="flex shrink-0 flex-col gap-1.5 border-t border-base-content/10 p-2">
+                  <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkDone}>
+                    Mark done
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkSkipped}>
+                    Skip
+                  </button>
+                </div>
+              </aside>
+            </Show>
+            <div class="flex min-w-0 flex-1 flex-col bg-base-100">
+              <FileViewer
+                kind={selectedKind}
+                fileName={() => selectedFile()?.name ?? null}
+                filePath={selectedPath}
+                projectRoot={folderPath}
+                imageLayers={imageLayers}
+                textLoading={() => textEditor.textLoading()}
+                error={loadError}
+                onImageLoad={handleImageLoad}
+                onTextChange={textEditor.setTextDraft}
+                textDraft={textEditor.textDraft}
+                onTextSave={textEditor.saveOpenTextIfDirty}
               />
-              <div class="flex shrink-0 flex-col gap-1.5 border-t border-base-content/10 p-2">
-                <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkDone}>
-                  Mark done
-                </button>
-                <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkSkipped}>
-                  Skip
-                </button>
-              </div>
-            </aside>
+            </div>
           </Show>
-          <div class="flex min-w-0 flex-1 flex-col bg-base-100">
-            <FileViewer
-              kind={selectedKind}
-              fileName={() => selectedFile()?.name ?? null}
-              filePath={selectedPath}
-              projectRoot={folderPath}
-              imageLayers={imageLayers}
-              textLoading={() => textLoading()}
-              error={loadError}
-              labels={labels}
-              activeLabelId={activeLabelId}
-              annotationStore={annotationStore}
-              semanticStore={semanticStore}
-              segmentationMode={() => projectSettings().segmentationMode}
-              activeTool={activeTool}
-              onToolChange={setActiveTool}
-              brushSize={brushSize}
-              shrinkBrushAtMaxZoom={shrinkBrushAtMaxZoom}
-              onImageLoad={handleImageLoad}
-              onTextChange={setTextDraft}
-              textDraft={textDraft}
-              onTextSave={saveOpenTextIfDirty}
+          <Show when={!folderPath()}>
+            <WelcomeScreen
+              recentProjects={recentProjects}
+              onOpenFolder={() => void lifecycle.openFolder()}
+              onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
+              onRemoveRecent={(path) => void handleRemoveRecent(path)}
             />
-          </div>
-        </Show>
-        <Show when={!folderPath()}>
-          <WelcomeScreen
-            recentProjects={recentProjects}
-            onOpenFolder={openFolder}
-            onOpenRecent={(path) => void openRecentProject(path)}
-            onRemoveRecent={(path) => void handleRemoveRecent(path)}
-          />
-        </Show>
+          </Show>
+        </div>
+        <StatusBar info={fileInfo} />
+        <ConfirmDialog
+          open={() => labelDeletePrompt() !== null}
+          title={() => {
+            const label = labelDeletePrompt()?.label
+            return label ? `Do you want to delete "${label.name}" label?` : ''
+          }}
+          message={() => {
+            const prompt = labelDeletePrompt()
+            if (!prompt) return ''
+            const { fileCount, instanceCount } = prompt.stats
+            return (
+              <>
+                This action cannot be undone. All annotations ({fileCount} files, {instanceCount}{' '}
+                instances) associated to the label will be deleted.
+              </>
+            )
+          }}
+          destructive
+          onCancel={handleCancelDeleteLabel}
+          onConfirm={() => void handleConfirmDeleteLabel()}
+        />
       </div>
-      <StatusBar info={fileInfo} />
-      <ConfirmDialog
-        open={() => labelDeletePrompt() !== null}
-        title={() => {
-          const label = labelDeletePrompt()?.label
-          return label ? `Do you want to delete "${label.name}" label?` : ''
-        }}
-        message={() => {
-          const prompt = labelDeletePrompt()
-          if (!prompt) return ''
-          const { fileCount, instanceCount } = prompt.stats
-          return (
-            <>
-              This action cannot be undone. All annotations ({fileCount} files, {instanceCount}{' '}
-              instances) associated to the label will be deleted.
-            </>
-          )
-        }}
-        destructive
-        onCancel={handleCancelDeleteLabel}
-        onConfirm={() => void handleConfirmDeleteLabel()}
-      />
-    </div>
+    </ProjectContext.Provider>
   )
 }
 

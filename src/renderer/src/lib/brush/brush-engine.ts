@@ -16,6 +16,10 @@ import {
     PREVIEW_VERTEX
 } from './shaders'
 import { expandPixelBrushStrokeBounds, forEachBrushStrokeCenter } from './brush-shapes'
+import { computeMaskBounds, cropMaskBitmap } from '../mask-bitmap'
+import type { Point2D } from '../../../../shared/geometry'
+
+export type { Point2D }
 
 export interface SavedMaskLayer {
   id: string
@@ -23,11 +27,7 @@ export interface SavedMaskLayer {
   bounds: { x: number; y: number; width: number; height: number }
   data: Uint8Array
   colorRgb: [number, number, number]
-}
-
-export interface Point2D {
-  x: number
-  y: number
+  opacity?: number
 }
 
 export interface CapsuleSegment {
@@ -475,6 +475,48 @@ export class BrushEngine {
     this.clearActiveStroke()
   }
 
+  /** Load an image-space binary mask into the session buffer (y=0 at top). */
+  loadSessionMask(data: Uint8Array): void {
+    if (!this.sessionFramebuffer || data.length !== this.width * this.height) return
+
+    this.clearSession()
+
+    const bounds = computeMaskBounds(data, this.width, this.height)
+    if (!bounds) return
+
+    const { gl } = this
+    const cropped = cropMaskBitmap(data, this.width, bounds)
+    const texture = uploadMaskDataTexture(gl, cropped, bounds.width, bounds.height)
+
+    // Draw with the same image-space Y mapping as capsule stamps (not texSubImage2D).
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.sessionFramebuffer)
+    gl.viewport(0, 0, this.width, this.height)
+    gl.disable(gl.BLEND)
+    gl.colorMask(true, false, false, false)
+    gl.useProgram(this.placedMaskProgram)
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, texture)
+    gl.uniform2f(this.placedImageSizePx, this.width, this.height)
+    gl.uniform4f(this.placedBounds, bounds.x, bounds.y, bounds.width, bounds.height)
+    gl.uniform3f(this.placedMaskColor, 1, 1, 1)
+    gl.uniform1f(this.placedOpacity, 1)
+    gl.uniform1i(this.placedMaskSampler, 0)
+    gl.bindVertexArray(this.placedMaskVao)
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    gl.bindVertexArray(null)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+    gl.colorMask(true, true, true, true)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.deleteTexture(texture)
+
+    this.expandSessionDirtyBounds(
+      bounds.x,
+      bounds.y,
+      bounds.x + bounds.width - 1,
+      bounds.y + bounds.height - 1
+    )
+  }
+
   stampCapsules(
     segments: CapsuleSegment[],
     radiusPx: number,
@@ -752,7 +794,6 @@ export class BrushEngine {
     const { gl } = this
     gl.useProgram(this.placedMaskProgram)
     gl.uniform2f(this.placedImageSizePx, this.width, this.height)
-    gl.uniform1f(this.placedOpacity, COMMITTED_MASK_OPACITY)
     gl.uniform1i(this.placedMaskSampler, 0)
     gl.bindVertexArray(this.placedMaskVao)
 
@@ -770,6 +811,7 @@ export class BrushEngine {
         layer.bounds.height
       )
       gl.uniform3fv(this.placedMaskColor, layer.colorRgb)
+      gl.uniform1f(this.placedOpacity, layer.opacity ?? COMMITTED_MASK_OPACITY)
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     }
 

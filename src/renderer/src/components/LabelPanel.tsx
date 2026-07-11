@@ -1,8 +1,16 @@
 import type { Component } from 'solid-js'
-import { For, Show, createEffect, createSignal, onCleanup } from 'solid-js'
+import { For, Index, Show, createEffect, createMemo, createSignal } from 'solid-js'
 import { BsPencil, BsXLg } from 'solid-icons/bs'
 import type { Label } from '../../../shared/annotations'
 import { LABEL_COLORS } from '../../../shared/annotations'
+import {
+  hexColorsEqual,
+  isLabelPaletteColor,
+  isValidHexColor,
+  normalizeHexColor,
+  parseCompleteHexColor
+} from '../../../shared/label-color'
+import FloatingPopover from './FloatingPopover'
 
 const LabelPanel: Component<{
   labels: () => Label[]
@@ -17,26 +25,28 @@ const LabelPanel: Component<{
   const [editingId, setEditingId] = createSignal<string | null>(null)
   const [editName, setEditName] = createSignal('')
   const [colorPickerId, setColorPickerId] = createSignal<string | null>(null)
+  const [colorPickerRef, setColorPickerRef] = createSignal<HTMLElement | undefined>()
+  const [hexDraft, setHexDraft] = createSignal('')
+  const hexPreview = createMemo(() => parseCompleteHexColor(hexDraft()))
+
+  const colorPickerLabel = createMemo(() => {
+    const id = colorPickerId()
+    if (!id) return null
+    return props.labels().find((label) => label.id === id) ?? null
+  })
 
   createEffect(() => {
-    if (!colorPickerId()) return
-
-    const close = (event: MouseEvent): void => {
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (target instanceof Element && target.closest('[data-color-picker]')) return
-      setColorPickerId(null)
+    const label = colorPickerLabel()
+    if (!label) {
+      setHexDraft('')
+      return
     }
-
-    const timer = window.setTimeout(() => document.addEventListener('mousedown', close), 0)
-    onCleanup(() => {
-      window.clearTimeout(timer)
-      document.removeEventListener('mousedown', close)
-    })
+    setHexDraft(isLabelPaletteColor(label.color) ? '' : normalizeHexColor(label.color))
   })
 
   const startEditName = (label: Label): void => {
     setColorPickerId(null)
+    setColorPickerRef(undefined)
     setEditingId(label.id)
     setEditName(label.name)
   }
@@ -65,16 +75,30 @@ const LabelPanel: Component<{
   }
 
   const handleColorChange = async (label: Label, color: string): Promise<void> => {
-    if (color === label.color) {
-      setColorPickerId(null)
-      return
-    }
+    if (hexColorsEqual(color, label.color)) return
     await props.onUpdate({ ...label, color })
-    setColorPickerId(null)
   }
 
-  const toggleColorPicker = (labelId: string): void => {
-    setColorPickerId((current) => (current === labelId ? null : labelId))
+  const handleHexSubmit = async (label: Label): Promise<void> => {
+    const draft = hexDraft().trim()
+    if (!draft || !isValidHexColor(draft)) return
+    await handleColorChange(label, normalizeHexColor(draft))
+  }
+
+  const closeColorPicker = (): void => {
+    setColorPickerId(null)
+    setColorPickerRef(undefined)
+  }
+
+  const toggleColorPicker = (labelId: string, button: HTMLElement): void => {
+    setColorPickerId((current) => {
+      if (current === labelId) {
+        setColorPickerRef(undefined)
+        return null
+      }
+      setColorPickerRef(button)
+      return labelId
+    })
   }
 
   return (
@@ -85,75 +109,51 @@ const LabelPanel: Component<{
           <div class="mb-2 text-xs text-error">{props.error()}</div>
         </Show>
 
-        <For each={props.labels()}>
+        <Index each={props.labels()}>
           {(label) => (
             <div
               class="mb-1 flex items-center gap-1 rounded"
-              classList={{ 'bg-primary/15': props.activeLabelId() === label.id }}
+              classList={{ 'bg-primary/15': props.activeLabelId() === label().id }}
             >
-              <div class="relative shrink-0" data-color-picker>
+              <div class="shrink-0">
                 <button
                   type="button"
                   class="btn btn-ghost btn-xs h-auto min-h-0 px-1 py-1.5"
                   title="Change color"
-                  aria-label={`Change color for ${label.name}`}
-                  aria-expanded={colorPickerId() === label.id}
+                  aria-label={`Change color for ${label().name}`}
+                  aria-expanded={colorPickerId() === label().id}
+                  ref={(element) => {
+                    if (colorPickerId() === label().id) setColorPickerRef(element)
+                  }}
                   onClick={(event) => {
                     event.stopPropagation()
-                    toggleColorPicker(label.id)
+                    toggleColorPicker(label().id, event.currentTarget)
                   }}
                 >
                   <span
                     class="h-3 w-3 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_18%,transparent)]"
-                    style={{ background: label.color }}
+                    style={{ background: label().color }}
                   />
                 </button>
-                <Show when={colorPickerId() === label.id}>
-                  <div
-                    class="absolute top-[calc(100%+4px)] left-0 z-20 grid w-[156px] grid-cols-6 gap-1 rounded-md border border-base-content/12 bg-base-100 p-1.5 shadow-lg"
-                    role="listbox"
-                    aria-label="Label colors"
-                    data-color-picker
-                  >
-                    <For each={[...LABEL_COLORS]}>
-                      {(color) => (
-                        <button
-                          type="button"
-                          role="option"
-                          class="h-5 w-5 cursor-pointer rounded-sm border-none shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_14%,transparent)]"
-                          classList={{
-                            'shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_14%,transparent),0_0_0_2px_var(--color-base-100),0_0_0_3px_var(--color-primary)]':
-                              color === label.color
-                          }}
-                          style={{ background: color }}
-                          title={color}
-                          aria-label={color}
-                          aria-selected={color === label.color}
-                          onClick={() => void handleColorChange(label, color)}
-                        />
-                      )}
-                    </For>
-                  </div>
-                </Show>
               </div>
 
               <Show
-                when={editingId() === label.id}
+                when={editingId() === label().id}
                 fallback={
                   <>
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm h-auto min-h-0 flex-1 justify-start px-1 py-1.5 text-xs font-normal"
-                      onClick={() => props.onSelect(label.id)}
+                      onClick={() => props.onSelect(label().id)}
                     >
-                      <span class="truncate">{label.name}</span>
+                      <span class="truncate">{label().name}</span>
                     </button>
                     <button
                       type="button"
                       class="btn btn-ghost btn-xs btn-square text-base-content/45"
                       title="Rename label"
-                      aria-label={`Rename ${label.name}`}
-                      onClick={() => startEditName(label)}
+                      aria-label={`Rename ${label().name}`}
+                      onClick={() => startEditName(label())}
                     >
                       <BsPencil size={16} aria-hidden="true" />
                     </button>
@@ -166,10 +166,14 @@ const LabelPanel: Component<{
                   ref={(element) => queueMicrotask(() => element.focus())}
                   onInput={(event) => setEditName(event.currentTarget.value)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') void handleSaveName(label)
-                    if (event.key === 'Escape') cancelEditName()
+                    if (event.key === 'Enter') void handleSaveName(label())
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      cancelEditName()
+                    }
                   }}
-                  onBlur={() => void handleSaveName(label)}
+                  onBlur={() => void handleSaveName(label())}
                 />
               </Show>
 
@@ -177,14 +181,14 @@ const LabelPanel: Component<{
                 type="button"
                 class="btn btn-ghost btn-xs btn-square text-error/55 hover:text-error"
                 title="Delete label"
-                aria-label={`Delete ${label.name}`}
-                onClick={() => void props.onDelete(label.id)}
+                aria-label={`Delete ${label().name}`}
+                onClick={() => void props.onDelete(label().id)}
               >
                 <BsXLg size={16} aria-hidden="true" />
               </button>
             </div>
           )}
-        </For>
+        </Index>
 
         <div class="mt-2 flex items-center gap-1.5">
           <input
@@ -206,6 +210,86 @@ const LabelPanel: Component<{
           </button>
         </div>
       </div>
+
+      <FloatingPopover
+        open={() => colorPickerId() !== null}
+        reference={() => colorPickerRef()}
+        placement="bottom-start"
+        fitContent
+        panelClass="p-1.5"
+        onClose={closeColorPicker}
+      >
+        <Show when={colorPickerId()}>
+          <div class="flex w-fit flex-col gap-1.5">
+            <div role="listbox" aria-label="Label colors" class="grid grid-cols-6 gap-1">
+              <For each={[...LABEL_COLORS]}>
+                {(color) => {
+                  const selected = (): boolean => {
+                    const current = colorPickerLabel()
+                    return current ? hexColorsEqual(color, current.color) : false
+                  }
+                  return (
+                    <div
+                      class="relative h-5 w-5 rounded-sm"
+                      classList={{
+                        'outline outline-2 outline-offset-1 outline-base-content': selected()
+                      }}
+                    >
+                      <button
+                        type="button"
+                        role="option"
+                        data-color-swatch
+                        class="h-full w-full cursor-pointer rounded-sm border-none shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_14%,transparent)]"
+                        style={{ background: color }}
+                        title={color}
+                        aria-label={color}
+                        aria-selected={selected()}
+                        onClick={() => {
+                          const current = colorPickerLabel()
+                          if (current) void handleColorChange(current, color)
+                        }}
+                      />
+                    </div>
+                  )
+                }}
+              </For>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input
+                class="input input-bordered input-xs bg-base-100 font-mono h-5 min-h-5 w-[6.75rem] px-1.5"
+                placeholder="#RRGGBB"
+                aria-label="Custom hex color"
+                spellcheck={false}
+                value={hexDraft()}
+                onInput={(event) => setHexDraft(event.currentTarget.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    const current = colorPickerLabel()
+                    if (current) void handleHexSubmit(current)
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    closeColorPicker()
+                  }
+                }}
+                onBlur={() => {
+                  const current = colorPickerLabel()
+                  if (current) void handleHexSubmit(current)
+                }}
+              />
+              <span
+                class="h-5 w-5 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_14%,transparent)]"
+                classList={{ 'bg-base-200': !hexPreview() }}
+                style={hexPreview() ? { background: hexPreview()! } : undefined}
+                title={hexPreview() ?? undefined}
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+        </Show>
+      </FloatingPopover>
     </section>
   )
 }

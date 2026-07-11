@@ -85,6 +85,10 @@ function flattenImageFiles(entries: FileEntry[]): FileEntry[] {
   return images
 }
 
+export function findFirstImageFile(entries: FileEntry[]): FileEntry | null {
+  return flattenImageFiles(entries)[0] ?? null
+}
+
 export function getAdjacentImagePaths(
   entries: FileEntry[],
   currentPath: string

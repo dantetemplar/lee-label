@@ -1,68 +1,67 @@
 import type { Component } from 'solid-js'
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
-import type { Label, RectangleShape } from '../../../shared/annotations'
+import { Show, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js'
+import type { Label } from '../../../shared/annotations'
 import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY } from '../../../shared/annotations'
+import type { Point2D } from '../../../shared/geometry'
 import type { SegmentationMode } from '../../../shared/segmentation'
-import { hexToRgba, hexToRgbNormalized } from '../../../shared/label-color'
+import {
+  POLYGON_SIMPLIFICATION,
+  POLYGON_SIMPLIFICATION_EDIT
+} from '../../../shared/segmentation'
+import { hexToRgbNormalized } from '../../../shared/label-color'
 import type { ViewTransform } from '../lib/annotation-coords'
 import {
   clampToImage,
-  eraseCapsuleFromMaskData,
-  erasePixelBrushStrokeFromMaskData,
   hitTestMaskBounds,
   hitTestPolygon,
   hitTestRectangle,
   snapPointToImagePixel,
-  tightenMaskBitmap,
   viewportToImage
 } from '../lib/annotation-coords'
+import {
+  eraseCapsuleFromMaskData,
+  erasePixelBrushStrokeFromMaskData,
+  expandMaskBitmap,
+  tightenMaskBitmap
+} from '../lib/mask-bitmap'
 import type { WorkingShape } from '../lib/annotation-store'
 import { AnnotationStore } from '../lib/annotation-store'
 import {
   BrushEngine,
-  type CapsuleSegment,
-  type Point2D,
-  type SavedMaskLayer,
-  type StampMode,
-  type TopologyHint
+  type SavedMaskLayer
 } from '../lib/brush/brush-engine'
 import {
+  applyManualIssueGuesses,
+  createBrushSessionState,
+  resetBrushSessionState
+} from '../lib/brush/brush-session'
+import {
   BRUSH_PREVIEW_FILLED_OPACITY,
+  COMMITTED_MASK_OPACITY,
   getBrushPreviewSettings,
   getEffectiveBrushDiameter,
   usesSvgBrushPreview
 } from '../lib/brush/constants'
 import {
-  forEachBrushStrokeCenter,
   forEachPixelBrushPixel,
   usesPixelBrushShape
 } from '../lib/brush/brush-shapes'
+import { rasterizePolygon } from '../lib/polygon/rasterize'
+import {
+  TopologySession,
+  topologyHintsFromIssues,
+  type TopologyAlert
+} from '../lib/polygon/topology-session'
+import type { TopologyIssueMask } from '../lib/polygon/worker-types'
+import { useProjectContext } from '../lib/project-context'
 import { renderSemanticOverlay, stampClassIdStroke } from '../lib/semantic-class-map'
 import type { SemanticMapStore } from '../lib/semantic-map-store'
 import type { AnnotationTool } from './AnnotationToolbar'
+import AnnotationShapeLayer from './AnnotationShapeLayer'
 
-export interface TopologyAlert {
-  message: string
-  onDismiss: () => void
-}
+export type { TopologyAlert }
 
 const MIN_RECT_SIZE = 3
-
-interface TopologyIssueMask {
-  id: string
-  kind: 'island' | 'hole'
-  x: number
-  y: number
-  width: number
-  height: number
-  data: Uint8Array
-}
-
-interface SegmentationWorkerResult {
-  id: number
-  issues: TopologyIssueMask[]
-  polygon: { x: number; y: number }[] | null
-}
 
 function findShapeAtPoint(
   shapes: WorkingShape[],
@@ -76,10 +75,6 @@ function findShapeAtPoint(
     if (shape.type === 'polygon' && hitTestPolygon(x, y, shape.points)) return shape
   }
   return null
-}
-
-function polygonPointsToSvg(points: { x: number; y: number }[]): string {
-  return points.map((point) => `${point.x},${point.y}`).join(' ')
 }
 
 const AnnotationOverlay: Component<{
@@ -96,6 +91,7 @@ const AnnotationOverlay: Component<{
   segmentationMode: () => SegmentationMode
   onTopologyAlertChange?: (alert: TopologyAlert | null) => void
 }> = (props) => {
+  const project = useProjectContext()
   let glCanvasRef: HTMLCanvasElement | undefined
   let semanticCanvasRef: HTMLCanvasElement | undefined
   let overlayRef: HTMLDivElement | undefined
@@ -108,6 +104,8 @@ const AnnotationOverlay: Component<{
   } | null>(null)
   const [hoverPoint, setHoverPoint] = createSignal<Point2D | null>(null)
   const [topologyIssues, setTopologyIssues] = createSignal<TopologyIssueMask[]>([])
+  const [editingShapeId, setEditingShapeId] = createSignal<string | null>(null)
+  const [hoveredShapeId, setHoveredShapeId] = createSignal<string | null>(null)
 
   let lastPointerClient: { x: number; y: number } | null = null
 
@@ -117,43 +115,17 @@ const AnnotationOverlay: Component<{
   let moveOffset = { x: 0, y: 0 }
 
   let brushEngine: BrushEngine | null = null
-  let isDrawing = false
-  let activePointerId: number | null = null
-  let strokeSegments: CapsuleSegment[] = []
-  let lastPoint: Point2D | null = null
-  let lockedBrushDiameterImagePx = 1
-  let sessionUndoPushed = false
-  let semanticUndoPushed = false
-  let brushStrokeMode: StampMode = 'paint'
-  let savedMasksErased = false
-  let topologyCommitAttempt = 0
+  const brushSession = createBrushSessionState()
+  const topologySession = new TopologySession()
+  const nextTopologyIssueMaskId = { current: 0 }
   let renderFrame = 0
-  let segmentationWorker: Worker | null = null
-  let nextSegmentationRequestId = 0
-  let nextTopologyIssueMaskId = 0
-  let segmentationGeneration = 0
   let isCommitProcessing = false
-  const pendingSegmentationRequests = new Map<
-    number,
-    { resolve: (result: SegmentationWorkerResult) => void; reject: (error: Error) => void }
-  >()
 
   const labelMap = createMemo(() => new Map(props.labels().map((label) => [label.id, label])))
   const classColorMap = createMemo(
     () => new Map(props.labels().map((label) => [label.classId, label.color]))
   )
-  const rectangles = createMemo(() =>
-    props.store.shapes[0]().filter((shape): shape is RectangleShape => shape.type === 'rectangle')
-  )
-  const polygons = createMemo(() =>
-    props.store.shapes[0]().filter((shape) => shape.type === 'polygon')
-  )
-  const topologyHints = createMemo((): TopologyHint[] =>
-    topologyIssues().map((issue) => ({
-      ...issue,
-      colorRgb: [0.94, 0.27, 0.27] as [number, number, number]
-    }))
-  )
+  const topologyHints = createMemo(() => topologyHintsFromIssues(topologyIssues()))
 
   const getImagePointAt = (clientX: number, clientY: number): Point2D | null => {
     const viewport = props.viewportRef()
@@ -222,7 +194,14 @@ const AnnotationOverlay: Component<{
   })
 
   const savedMaskLayers = createMemo((): SavedMaskLayer[] => {
-    const masks = props.store.shapes[0]().filter((shape) => shape.type === 'mask')
+    const editingId = editingShapeId()
+    const selectedId = props.store.selectedShapeId[0]()
+    const masks = props.store
+      .shapes[0]()
+      .filter(
+        (shape): shape is Extract<WorkingShape, { type: 'mask' }> =>
+          shape.type === 'mask' && shape.id !== editingId
+      )
     masks.sort((left, right) => left.zOrder - right.zOrder)
 
     return masks.map((shape) => {
@@ -232,7 +211,8 @@ const AnnotationOverlay: Component<{
         version: shape.updatedAt,
         bounds: shape.bounds,
         data: shape.data,
-        colorRgb: hexToRgbNormalized(label?.color ?? '#ffffff')
+        colorRgb: hexToRgbNormalized(label?.color ?? '#ffffff'),
+        opacity: shape.id === selectedId ? SELECTED_SHAPE_OPACITY : COMMITTED_MASK_OPACITY
       }
     })
   })
@@ -248,12 +228,12 @@ const AnnotationOverlay: Component<{
       brushEngine = null
       canvas.width = size.width
       canvas.height = size.height
-      isDrawing = false
-      activePointerId = null
-      strokeSegments = []
-      lastPoint = null
-      sessionUndoPushed = false
-      semanticUndoPushed = false
+      brushSession.isDrawing = false
+      brushSession.activePointerId = null
+      brushSession.strokeSegments = []
+      brushSession.lastPoint = null
+      brushSession.sessionUndoPushed = false
+      brushSession.semanticUndoPushed = false
     }
 
     if (!brushEngine) {
@@ -323,16 +303,16 @@ const AnnotationOverlay: Component<{
     const hover = hoverPoint()
     const previewRadius = brushRadiusImagePx()
     const correctingTopologyIssue =
-      isDrawing &&
+      brushSession.isDrawing &&
       topologyIssues().some((issue) =>
-        brushStrokeMode === 'paint' ? issue.kind === 'hole' : issue.kind === 'island'
+        brushSession.brushStrokeMode === 'paint' ? issue.kind === 'hole' : issue.kind === 'island'
       )
     const labelColor = hexToRgbNormalized(activeLabelColor())
     const activeStrokeColor = correctingTopologyIssue
       ? ([0.13, 0.65, 0.35] as [number, number, number])
       : labelColor
     const activeOutsideStrokeColor =
-      brushStrokeMode === 'erase' ? ([1, 1, 1] as [number, number, number]) : labelColor
+      brushSession.brushStrokeMode === 'erase' ? ([1, 1, 1] as [number, number, number]) : labelColor
     const preview = getBrushPreviewSettings(effectiveBrushDiameter())
     const useGlPreview =
       maskToolActive && Boolean(hover) && !usesSvgBrushPreview(effectiveBrushDiameter())
@@ -359,18 +339,43 @@ const AnnotationOverlay: Component<{
   }
 
   const resetBrushSession = (): void => {
-    segmentationGeneration++
-    isDrawing = false
-    activePointerId = null
-    strokeSegments = []
-    lastPoint = null
-    sessionUndoPushed = false
-    semanticUndoPushed = false
-    brushStrokeMode = 'paint'
-    savedMasksErased = false
-    topologyCommitAttempt = 0
+    resetBrushSessionState(brushSession)
     clearTopologyAlert()
     brushEngine?.clearBrushOverlays()
+    requestOverlayRender()
+  }
+
+  const loadSelectedShapeForEditing = (): void => {
+    setEditingShapeId(null)
+
+    if (props.activeTool() !== 'mask' || props.segmentationMode() !== 'instance') return
+
+    const selectedId = props.store.selectedShapeId[0]()
+    if (!selectedId) return
+
+    const shape = props.store.shapes[0]().find((item) => item.id === selectedId)
+    if (!shape || (shape.type !== 'polygon' && shape.type !== 'mask')) return
+
+    const size = props.imageSize()
+    const engine = ensureBrushEngine()
+    if (!size || !engine) return
+
+    const mask =
+      shape.type === 'polygon'
+        ? rasterizePolygon(shape.points, size.width, size.height)
+        : expandMaskBitmap(
+            shape.data,
+            shape.bounds.width,
+            shape.bounds,
+            size.width,
+            size.height
+          )
+
+    if (!mask.some((value) => value > 0)) return
+
+    engine.loadSessionMask(mask)
+    setEditingShapeId(shape.id)
+    project.setActiveLabelId(shape.labelId)
     requestOverlayRender()
   }
 
@@ -380,16 +385,16 @@ const AnnotationOverlay: Component<{
   }
 
   const releaseActivePointerCapture = (): void => {
-    if (overlayRef && activePointerId !== null && overlayRef.hasPointerCapture(activePointerId)) {
-      overlayRef.releasePointerCapture(activePointerId)
+    if (overlayRef && brushSession.activePointerId !== null && overlayRef.hasPointerCapture(brushSession.activePointerId)) {
+      overlayRef.releasePointerCapture(brushSession.activePointerId)
     }
-    activePointerId = null
+    brushSession.activePointerId = null
   }
 
   const finalizeStrokeAfterCommit = (): void => {
-    strokeSegments = []
-    lastPoint = null
-    isDrawing = false
+    brushSession.strokeSegments = []
+    brushSession.lastPoint = null
+    brushSession.isDrawing = false
     releaseActivePointerCapture()
     brushEngine?.clearBrushOverlays()
   }
@@ -399,180 +404,47 @@ const AnnotationOverlay: Component<{
     props.onTopologyAlertChange?.({
       message,
       onDismiss: () => {
-        topologyCommitAttempt = 0
+        brushSession.topologyCommitAttempt = 0
         clearTopologyAlert()
       }
     })
-  }
-
-  const getSegmentationWorker = (): Worker => {
-    if (segmentationWorker) return segmentationWorker
-
-    segmentationWorker = new Worker(new URL('../lib/polygon/segmentation-worker.ts', import.meta.url), {
-      type: 'module'
-    })
-    segmentationWorker.onmessage = (event: MessageEvent<SegmentationWorkerResult>) => {
-      const pending = pendingSegmentationRequests.get(event.data.id)
-      if (!pending) return
-      pendingSegmentationRequests.delete(event.data.id)
-      pending.resolve(event.data)
-    }
-    segmentationWorker.onerror = (event) => {
-      const error = new Error(event.message || 'Mask conversion worker failed.')
-      for (const pending of pendingSegmentationRequests.values()) {
-        pending.reject(error)
-      }
-      pendingSegmentationRequests.clear()
-      segmentationWorker?.terminate()
-      segmentationWorker = null
-    }
-
-    return segmentationWorker
-  }
-
-  const convertMaskInWorker = (
-    data: Uint8Array,
-    width: number,
-    height: number,
-    repairTopology: boolean
-  ): Promise<SegmentationWorkerResult> => {
-    const worker = getSegmentationWorker()
-    const id = ++nextSegmentationRequestId
-    const buffer = data.buffer as ArrayBuffer
-
-    return new Promise((resolve, reject) => {
-      pendingSegmentationRequests.set(id, { resolve, reject })
-      worker.postMessage({ id, data: buffer, width, height, repairTopology }, [buffer])
-    })
-  }
-
-  const applyManualIssueGuesses = (segments: CapsuleSegment[], mode: StampMode): void => {
-    if (segments.length === 0) return
-
-    const kindToFix = mode === 'paint' ? 'hole' : 'island'
-    const nextIssues: TopologyIssueMask[] = []
-    let didChange = false
-
-    for (const issue of topologyIssues()) {
-      if (issue.kind !== kindToFix) {
-        nextIssues.push(issue)
-        continue
-      }
-
-      const remaining = new Uint8Array(issue.data)
-      let changed = false
-
-      const markPixel = (x: number, y: number): void => {
-        const localX = x - issue.x
-        const localY = y - issue.y
-        if (localX < 0 || localY < 0 || localX >= issue.width || localY >= issue.height) return
-
-        const index = localY * issue.width + localX
-        if (!remaining[index]) return
-        remaining[index] = 0
-        changed = true
-      }
-
-      for (const segment of segments) {
-        if (usesPixelBrushShape(lockedBrushDiameterImagePx)) {
-          forEachBrushStrokeCenter(
-            segment.from.x,
-            segment.from.y,
-            segment.to.x,
-            segment.to.y,
-            (centerX, centerY) => {
-              forEachPixelBrushPixel(centerX, centerY, lockedBrushDiameterImagePx, markPixel)
-            }
-          )
-          continue
-        }
-
-        const radius = lockedBrushDiameterImagePx / 2
-        const minX = Math.max(issue.x, Math.floor(Math.min(segment.from.x, segment.to.x) - radius))
-        const minY = Math.max(issue.y, Math.floor(Math.min(segment.from.y, segment.to.y) - radius))
-        const maxX = Math.min(
-          issue.x + issue.width - 1,
-          Math.ceil(Math.max(segment.from.x, segment.to.x) + radius)
-        )
-        const maxY = Math.min(
-          issue.y + issue.height - 1,
-          Math.ceil(Math.max(segment.from.y, segment.to.y) + radius)
-        )
-        const dx = segment.to.x - segment.from.x
-        const dy = segment.to.y - segment.from.y
-        const lengthSquared = dx * dx + dy * dy
-
-        for (let y = minY; y <= maxY; y++) {
-          for (let x = minX; x <= maxX; x++) {
-            const projection =
-              lengthSquared === 0
-                ? 0
-                : Math.min(
-                    1,
-                    Math.max(0, ((x - segment.from.x) * dx + (y - segment.from.y) * dy) / lengthSquared)
-                  )
-            const closestX = segment.from.x + projection * dx
-            const closestY = segment.from.y + projection * dy
-            if (Math.hypot(x - closestX, y - closestY) <= radius) {
-              markPixel(x, y)
-            }
-          }
-        }
-      }
-
-      if (!changed) {
-        nextIssues.push(issue)
-        continue
-      }
-      didChange = true
-
-      if (remaining.some((value) => value > 0)) {
-        nextIssues.push({
-          ...issue,
-          id: `${issue.id}:remaining:${++nextTopologyIssueMaskId}`,
-          data: remaining
-        })
-      }
-    }
-
-    if (didChange) {
-      setTopologyIssues(nextIssues)
-    }
   }
 
   const eraseFromSavedMasks = (from: Point2D, to: Point2D): void => {
     const size = props.imageSize()
     if (!size) return
 
+    const editingId = editingShapeId()
     let changed = false
     for (const shape of props.store.shapes[0]()) {
       if (shape.type !== 'mask') continue
-      const erased = usesPixelBrushShape(lockedBrushDiameterImagePx)
+      if (shape.id === editingId) continue
+      const erased = usesPixelBrushShape(brushSession.lockedBrushDiameterImagePx)
         ? erasePixelBrushStrokeFromMaskData(
             shape.data,
             shape.bounds,
             from,
             to,
-            lockedBrushDiameterImagePx
+            brushSession.lockedBrushDiameterImagePx
           )
         : eraseCapsuleFromMaskData(
             shape.data,
             shape.bounds,
             from,
             to,
-            lockedBrushDiameterImagePx / 2
+            brushSession.lockedBrushDiameterImagePx / 2
           )
       if (erased) changed = true
     }
 
     if (changed) {
-      savedMasksErased = true
+      brushSession.savedMasksErased = true
       requestOverlayRender()
     }
   }
 
   const finalizeErasedMasks = (): void => {
-    if (!savedMasksErased) return
+    if (!brushSession.savedMasksErased) return
 
     const size = props.imageSize()
     if (!size) return
@@ -592,19 +464,19 @@ const AnnotationOverlay: Component<{
     }
 
     props.store.setShapes(nextShapes)
-    savedMasksErased = false
+    brushSession.savedMasksErased = false
   }
 
   const addStrokeSegment = (from: Point2D, to: Point2D): void => {
     const segment = { from, to }
-    strokeSegments.push(segment)
+    brushSession.strokeSegments.push(segment)
 
     if (props.segmentationMode() === 'semantic') {
       const store = props.semanticStore
       const size = props.imageSize()
       const map = store?.getMutableClassMap()
       if (!store || !size || !map) return
-      const classId = brushStrokeMode === 'erase' ? 0 : activeClassId()
+      const classId = brushSession.brushStrokeMode === 'erase' ? 0 : activeClassId()
       const next = new Uint16Array(map)
       stampClassIdStroke(
         next,
@@ -612,7 +484,7 @@ const AnnotationOverlay: Component<{
         size.height,
         from,
         to,
-        lockedBrushDiameterImagePx,
+        brushSession.lockedBrushDiameterImagePx,
         classId
       )
       store.setClassMap(next)
@@ -620,19 +492,19 @@ const AnnotationOverlay: Component<{
       return
     }
 
-    if (usesPixelBrushShape(lockedBrushDiameterImagePx)) {
-      if (brushStrokeMode === 'erase') {
+    if (usesPixelBrushShape(brushSession.lockedBrushDiameterImagePx)) {
+      if (brushSession.brushStrokeMode === 'erase') {
         brushEngine?.stampPixelBrushStroke(
           from,
           to,
-          lockedBrushDiameterImagePx,
+          brushSession.lockedBrushDiameterImagePx,
           'session',
           'erase'
         )
         brushEngine?.stampPixelBrushStroke(
           from,
           to,
-          lockedBrushDiameterImagePx,
+          brushSession.lockedBrushDiameterImagePx,
           'active',
           'paint'
         )
@@ -640,12 +512,12 @@ const AnnotationOverlay: Component<{
         return
       }
 
-      brushEngine?.stampPixelBrushStroke(from, to, lockedBrushDiameterImagePx, 'active', 'paint')
+      brushEngine?.stampPixelBrushStroke(from, to, brushSession.lockedBrushDiameterImagePx, 'active', 'paint')
       return
     }
 
-    const radius = lockedBrushDiameterImagePx / 2
-    if (brushStrokeMode === 'erase') {
+    const radius = brushSession.lockedBrushDiameterImagePx / 2
+    if (brushSession.brushStrokeMode === 'erase') {
       brushEngine?.stampCapsule(from, to, radius, 'session', 'erase')
       brushEngine?.stampCapsule(from, to, radius, 'active', 'paint')
       eraseFromSavedMasks(from, to)
@@ -656,19 +528,19 @@ const AnnotationOverlay: Component<{
   }
 
   const stampPendingStrokeToSession = (): void => {
-    if (strokeSegments.length === 0 || brushStrokeMode !== 'paint') return
+    if (brushSession.strokeSegments.length === 0 || brushSession.brushStrokeMode !== 'paint') return
 
-    if (usesPixelBrushShape(lockedBrushDiameterImagePx)) {
+    if (usesPixelBrushShape(brushSession.lockedBrushDiameterImagePx)) {
       brushEngine?.stampPixelBrushStrokes(
-        strokeSegments,
-        lockedBrushDiameterImagePx,
+        brushSession.strokeSegments,
+        brushSession.lockedBrushDiameterImagePx,
         'session',
         'paint'
       )
     } else {
       brushEngine?.stampCapsules(
-        strokeSegments,
-        lockedBrushDiameterImagePx / 2,
+        brushSession.strokeSegments,
+        brushSession.lockedBrushDiameterImagePx / 2,
         'session',
         'paint'
       )
@@ -687,11 +559,34 @@ const AnnotationOverlay: Component<{
     if (!engine) return
 
     stampPendingStrokeToSession()
-    if (brushStrokeMode === 'erase') {
+    if (brushSession.brushStrokeMode === 'erase') {
       engine.clearActiveStroke()
     }
 
+    const editingId = editingShapeId()
+    const existing = editingId
+      ? props.store.shapes[0]().find((shape) => shape.id === editingId)
+      : undefined
+
+    // Editing an unchanged loaded mask — skip mask→polygon round-trip.
+    const hasUserPixelEdits =
+      brushSession.isDrawing ||
+      brushSession.strokeSegments.length > 0 ||
+      brushSession.sessionUndoPushed ||
+      brushSession.savedMasksErased ||
+      engine.hasActiveContent()
+    if (existing && !hasUserPixelEdits) {
+      return
+    }
+
     if (!engine.hasCommitContent()) {
+      if (existing) {
+        if (!brushSession.sessionUndoPushed) props.store.pushUndo()
+        props.store.setShapes(props.store.shapes[0]().filter((shape) => shape.id !== existing.id))
+        props.store.setSelectedShapeId(null)
+        setEditingShapeId(null)
+        resetBrushSession()
+      }
       return
     }
 
@@ -701,21 +596,22 @@ const AnnotationOverlay: Component<{
     }
 
     isCommitProcessing = true
-    const generation = segmentationGeneration
+    const generation = brushSession.segmentationGeneration
     try {
-      const result = await convertMaskInWorker(
+      const result = await topologySession.convertMask(
         raw,
         size.width,
         size.height,
-        topologyCommitAttempt === 1
+        brushSession.topologyCommitAttempt === 1,
+        existing ? POLYGON_SIMPLIFICATION_EDIT : POLYGON_SIMPLIFICATION
       )
-      if (generation !== segmentationGeneration) return
+      if (generation !== brushSession.segmentationGeneration) return
 
       if (result.issues.length > 0) {
         if (topologyIssues().length === 0) {
           setTopologyIssues(result.issues)
         }
-        topologyCommitAttempt = 1
+        brushSession.topologyCommitAttempt = 1
         showTopologyAlert(
           'Disconnected regions or holes detected. Fix manually, or press Space again to auto-fill holes and remove islands.',
           result.issues
@@ -729,13 +625,32 @@ const AnnotationOverlay: Component<{
         return
       }
 
-      const shape = props.store.createPolygon(labelId, result.polygon)
-      props.store.setShapes([...props.store.shapes[0](), shape])
+      if (!brushSession.sessionUndoPushed) props.store.pushUndo()
+
+      const created = props.store.createPolygon(labelId, result.polygon)
+      if (existing) {
+        props.store.setShapes(
+          props.store.shapes[0]().map((shape) =>
+            shape.id === existing.id
+              ? {
+                  ...created,
+                  id: existing.id,
+                  zOrder: existing.zOrder,
+                  createdAt: existing.createdAt,
+                  labelId
+                }
+              : shape
+          )
+        )
+      } else {
+        props.store.setShapes([...props.store.shapes[0](), created])
+      }
       props.store.setSelectedShapeId(null)
       finalizeStrokeAfterCommit()
-      sessionUndoPushed = false
-      topologyCommitAttempt = 0
+      brushSession.sessionUndoPushed = false
+      brushSession.topologyCommitAttempt = 0
       clearTopologyAlert()
+      setEditingShapeId(null)
       flushOverlayRender()
     } catch (error) {
       console.error('Mask conversion failed:', error)
@@ -754,22 +669,53 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   })
 
+  let lastEngineWidth = 0
+  let lastEngineHeight = 0
+
   createEffect(() => {
     const size = props.imageSize()
     if (!size) return
+    if (
+      brushEngine &&
+      size.width === lastEngineWidth &&
+      size.height === lastEngineHeight
+    ) {
+      return
+    }
+    lastEngineWidth = size.width
+    lastEngineHeight = size.height
     brushEngine?.dispose()
     brushEngine = null
+    setEditingShapeId(null)
     resetBrushSession()
   })
 
-  createEffect(() => {
-    props.activeTool()
-    props.segmentationMode()
-    lastPointerClient = null
-    setHoverPoint(null)
-    resetBrushSession()
-    requestOverlayRender()
-  })
+  createEffect(
+    on(
+      () =>
+        [
+          props.activeTool(),
+          props.segmentationMode(),
+          props.store.selectedShapeId[0](),
+          props.imageSize()?.width ?? 0,
+          props.imageSize()?.height ?? 0
+        ] as const,
+      () => {
+        lastPointerClient = null
+        setHoverPoint(null)
+        setHoveredShapeId(null)
+        resetBrushSession()
+        queueMicrotask(() => {
+          loadSelectedShapeForEditing()
+          requestOverlayRender()
+          const viewport = props.viewportRef()
+          if (props.activeTool() === 'mask' && viewport && document.activeElement !== viewport) {
+            viewport.focus({ preventScroll: true })
+          }
+        })
+      }
+    )
+  )
 
   createEffect(() => {
     props.brushSize()
@@ -790,49 +736,56 @@ const AnnotationOverlay: Component<{
     window.removeEventListener('mouseup', handleMouseUp)
   }
 
-  const stopBrushDrawing = (_event: PointerEvent): void => {
-    if (!isDrawing) return
+  const stopBrushDrawing = (): void => {
+    if (!brushSession.isDrawing) return
 
-    isDrawing = false
+    brushSession.isDrawing = false
     releaseActivePointerCapture()
 
     if (props.segmentationMode() === 'semantic') {
-      semanticUndoPushed = false
-      strokeSegments = []
-      lastPoint = null
-      brushStrokeMode = 'paint'
+      brushSession.semanticUndoPushed = false
+      brushSession.strokeSegments = []
+      brushSession.lastPoint = null
+      brushSession.brushStrokeMode = 'paint'
       requestOverlayRender()
       return
     }
 
-    if (strokeSegments.length > 0) {
-      topologyCommitAttempt = 0
-      applyManualIssueGuesses(strokeSegments, brushStrokeMode)
+    if (brushSession.strokeSegments.length > 0) {
+      brushSession.topologyCommitAttempt = 0
+      const { nextIssues, didChange } = applyManualIssueGuesses(
+        topologyIssues(),
+        brushSession.strokeSegments,
+        brushSession.brushStrokeMode,
+        brushSession.lockedBrushDiameterImagePx,
+        nextTopologyIssueMaskId
+      )
+      if (didChange) setTopologyIssues(nextIssues)
     }
-    if (strokeSegments.length > 0 && brushStrokeMode === 'paint') {
-      if (usesPixelBrushShape(lockedBrushDiameterImagePx)) {
+    if (brushSession.strokeSegments.length > 0 && brushSession.brushStrokeMode === 'paint') {
+      if (usesPixelBrushShape(brushSession.lockedBrushDiameterImagePx)) {
         brushEngine?.stampPixelBrushStrokes(
-          strokeSegments,
-          lockedBrushDiameterImagePx,
+          brushSession.strokeSegments,
+          brushSession.lockedBrushDiameterImagePx,
           'session',
           'paint'
         )
       } else {
         brushEngine?.stampCapsules(
-          strokeSegments,
-          lockedBrushDiameterImagePx / 2,
+          brushSession.strokeSegments,
+          brushSession.lockedBrushDiameterImagePx / 2,
           'session',
           'paint'
         )
       }
     }
-    if (brushStrokeMode === 'erase') {
+    if (brushSession.brushStrokeMode === 'erase') {
       finalizeErasedMasks()
     }
     brushEngine?.clearActiveStroke()
-    strokeSegments = []
-    lastPoint = null
-    brushStrokeMode = 'paint'
+    brushSession.strokeSegments = []
+    brushSession.lastPoint = null
+    brushSession.brushStrokeMode = 'paint'
     requestOverlayRender()
   }
 
@@ -896,34 +849,34 @@ const AnnotationOverlay: Component<{
       if (props.segmentationMode() === 'instance' && isCommitProcessing) return
 
       event.preventDefault()
-      brushStrokeMode = event.button === 2 ? 'erase' : 'paint'
+      brushSession.brushStrokeMode = event.button === 2 ? 'erase' : 'paint'
 
       const point = getImagePoint(event)
       const labelId = props.activeLabelId()
       if (!point) return
       if (props.segmentationMode() === 'instance' && !ensureBrushEngine()) return
-      if (brushStrokeMode === 'paint' && !labelId) return
+      if (brushSession.brushStrokeMode === 'paint' && !labelId) return
 
       if (props.segmentationMode() === 'semantic') {
-        if (!semanticUndoPushed) {
+        if (!brushSession.semanticUndoPushed) {
           props.semanticStore?.pushUndo()
-          semanticUndoPushed = true
+          brushSession.semanticUndoPushed = true
         }
-      } else if (!sessionUndoPushed) {
+      } else if (!brushSession.sessionUndoPushed) {
         props.store.pushUndo()
-        sessionUndoPushed = true
+        brushSession.sessionUndoPushed = true
       }
 
       overlayRef?.setPointerCapture(event.pointerId)
-      activePointerId = event.pointerId
-      isDrawing = true
-      savedMasksErased = false
+      brushSession.activePointerId = event.pointerId
+      brushSession.isDrawing = true
+      brushSession.savedMasksErased = false
       setHoverPoint(point)
-      strokeSegments = []
-      lockedBrushDiameterImagePx = effectiveBrushDiameter()
+      brushSession.strokeSegments = []
+      brushSession.lockedBrushDiameterImagePx = effectiveBrushDiameter()
       brushEngine?.clearActiveStroke()
       addStrokeSegment(point, point)
-      lastPoint = point
+      brushSession.lastPoint = point
       requestOverlayRender()
       return
     }
@@ -939,6 +892,7 @@ const AnnotationOverlay: Component<{
     if (tool === 'cursor') {
       const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
       props.store.setSelectedShapeId(hit?.id ?? null)
+      if (hit) project.setActiveLabelId(hit.labelId)
       if (hit?.type === 'rectangle') {
         props.store.pushUndo()
         dragMode = 'move-rect'
@@ -961,7 +915,20 @@ const AnnotationOverlay: Component<{
   }
 
   const handleOverlayPointerMove = (event: PointerEvent): void => {
-    if (props.activeTool() !== 'mask') return
+    const tool = props.activeTool()
+
+    if (tool === 'cursor') {
+      const point = getImagePoint(event)
+      if (!point) {
+        setHoveredShapeId(null)
+        return
+      }
+      const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
+      setHoveredShapeId(hit?.id ?? null)
+      return
+    }
+
+    if (tool !== 'mask') return
 
     lastPointerClient = { x: event.clientX, y: event.clientY }
     const point = getImagePoint(event)
@@ -973,13 +940,13 @@ const AnnotationOverlay: Component<{
 
     setHoverPoint(point)
 
-    if (isDrawing && lastPoint) {
-      if (point.x === lastPoint.x && point.y === lastPoint.y) {
+    if (brushSession.isDrawing && brushSession.lastPoint) {
+      if (point.x === brushSession.lastPoint.x && point.y === brushSession.lastPoint.y) {
         requestOverlayRender()
         return
       }
-      addStrokeSegment(lastPoint, point)
-      lastPoint = point
+      addStrokeSegment(brushSession.lastPoint, point)
+      brushSession.lastPoint = point
       requestOverlayRender()
       return
     }
@@ -987,15 +954,16 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   }
 
-  const handleOverlayPointerUp = (event: PointerEvent): void => {
+  const handleOverlayPointerUp = (): void => {
     if (props.activeTool() !== 'mask') return
-    stopBrushDrawing(event)
+    stopBrushDrawing()
   }
 
-  const handleOverlayPointerLeave = (event: PointerEvent): void => {
+  const handleOverlayPointerLeave = (): void => {
+    setHoveredShapeId(null)
     if (props.activeTool() !== 'mask') return
-    if (isDrawing) {
-      stopBrushDrawing(event)
+    if (brushSession.isDrawing) {
+      stopBrushDrawing()
       return
     }
     lastPointerClient = null
@@ -1003,24 +971,28 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   }
 
-  const handleKeyDown = (event: KeyboardEvent): void => {
-    if (props.activeTool() === 'mask' && props.segmentationMode() === 'instance') {
-      if (event.code === 'Space') {
-        event.preventDefault()
-        commitSessionPolygon()
-        return
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        resetBrushSession()
-        return
-      }
-    }
+  const hasCancellableBrushWork = (): boolean =>
+    brushSession.isDrawing ||
+    brushSession.strokeSegments.length > 0 ||
+    brushSession.sessionUndoPushed ||
+    brushSession.semanticUndoPushed ||
+    brushSession.savedMasksErased ||
+    topologyIssues().length > 0
 
-    if (props.activeTool() === 'mask' && props.segmentationMode() === 'semantic') {
-      if (event.key === 'Escape') {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      if (dragMode === 'draw-rect' || draftRect()) {
         event.preventDefault()
+        event.stopPropagation()
+        stopInteraction()
+        return
+      }
+
+      if (props.activeTool() === 'mask' && hasCancellableBrushWork()) {
+        event.preventDefault()
+        event.stopPropagation()
         resetBrushSession()
+        loadSelectedShapeForEditing()
         return
       }
     }
@@ -1042,6 +1014,26 @@ const AnnotationOverlay: Component<{
   }
 
   createEffect(() => {
+    if (props.activeTool() !== 'mask' || props.segmentationMode() !== 'instance') return
+
+    const handleSpace = (event: KeyboardEvent): void => {
+      if (event.code !== 'Space' && event.key !== ' ') return
+      const target = event.target
+      if (target instanceof HTMLElement) {
+        const tag = target.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+          return
+        }
+      }
+      event.preventDefault()
+      void commitSessionPolygon()
+    }
+
+    document.addEventListener('keydown', handleSpace)
+    onCleanup(() => document.removeEventListener('keydown', handleSpace))
+  })
+
+  createEffect(() => {
     const viewport = props.viewportRef()
     if (!viewport) return
     viewport.addEventListener('keydown', handleKeyDown)
@@ -1051,9 +1043,7 @@ const AnnotationOverlay: Component<{
   onCleanup(() => {
     stopInteraction()
     if (renderFrame) cancelAnimationFrame(renderFrame)
-    segmentationWorker?.terminate()
-    segmentationWorker = null
-    pendingSegmentationRequests.clear()
+    topologySession.dispose()
     brushEngine?.dispose()
     brushEngine = null
   })
@@ -1064,12 +1054,6 @@ const AnnotationOverlay: Component<{
       transform: `translate(${transform.panX}px, ${transform.panY}px) scale(${transform.scale})`,
       'transform-origin': '0 0'
     }
-  })
-
-  const draftLabelColor = createMemo(() => {
-    const labelId = props.activeLabelId()
-    if (!labelId) return '#ffffff'
-    return labelMap().get(labelId)?.color ?? '#ffffff'
   })
 
   return (
@@ -1103,80 +1087,17 @@ const AnnotationOverlay: Component<{
               class="annotation-gl-canvas pointer-events-none absolute top-0 left-0 z-1 h-full w-full"
             />
           </Show>
-          <svg
-            class="pointer-events-none absolute top-0 left-0 z-2 h-full w-full overflow-visible"
+          <AnnotationShapeLayer
             width={size().width}
             height={size().height}
-            viewBox={`0 0 ${size().width} ${size().height}`}
-          >
-            <For each={rectangles()}>
-              {(rect) => {
-                const label = (): Label | undefined => labelMap().get(rect.labelId)
-                const selected = (): boolean => props.store.selectedShapeId[0]() === rect.id
-                return (
-                  <rect
-                    x={rect.x}
-                    y={rect.y}
-                    width={rect.width}
-                    height={rect.height}
-                    fill={hexToRgba(
-                      label()?.color ?? '#ffffff',
-                      selected() ? SELECTED_SHAPE_OPACITY : SHAPE_OPACITY
-                    )}
-                    stroke={label()?.color ?? '#ffffff'}
-                    stroke-width={selected() ? 2.5 : 1.5}
-                  />
-                )
-              }}
-            </For>
-            <For each={polygons()}>
-              {(polygon) => {
-                const label = (): Label | undefined => labelMap().get(polygon.labelId)
-                const selected = (): boolean => props.store.selectedShapeId[0]() === polygon.id
-                return (
-                  <polygon
-                    points={polygonPointsToSvg(polygon.points)}
-                    fill={hexToRgba(
-                      label()?.color ?? '#ffffff',
-                      selected() ? SELECTED_SHAPE_OPACITY : SHAPE_OPACITY
-                    )}
-                    stroke={label()?.color ?? '#ffffff'}
-                    stroke-width={selected() ? 2.5 : 1.5}
-                  />
-                )
-              }}
-            </For>
-            <Show when={draftRect()}>
-              {(rect) => (
-                <rect
-                  x={rect().x}
-                  y={rect().y}
-                  width={rect().width}
-                  height={rect().height}
-                  fill={hexToRgba(draftLabelColor(), SHAPE_OPACITY)}
-                  stroke={draftLabelColor()}
-                  stroke-width={1.5}
-                  stroke-dasharray="4 3"
-                />
-              )}
-            </Show>
-            <Show when={brushSvgPreview()}>
-              {(preview) => (
-                <For each={preview().pixels}>
-                  {(pixel) => (
-                    <rect
-                      x={pixel.x}
-                      y={pixel.y}
-                      width={1}
-                      height={1}
-                      fill="#ffffff"
-                      fill-opacity={preview().opacity}
-                    />
-                  )}
-                </For>
-              )}
-            </Show>
-          </svg>
+            store={props.store}
+            labels={props.labels}
+            activeLabelId={props.activeLabelId}
+            hiddenShapeId={editingShapeId}
+            hoveredShapeId={hoveredShapeId}
+            draftRect={draftRect}
+            brushSvgPreview={brushSvgPreview}
+          />
         </div>
       )}
     </Show>
