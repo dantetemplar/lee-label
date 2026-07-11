@@ -17,11 +17,21 @@ function requireOpenProject(): void {
 export function registerAnnotationsIpc(): void {
   ipcMain.handle('project:open', (_, rootPath: string) => {
     projectDatabase.open(rootPath)
-    return { rootPath }
+    return { rootPath, ...projectDatabase.getProject() }
   })
 
   ipcMain.handle('project:close', () => {
     projectDatabase.close()
+  })
+
+  ipcMain.handle('project:get', () => {
+    requireOpenProject()
+    return projectDatabase.getProject()
+  })
+
+  ipcMain.handle('project:update', (_, input: { name: string }) => {
+    requireOpenProject()
+    return projectDatabase.updateProjectName(input.name)
   })
 
   ipcMain.handle('labels:list', () => {

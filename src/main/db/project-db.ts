@@ -140,6 +140,22 @@ export class ProjectDatabase {
     return this.rootPath
   }
 
+  getProject(): { name: string } {
+    const db = this.requireDb()
+    const row = db.prepare('SELECT name FROM project WHERE id = 1').get() as { name: string | null }
+    const defaultName = basename(this.rootPath ?? '')
+    return { name: row.name?.trim() || defaultName }
+  }
+
+  updateProjectName(name: string): { name: string } {
+    const trimmed = name.trim()
+    if (!trimmed) throw new Error('Project name cannot be empty')
+
+    const now = new Date().toISOString()
+    this.requireDb().prepare('UPDATE project SET name = ?, updated_at = ? WHERE id = 1').run(trimmed, now)
+    return { name: trimmed }
+  }
+
   private requireDb(): Database.Database {
     if (!this.db) throw new Error('No project database is open')
     return this.db

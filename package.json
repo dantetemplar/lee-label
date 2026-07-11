@@ -25,6 +25,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@floating-ui/dom": "^1.7.6",
     "better-sqlite3": "^12.11.1",
     "solid-icons": "^1.2.0"
   },

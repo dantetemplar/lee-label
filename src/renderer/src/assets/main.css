@@ -79,6 +79,10 @@ body {
   @apply border-base-content/20;
 }
 
+.app .field-readonly {
+  @apply rounded-lg border border-base-content/6 bg-base-200/80 px-3 py-2 text-sm text-base-content/50 cursor-default select-text;
+}
+
 .app input[type='range']:focus,
 .app input[type='range']:focus-visible {
   outline: none;

@@ -5,7 +5,8 @@ import {
   BsFileEarmark,
   BsFileEarmarkImage,
   BsFileEarmarkText,
-  BsFolderFill
+  BsFolderFill,
+  BsGear
 } from 'solid-icons/bs'
 import type { FileEntry } from '../../../shared/types'
 import type { ImageStatus } from '../../../shared/annotations'
@@ -17,6 +18,7 @@ import {
   findParentPath,
   getDefaultExpandedPaths
 } from '../lib/tree-nav'
+import ProjectSettingsModal from './ProjectSettingsModal'
 
 const TREE_ROW_HEIGHT = 22
 const TREE_ICON_SIZE = 16
@@ -202,10 +204,12 @@ const FileTree: Component<{
   imageStatuses: () => Record<string, ImageStatus>
   onSelect: (node: FileEntry) => void
   onFocusChange?: (path: string) => void
+  onProjectNameChange?: (name: string) => void | Promise<void>
 }> = (props) => {
   let treeRef: HTMLDivElement | undefined
   const [expandedPaths, setExpandedPaths] = createSignal<Set<string>>(new Set())
   const [focusedPath, setFocusedPath] = createSignal<string | null>(null)
+  const [settingsOpen, setSettingsOpen] = createSignal(false)
 
   createEffect(() => {
     const entries = props.entries()
@@ -380,9 +384,27 @@ const FileTree: Component<{
 
   return (
     <aside class="flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-base-300 bg-base-200 border-r">
-      <div class="px-5 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">
-        {props.rootName().toUpperCase()}
+      <div class="flex items-center justify-between gap-2 px-5 pt-2.5 pb-2">
+        <div class="min-w-0 truncate text-[11px] font-semibold tracking-wide text-base-content/60">
+          {props.rootName().toUpperCase()}
+        </div>
+        <button
+          type="button"
+          class="inline-flex shrink-0 items-center gap-1 border-none bg-transparent p-0 text-[11px] text-base-content/60 hover:text-base-content cursor-pointer"
+          aria-expanded={settingsOpen()}
+          onClick={() => setSettingsOpen(true)}
+        >
+          <span>Project settings</span>
+          <BsGear size={12} aria-hidden="true" />
+        </button>
       </div>
+      <ProjectSettingsModal
+        open={settingsOpen}
+        projectName={props.rootName}
+        projectPath={props.projectRoot}
+        onClose={() => setSettingsOpen(false)}
+        onSave={(name) => props.onProjectNameChange?.(name)}
+      />
       <div
         ref={treeRef}
         class="tree-scrollbar flex-1 overflow-x-hidden overflow-y-auto pb-2 outline-none focus:outline-none"

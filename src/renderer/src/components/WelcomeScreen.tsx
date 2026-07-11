@@ -4,9 +4,11 @@ import { BsFolder2Open } from 'solid-icons/bs'
 import type { RecentProject } from '../../../shared/types'
 import { APP_DISPLAY_NAME } from '../../../shared/app-name'
 import AppLogo from './AppLogo'
+import FloatingPopover from './FloatingPopover'
 import {
   getRecentProjectFullLabel,
   getRecentProjectParentLabel,
+  getRecentProjectTitleParts,
   truncatePathStart
 } from '../lib/recent-project-path'
 
@@ -16,8 +18,14 @@ const WelcomeScreen: Component<{
   recentProjects: () => RecentProject[]
   onOpenFolder: () => void
   onOpenRecent: (path: string) => void
+  onRemoveRecent: (path: string) => void | Promise<void>
 }> = (props) => {
   const [showAllRecent, setShowAllRecent] = createSignal(false)
+  const [recentMenu, setRecentMenu] = createSignal<{
+    project: RecentProject
+    x: number
+    y: number
+  } | null>(null)
 
   const visibleRecent = (): RecentProject[] => {
     const projects = props.recentProjects()
@@ -26,6 +34,19 @@ const WelcomeScreen: Component<{
   }
 
   const hasMoreRecent = (): boolean => props.recentProjects().length > RECENT_PREVIEW_COUNT
+
+  const handleRecentContextMenu = (project: RecentProject, event: MouseEvent): void => {
+    event.preventDefault()
+    setRecentMenu({ project, x: event.clientX, y: event.clientY })
+  }
+
+  const handleRemoveRecent = (): void => {
+    const menu = recentMenu()
+    if (!menu) return
+    const path = menu.project.path
+    setRecentMenu(null)
+    void Promise.resolve(props.onRemoveRecent(path))
+  }
 
   return (
     <div class="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto bg-base-100 p-12 text-base-content">
@@ -64,28 +85,62 @@ const WelcomeScreen: Component<{
             </div>
             <ul class="m-0 list-none p-0">
               <For each={visibleRecent()}>
-                {(project) => (
+                {(project) => {
+                  const { title, folderSuffix } = getRecentProjectTitleParts(project)
+                  return (
                   <li>
                     <button
                       type="button"
                       class="btn btn-ghost flex h-auto min-h-0 w-full items-center justify-between gap-3 px-0 text-[13px] font-normal focus-visible:bg-base-300"
                       title={getRecentProjectFullLabel(project)}
-                      onClick={() => props.onOpenRecent(project.path)}
+                      onClick={() => {
+                        setRecentMenu(null)
+                        props.onOpenRecent(project.path)
+                      }}
+                      onContextMenu={(event) => handleRecentContextMenu(project, event)}
                     >
                       <span class="max-w-[50%] min-w-0 truncate font-medium text-base-content/82">
-                        {project.name}
+                        {title}
+                        <Show when={folderSuffix}>
+                          <span class="font-normal text-base-content/48">{folderSuffix}</span>
+                        </Show>
                       </span>
                       <span class="max-w-[55%] min-w-0 truncate text-right text-xs text-base-content/48">
                         {truncatePathStart(getRecentProjectParentLabel(project))}
                       </span>
                     </button>
                   </li>
-                )}
+                  )
+                }}
               </For>
             </ul>
           </section>
         </Show>
       </div>
+
+      <FloatingPopover
+        open={() => recentMenu() !== null}
+        anchor={() => {
+          const menu = recentMenu()
+          if (!menu) return undefined
+          return { x: menu.x, y: menu.y }
+        }}
+        placement="bottom-start"
+        onClose={() => setRecentMenu(null)}
+      >
+        <button
+          type="button"
+          role="menuitem"
+          class="flex w-full items-center rounded-md px-3 py-2 text-left text-[13px] text-base-content/88 hover:bg-base-200"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation()
+            handleRemoveRecent()
+          }}
+        >
+          Remove from recents
+        </button>
+      </FloatingPopover>
     </div>
   )
 }

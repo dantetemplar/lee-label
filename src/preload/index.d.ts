@@ -28,11 +28,18 @@ export interface AppAPI {
   recent: {
     get: () => Promise<import('../shared/types').RecentProject[]>
     add: (path: string) => Promise<import('../shared/types').RecentProject[]>
+    remove: (path: string) => Promise<import('../shared/types').RecentProject[]>
     exists: (path: string) => Promise<boolean>
   }
+  paths: {
+    getHome: () => Promise<string>
+    formatDisplay: (path: string) => Promise<string>
+  }
   project: {
-    open: (rootPath: string) => Promise<{ rootPath: string }>
+    open: (rootPath: string) => Promise<{ rootPath: string; name: string }>
     close: () => Promise<void>
+    get: () => Promise<{ name: string }>
+    update: (input: { name: string }) => Promise<{ name: string }>
   }
   labels: {
     list: () => Promise<Label[]>

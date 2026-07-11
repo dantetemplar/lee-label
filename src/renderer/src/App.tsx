@@ -195,11 +195,12 @@ const App: Component = () => {
   }
 
   const openAnnotationProject = async (path: string): Promise<void> => {
-    await window.api.project.open(path)
+    const project = await window.api.project.open(path)
     const [nextLabels, statuses] = await Promise.all([
       window.api.labels.list(),
       window.api.images.listStatuses()
     ])
+    setFolderName(project.name)
     setLabels(nextLabels)
     setImageStatuses(statuses)
     setActiveLabelId(nextLabels[0]?.id ?? null)
@@ -220,7 +221,6 @@ const App: Component = () => {
     const tree = await window.api.files.readDirectoryTree(path)
     const recent = await window.api.recent.add(path)
     setFolderPath(path)
-    setFolderName(path.split(/[/\\]/).pop() ?? 'Folder')
     setEntries(tree)
     setRecentProjects(recent)
     resetViewerState()
@@ -235,6 +235,17 @@ const App: Component = () => {
     if (!path) return
 
     await loadFolderAtPath(path)
+  }
+
+  const goToWelcomeScreen = async (): Promise<void> => {
+    if (!folderPath()) return
+
+    saveOpenTextIfDirty()
+    await flushAnnotations()
+    await closeAnnotationProject()
+    setFolderPath(null)
+    setEntries([])
+    resetViewerState()
   }
 
   const openRecentProject = async (path: string): Promise<void> => {
@@ -409,11 +420,30 @@ const App: Component = () => {
     )
   )
 
+  const handleUpdateProjectName = async (name: string): Promise<void> => {
+    const updated = await window.api.project.update({ name })
+    setFolderName(updated.name)
+    const path = folderPath()
+    if (path) {
+      const recent = await window.api.recent.add(path)
+      setRecentProjects(recent)
+    }
+  }
+
+  const handleRemoveRecent = async (path: string): Promise<void> => {
+    const recent = await window.api.recent.remove(path)
+    setRecentProjects(recent)
+  }
+
   return (
     <div class="app flex h-screen flex-col bg-base-100 text-base-content">
       <TitleBar
         title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
-        onOpenFolder={openFolder}
+        hasOpenProject={() => folderPath() !== null}
+        recentProjects={recentProjects}
+        onGoToWelcomeScreen={() => void goToWelcomeScreen()}
+        onOpenFolder={() => void openFolder()}
+        onOpenRecent={(path) => void openRecentProject(path)}
       />
       <div class="flex min-h-0 flex-1">
         <Show when={folderPath()}>
@@ -428,6 +458,7 @@ const App: Component = () => {
                 imageStatuses={imageStatuses}
                 onSelect={(node) => void selectFile(node)}
                 onFocusChange={handleTreeFocusChange}
+                onProjectNameChange={handleUpdateProjectName}
               />
             }
           >
@@ -487,6 +518,7 @@ const App: Component = () => {
             recentProjects={recentProjects}
             onOpenFolder={openFolder}
             onOpenRecent={(path) => void openRecentProject(path)}
+            onRemoveRecent={(path) => void handleRemoveRecent(path)}
           />
         </Show>
       </div>

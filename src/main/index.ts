@@ -6,8 +6,9 @@ import icon from '../../resources/icon.png?asset'
 import type { FileEntry } from '../shared/types'
 import { readTextFile, writeTextFile } from './file-io'
 import { registerImageProtocolSchemes, setupImageProtocol } from './image-protocol'
-import { addRecentProject, getRecentProjects, isExistingDirectory } from './recent-projects'
+import { addRecentProject, getRecentProjects, isExistingDirectory, removeRecentProject } from './recent-projects'
 import { APP_DISPLAY_NAME } from '../shared/app-name'
+import { formatDisplayPath } from '../shared/paths'
 import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
 
 registerImageProtocolSchemes()
@@ -97,8 +98,20 @@ function registerIpc(): void {
     return addRecentProject(path)
   })
 
+  ipcMain.handle('recent:remove', async (_, path: string) => {
+    return removeRecentProject(path)
+  })
+
   ipcMain.handle('recent:exists', async (_, path: string) => {
     return isExistingDirectory(path)
+  })
+
+  ipcMain.handle('paths:get-home', () => {
+    return app.getPath('home')
+  })
+
+  ipcMain.handle('paths:format-display', (_, path: string) => {
+    return formatDisplayPath(path, app.getPath('home'))
   })
 }
 

@@ -9,6 +9,7 @@ export interface FileEntry {
 export interface RecentProject {
   path: string
   name: string
+  folderName: string
   displayPath: string
   openedAt: number
 }

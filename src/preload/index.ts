@@ -32,12 +32,20 @@ const api = {
   recent: {
     get: (): Promise<RecentProject[]> => ipcRenderer.invoke('recent:get'),
     add: (path: string): Promise<RecentProject[]> => ipcRenderer.invoke('recent:add', path),
+    remove: (path: string): Promise<RecentProject[]> => ipcRenderer.invoke('recent:remove', path),
     exists: (path: string): Promise<boolean> => ipcRenderer.invoke('recent:exists', path)
   },
+  paths: {
+    getHome: (): Promise<string> => ipcRenderer.invoke('paths:get-home'),
+    formatDisplay: (path: string): Promise<string> => ipcRenderer.invoke('paths:format-display', path)
+  },
   project: {
-    open: (rootPath: string): Promise<{ rootPath: string }> =>
+    open: (rootPath: string): Promise<{ rootPath: string; name: string }> =>
       ipcRenderer.invoke('project:open', rootPath),
-    close: (): Promise<void> => ipcRenderer.invoke('project:close')
+    close: (): Promise<void> => ipcRenderer.invoke('project:close'),
+    get: (): Promise<{ name: string }> => ipcRenderer.invoke('project:get'),
+    update: (input: { name: string }): Promise<{ name: string }> =>
+      ipcRenderer.invoke('project:update', input)
   },
   labels: {
     list: (): Promise<import('../shared/annotations').Label[]> =>

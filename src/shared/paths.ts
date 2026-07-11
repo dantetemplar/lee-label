@@ -7,3 +7,10 @@ export function toRelativePath(projectRoot: string, absolutePath: string): strin
   }
   return normalizedPath
 }
+
+export function formatDisplayPath(path: string, home: string): string {
+  if (path === home) return '~'
+  if (path.startsWith(home + '/')) return `~${path.slice(home.length)}`
+  if (path.startsWith(home + '\\')) return `~${path.slice(home.length).replace(/\\/g, '/')}`
+  return path
+}

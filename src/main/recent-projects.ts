@@ -1,7 +1,9 @@
 import { app } from 'electron'
 import { mkdir, readFile, stat, writeFile } from 'fs/promises'
-import { dirname, join } from 'path'
+import { basename, dirname, join } from 'path'
 import type { RecentProject } from '../shared/types'
+import { formatDisplayPath } from '../shared/paths'
+import { readStoredProjectName } from './db/paths'
 
 const MAX_RECENT = 10
 
@@ -13,30 +15,35 @@ function getStorePath(): string {
   return join(app.getPath('userData'), 'recent-projects.json')
 }
 
-function formatDisplayPath(path: string): string {
-  const home = app.getPath('home')
-  if (path === home) return '~'
-  if (path.startsWith(home + '/')) return `~${path.slice(home.length)}`
-  if (path.startsWith(home + '\\')) return `~${path.slice(home.length).replace(/\\/g, '/')}`
-  return path
+function getParentDisplayPath(path: string): string {
+  return formatDisplayPath(dirname(path), app.getPath('home'))
 }
 
-function getParentDisplayPath(path: string): string {
-  return formatDisplayPath(dirname(path))
+function getFolderName(path: string): string {
+  return basename(path)
+}
+
+function normalizeProjectPath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '') || path
+}
+
+function getRecentProjectDisplayName(path: string, folderName: string): string {
+  const storedName = readStoredProjectName(path)
+  if (storedName && storedName !== folderName) {
+    return `${storedName} (${folderName}/)`
+  }
+  return folderName
 }
 
 function toRecentProject(path: string, openedAt: number): RecentProject {
+  const folderName = getFolderName(path)
   return {
     path,
-    name: getProjectName(path),
+    folderName,
+    name: getRecentProjectDisplayName(path, folderName),
     displayPath: getParentDisplayPath(path),
     openedAt
   }
-}
-
-function getProjectName(path: string): string {
-  const parts = path.split(/[/\\]/).filter(Boolean)
-  return parts[parts.length - 1] ?? path
 }
 
 async function readStore(): Promise<RecentStore> {
@@ -69,10 +76,16 @@ export async function getRecentProjects(): Promise<RecentProject[]> {
   if (projects.length !== store.projects.length) {
     await writeStore({ projects })
   } else {
-    const staleDisplayPath = store.projects.some(
-      (project, index) => project.displayPath !== projects[index]?.displayPath
-    )
-    if (staleDisplayPath) {
+    const staleEntry = store.projects.some((project, index) => {
+      const refreshed = projects[index]
+      if (!refreshed) return true
+      return (
+        project.displayPath !== refreshed.displayPath ||
+        project.name !== refreshed.name ||
+        project.folderName !== refreshed.folderName
+      )
+    })
+    if (staleEntry) {
       await writeStore({ projects })
     }
   }
@@ -90,6 +103,29 @@ export async function addRecentProject(path: string): Promise<RecentProject[]> {
   )
 
   await writeStore({ projects })
+  return projects
+}
+
+export async function removeRecentProject(path: string): Promise<RecentProject[]> {
+  const targetPath = normalizeProjectPath(path)
+  const store = await readStore()
+  const remaining = store.projects.filter(
+    (project) => normalizeProjectPath(project.path) !== targetPath
+  )
+
+  await writeStore({ projects: remaining })
+
+  const projects: RecentProject[] = []
+  for (const project of remaining) {
+    if (await isExistingDirectory(project.path)) {
+      projects.push(toRecentProject(project.path, project.openedAt))
+    }
+  }
+
+  if (projects.length !== remaining.length) {
+    await writeStore({ projects })
+  }
+
   return projects
 }
 
