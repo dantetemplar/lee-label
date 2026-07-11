@@ -586,7 +586,7 @@ const ImageViewer: Component<{
   return (
     <div
       ref={viewportRef}
-      class="relative min-h-0 min-w-0 flex-1 touch-none outline-none focus:outline-none"
+      class="relative min-h-0 min-w-0 flex-1 overflow-hidden touch-none outline-none focus:outline-none"
       classList={{ 'cursor-grabbing': panning() }}
       style={{ cursor: viewportCursor() }}
       tabindex={0}

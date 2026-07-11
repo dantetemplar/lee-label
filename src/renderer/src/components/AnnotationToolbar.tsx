@@ -24,7 +24,7 @@ const AnnotationToolbar: Component<{
   onToolChange: (tool: AnnotationTool) => void
 }> = (props) => (
   <aside
-    class="flex w-[var(--toolbar-width)] min-w-[var(--toolbar-width)] shrink-0 flex-col border-base-300 bg-base-200 border-l"
+    class="relative z-10 flex w-[var(--toolbar-width)] min-w-[var(--toolbar-width)] shrink-0 flex-col border-base-300 bg-base-200 border-l"
     aria-label="Annotation tools"
   >
     <div class="flex flex-col py-1.5">
