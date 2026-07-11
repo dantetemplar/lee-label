@@ -10,6 +10,7 @@ import {
 } from 'solid-icons/bs'
 import type { FileEntry } from '../../../shared/types'
 import type { ImageStatus } from '../../../shared/annotations'
+import type { ProjectSettings } from '../../../shared/segmentation'
 import { getFileKind } from '../../../shared/file-types'
 import { toRelativePath } from '../../../shared/paths'
 import {
@@ -204,7 +205,11 @@ const FileTree: Component<{
   imageStatuses: () => Record<string, ImageStatus>
   onSelect: (node: FileEntry) => void
   onFocusChange?: (path: string) => void
-  onProjectNameChange?: (name: string) => void | Promise<void>
+  onProjectSettingsChange?: (settings: {
+    name: string
+    segmentationMode: ProjectSettings['segmentationMode']
+  }) => void | Promise<void>
+  projectSettings: () => ProjectSettings
 }> = (props) => {
   let treeRef: HTMLDivElement | undefined
   const [expandedPaths, setExpandedPaths] = createSignal<Set<string>>(new Set())
@@ -400,10 +405,10 @@ const FileTree: Component<{
       </div>
       <ProjectSettingsModal
         open={settingsOpen}
-        projectName={props.rootName}
+        projectSettings={props.projectSettings}
         projectPath={props.projectRoot}
         onClose={() => setSettingsOpen(false)}
-        onSave={(name) => props.onProjectNameChange?.(name)}
+        onSave={(settings) => props.onProjectSettingsChange?.(settings)}
       />
       <div
         ref={treeRef}

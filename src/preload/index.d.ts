@@ -1,4 +1,5 @@
 import type {
+  AnnotationStats,
   CreateLabelInput,
   ImageRecord,
   ImageStatus,
@@ -6,10 +7,13 @@ import type {
   LabelDeleteStats,
   MaskBlob,
   SaveMaskInput,
+  SavePolygonInput,
   SaveRectangleInput,
+  SemanticMaskBlob,
   Shape,
   UpdateLabelInput
 } from '../shared/annotations'
+import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
 
 export interface AppAPI {
   window: {
@@ -36,10 +40,14 @@ export interface AppAPI {
     formatDisplay: (path: string) => Promise<string>
   }
   project: {
-    open: (rootPath: string) => Promise<{ rootPath: string; name: string }>
+    open: (rootPath: string) => Promise<{ rootPath: string } & ProjectSettings>
     close: () => Promise<void>
-    get: () => Promise<{ name: string }>
-    update: (input: { name: string }) => Promise<{ name: string }>
+    get: () => Promise<ProjectSettings>
+    update: (input: {
+      name?: string
+      segmentationMode?: SegmentationMode
+    }) => Promise<ProjectSettings>
+    getAnnotationStats: () => Promise<AnnotationStats>
   }
   labels: {
     list: () => Promise<Label[]>
@@ -59,12 +67,27 @@ export interface AppAPI {
       relativePath: string,
       rectangles: SaveRectangleInput[],
       masks: { input: SaveMaskInput; data: ArrayBuffer }[],
+      polygons: SavePolygonInput[],
       imageWidth?: number,
       imageHeight?: number
     ) => Promise<Shape[]>
   }
   masks: {
     get: (shapeId: string) => Promise<MaskBlob | null>
+  }
+  polygons: {
+    get: (shapeId: string) => Promise<{ x: number; y: number }[] | null>
+  }
+  semanticMasks: {
+    get: (
+      relativePath: string
+    ) => Promise<{ width: number; height: number; data: ArrayBuffer } | null>
+    save: (
+      relativePath: string,
+      width: number,
+      height: number,
+      classMap: ArrayBuffer
+    ) => Promise<SemanticMaskBlob>
   }
 }
 

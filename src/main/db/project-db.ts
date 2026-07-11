@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { randomUUID } from 'crypto'
 import { basename } from 'path'
 import type {
+  AnnotationStats,
   CreateLabelInput,
   ImageRecord,
   ImageStatus,
@@ -9,12 +10,22 @@ import type {
   LabelDeleteStats,
   MaskBlob,
   MaskShape,
+  PolygonShape,
   RectangleShape,
   SaveMaskInput,
+  SavePolygonInput,
   SaveRectangleInput,
+  SemanticMaskBlob,
   Shape,
   UpdateLabelInput
 } from '../../shared/annotations'
+import {
+  DEFAULT_SEGMENTATION_MODE,
+  type ProjectSettings,
+  type SegmentationMode,
+  SETTINGS_KEY_SEGMENTATION_MODE
+} from '../../shared/segmentation'
+import { encodeClassMap, decodeClassMap } from '../semantic-mask-codec'
 import { getLabelColor } from '../../shared/label-color'
 import { runMigrations } from './migrations'
 import { getDbPath } from './paths'
@@ -23,6 +34,7 @@ interface LabelRow {
   id: string
   name: string
   color: string
+  class_id: number
   sort_order: number
   shortcut: string | null
 }
@@ -39,7 +51,7 @@ interface ImageRow {
 interface ShapeRow {
   id: string
   image_id: number
-  type: 'rectangle' | 'mask'
+  type: 'rectangle' | 'mask' | 'polygon'
   label_id: string
   z_order: number
   created_at: string
@@ -59,6 +71,7 @@ function mapLabel(row: LabelRow): Label {
     id: row.id,
     name: row.name,
     color: row.color,
+    classId: row.class_id,
     sortOrder: row.sort_order,
     shortcut: row.shortcut ?? undefined
   }
@@ -75,7 +88,7 @@ function mapImage(row: ImageRow): ImageRecord {
   }
 }
 
-function mapShape(row: ShapeRow): Shape {
+function mapShape(row: ShapeRow, polygonPoints?: { x: number; y: number }[]): Shape {
   if (row.type === 'rectangle') {
     return {
       id: row.id,
@@ -86,6 +99,18 @@ function mapShape(row: ShapeRow): Shape {
       y: row.y ?? 0,
       width: row.width ?? 0,
       height: row.height ?? 0,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }
+  }
+
+  if (row.type === 'polygon') {
+    return {
+      id: row.id,
+      type: 'polygon',
+      labelId: row.label_id,
+      zOrder: row.z_order,
+      points: polygonPoints ?? [],
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }
@@ -140,20 +165,76 @@ export class ProjectDatabase {
     return this.rootPath
   }
 
-  getProject(): { name: string } {
+  getProject(): ProjectSettings {
     const db = this.requireDb()
     const row = db.prepare('SELECT name FROM project WHERE id = 1').get() as { name: string | null }
     const defaultName = basename(this.rootPath ?? '')
-    return { name: row.name?.trim() || defaultName }
+    return {
+      name: row.name?.trim() || defaultName,
+      segmentationMode: this.getSetting<SegmentationMode>(
+        SETTINGS_KEY_SEGMENTATION_MODE,
+        DEFAULT_SEGMENTATION_MODE
+      )
+    }
+  }
+
+  updateProject(input: {
+    name?: string
+    segmentationMode?: SegmentationMode
+  }): ProjectSettings {
+    const db = this.requireDb()
+    const now = new Date().toISOString()
+
+    if (input.name !== undefined) {
+      const trimmed = input.name.trim()
+      if (!trimmed) throw new Error('Project name cannot be empty')
+      db.prepare('UPDATE project SET name = ?, updated_at = ? WHERE id = 1').run(trimmed, now)
+    }
+
+    if (input.segmentationMode !== undefined) {
+      this.setSetting(SETTINGS_KEY_SEGMENTATION_MODE, input.segmentationMode)
+    }
+
+    this.touchProject()
+    return this.getProject()
   }
 
   updateProjectName(name: string): { name: string } {
-    const trimmed = name.trim()
-    if (!trimmed) throw new Error('Project name cannot be empty')
+    const updated = this.updateProject({ name })
+    return { name: updated.name }
+  }
 
-    const now = new Date().toISOString()
-    this.requireDb().prepare('UPDATE project SET name = ?, updated_at = ? WHERE id = 1').run(trimmed, now)
-    return { name: trimmed }
+  getAnnotationStats(): AnnotationStats {
+    const db = this.requireDb()
+    const shapeCount = (
+      db.prepare('SELECT COUNT(*) AS count FROM shapes').get() as { count: number }
+    ).count
+    const semanticMaskCount = (
+      db.prepare('SELECT COUNT(*) AS count FROM semantic_masks').get() as { count: number }
+    ).count
+    return { shapeCount, semanticMaskCount }
+  }
+
+  private getSetting<T>(key: string, fallback: T): T {
+    const row = this.requireDb()
+      .prepare('SELECT value FROM settings WHERE key = ?')
+      .get(key) as { value: string } | undefined
+    if (!row) return fallback
+    try {
+      return JSON.parse(row.value) as T
+    } catch {
+      return row.value as T
+    }
+  }
+
+  private setSetting(key: string, value: unknown): void {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+    this.requireDb()
+      .prepare(
+        `INSERT INTO settings (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+      )
+      .run(key, serialized)
   }
 
   private requireDb(): Database.Database {
@@ -173,6 +254,12 @@ export class ProjectDatabase {
     const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM labels').get() as {
       max_order: number
     }
+    const maxClassId = db.prepare('SELECT COALESCE(MAX(class_id), 0) AS max_class_id FROM labels').get() as {
+      max_class_id: number
+    }
+    if (maxClassId.max_class_id >= 65535) {
+      throw new Error('Maximum number of labels (65535) reached')
+    }
     const existingColors = (db.prepare('SELECT color FROM labels').all() as { color: string }[]).map(
       (row) => row.color
     )
@@ -181,12 +268,13 @@ export class ProjectDatabase {
       id,
       name: input.name,
       color: input.color?.trim() || getLabelColor(input.name, existingColors),
+      classId: maxClassId.max_class_id + 1,
       sortOrder: maxOrder.max_order + 1,
       shortcut: input.shortcut
     }
     db.prepare(
-      'INSERT INTO labels (id, name, color, sort_order, shortcut) VALUES (?, ?, ?, ?, ?)'
-    ).run(label.id, label.name, label.color, label.sortOrder, label.shortcut ?? null)
+      'INSERT INTO labels (id, name, color, class_id, sort_order, shortcut) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(label.id, label.name, label.color, label.classId, label.sortOrder, label.shortcut ?? null)
     this.touchProject()
     return label
   }
@@ -316,7 +404,15 @@ export class ProjectDatabase {
     const rows = this.requireDb()
       .prepare('SELECT * FROM shapes WHERE image_id = ? ORDER BY z_order ASC, created_at ASC')
       .all(imageId) as ShapeRow[]
-    return rows.map(mapShape)
+
+    return rows.map((row) => {
+      if (row.type !== 'polygon') return mapShape(row)
+      const polygonRow = this.requireDb()
+        .prepare('SELECT rings_json FROM polygon_data WHERE shape_id = ?')
+        .get(row.id) as { rings_json: string } | undefined
+      const rings = polygonRow ? (JSON.parse(polygonRow.rings_json) as { points: { x: number; y: number }[] }[]) : []
+      return mapShape(row, rings[0]?.points ?? [])
+    })
   }
 
   saveRectangle(input: SaveRectangleInput): RectangleShape {
@@ -375,6 +471,70 @@ export class ProjectDatabase {
       createdAt,
       updatedAt: now
     }
+  }
+
+  savePolygon(input: SavePolygonInput): PolygonShape {
+    const db = this.requireDb()
+    const imageId = this.getImageId(input.relativePath)
+    if (input.imageWidth !== undefined || input.imageHeight !== undefined) {
+      db.prepare('UPDATE images SET width = COALESCE(?, width), height = COALESCE(?, height) WHERE id = ?').run(
+        input.imageWidth ?? null,
+        input.imageHeight ?? null,
+        imageId
+      )
+    }
+
+    if (input.points.length < 3) {
+      throw new Error('Polygon must have at least 3 points')
+    }
+
+    const now = new Date().toISOString()
+    const existing = db.prepare('SELECT created_at FROM shapes WHERE id = ?').get(input.id) as
+      | { created_at: string }
+      | undefined
+    const createdAt = existing?.created_at ?? now
+    const ringsJson = JSON.stringify([{ points: input.points }])
+
+    const tx = db.transaction(() => {
+      db.prepare(
+        `INSERT INTO shapes (
+          id, image_id, type, label_id, z_order, created_at, updated_at,
+          x, y, width, height, bounds_x, bounds_y, bounds_width, bounds_height
+        ) VALUES (?, ?, 'polygon', ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+        ON CONFLICT(id) DO UPDATE SET
+          label_id = excluded.label_id,
+          z_order = excluded.z_order,
+          updated_at = excluded.updated_at`
+      ).run(input.id, imageId, input.labelId, input.zOrder, createdAt, now)
+
+      db.prepare(
+        `INSERT INTO polygon_data (shape_id, rings_json)
+         VALUES (?, ?)
+         ON CONFLICT(shape_id) DO UPDATE SET rings_json = excluded.rings_json`
+      ).run(input.id, ringsJson)
+    })
+
+    tx()
+    this.touchProject()
+
+    return {
+      id: input.id,
+      type: 'polygon',
+      labelId: input.labelId,
+      zOrder: input.zOrder,
+      points: input.points,
+      createdAt,
+      updatedAt: now
+    }
+  }
+
+  getPolygonPoints(shapeId: string): { x: number; y: number }[] | null {
+    const row = this.requireDb()
+      .prepare('SELECT rings_json FROM polygon_data WHERE shape_id = ?')
+      .get(shapeId) as { rings_json: string } | undefined
+    if (!row) return null
+    const rings = JSON.parse(row.rings_json) as { points: { x: number; y: number }[] }[]
+    return rings[0]?.points ?? null
   }
 
   saveMask(input: SaveMaskInput, data: Buffer): MaskShape {
@@ -481,6 +641,7 @@ export class ProjectDatabase {
     relativePath: string,
     rectangles: SaveRectangleInput[],
     masks: { input: SaveMaskInput; data: Buffer }[],
+    polygons: SavePolygonInput[],
     imageWidth?: number,
     imageHeight?: number
   ): Shape[] {
@@ -495,7 +656,11 @@ export class ProjectDatabase {
       )
     }
 
-    const keepIds = new Set([...rectangles.map((r) => r.id), ...masks.map((m) => m.input.id)])
+    const keepIds = new Set([
+      ...rectangles.map((r) => r.id),
+      ...masks.map((m) => m.input.id),
+      ...polygons.map((p) => p.id)
+    ])
 
     const tx = db.transaction(() => {
       const existing = db
@@ -513,11 +678,78 @@ export class ProjectDatabase {
       for (const mask of masks) {
         this.saveMask({ ...mask.input, relativePath, imageWidth, imageHeight }, mask.data)
       }
+      for (const polygon of polygons) {
+        this.savePolygon({ ...polygon, relativePath, imageWidth, imageHeight })
+      }
     })
 
     tx()
     this.touchProject()
     return this.listShapes(relativePath)
+  }
+
+  getSemanticMask(relativePath: string): SemanticMaskBlob | null {
+    const imageId = this.getImageId(relativePath)
+    const row = this.requireDb()
+      .prepare('SELECT width, height, format, data FROM semantic_masks WHERE image_id = ?')
+      .get(imageId) as
+      | { width: number; height: number; format: 'png16'; data: Buffer }
+      | undefined
+    if (!row) return null
+
+    const buffer = row.data
+    const arrayBuffer = buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength
+    ) as ArrayBuffer
+
+    return {
+      width: row.width,
+      height: row.height,
+      format: row.format,
+      data: arrayBuffer
+    }
+  }
+
+  saveSemanticMask(
+    relativePath: string,
+    width: number,
+    height: number,
+    classMap: Uint16Array
+  ): SemanticMaskBlob {
+    const imageId = this.getImageId(relativePath)
+    const pngBuffer = encodeClassMap(classMap, width, height)
+
+    this.requireDb()
+      .prepare(
+        `INSERT INTO semantic_masks (image_id, width, height, format, data)
+         VALUES (?, ?, ?, 'png16', ?)
+         ON CONFLICT(image_id) DO UPDATE SET
+           width = excluded.width,
+           height = excluded.height,
+           format = excluded.format,
+           data = excluded.data`
+      )
+      .run(imageId, width, height, pngBuffer)
+
+    this.touchProject()
+
+    const arrayBuffer = pngBuffer.buffer.slice(
+      pngBuffer.byteOffset,
+      pngBuffer.byteOffset + pngBuffer.byteLength
+    ) as ArrayBuffer
+
+    return {
+      width,
+      height,
+      format: 'png16',
+      data: arrayBuffer
+    }
+  }
+
+  decodeSemanticMask(blob: SemanticMaskBlob): Uint16Array {
+    const buffer = Buffer.from(blob.data)
+    return decodeClassMap(buffer).data
   }
 
   private touchProject(): void {

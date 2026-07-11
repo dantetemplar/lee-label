@@ -3,16 +3,21 @@ import { randomUUID } from '../../../shared/uuid'
 import type {
   ImageStatus,
   MaskShape,
+  PolygonShape,
   RectangleShape,
   SaveMaskInput,
+  SavePolygonInput,
   SaveRectangleInput
 } from '../../../shared/annotations'
+import type { SegmentationMode } from '../../../shared/segmentation'
 
 export interface WorkingMask extends MaskShape {
   data: Uint8Array
 }
 
-export type WorkingShape = RectangleShape | WorkingMask
+export interface WorkingPolygon extends PolygonShape {}
+
+export type WorkingShape = RectangleShape | WorkingMask | WorkingPolygon
 
 interface AnnotationSnapshot {
   shapes: WorkingShape[]
@@ -22,6 +27,9 @@ interface AnnotationSnapshot {
 function cloneShape(shape: WorkingShape): WorkingShape {
   if (shape.type === 'mask') {
     return { ...shape, bounds: { ...shape.bounds }, data: new Uint8Array(shape.data) }
+  }
+  if (shape.type === 'polygon') {
+    return { ...shape, points: shape.points.map((point) => ({ ...point })) }
   }
   return { ...shape }
 }
@@ -41,6 +49,7 @@ export class AnnotationStore {
   readonly loading = createSignal(false)
   readonly currentRelativePath = createSignal<string | null>(null)
   readonly imageStatus = createSignal<ImageStatus>('todo')
+  readonly segmentationMode = createSignal<SegmentationMode>('instance')
 
   private undoStack: AnnotationSnapshot[] = []
   private redoStack: AnnotationSnapshot[] = []
@@ -52,6 +61,10 @@ export class AnnotationStore {
     private readonly onDirtyChange?: (dirty: boolean) => void,
     private readonly onStatusChange?: (relativePath: string, status: ImageStatus) => void
   ) {}
+
+  setSegmentationMode(mode: SegmentationMode): void {
+    this.segmentationMode[1](mode)
+  }
 
   private snapshot(): AnnotationSnapshot {
     return {
@@ -130,7 +143,7 @@ export class AnnotationStore {
 
     const working: WorkingShape[] = []
     for (const shape of shapeList) {
-      if (shape.type === 'rectangle') {
+      if (shape.type === 'rectangle' || shape.type === 'polygon') {
         working.push(shape)
         continue
       }
@@ -172,6 +185,7 @@ export class AnnotationStore {
     const shapes = this.shapes[0]()
     const rectangles: SaveRectangleInput[] = []
     const masks: { input: SaveMaskInput; data: ArrayBuffer }[] = []
+    const polygons: SavePolygonInput[] = []
 
     for (const shape of shapes) {
       if (shape.type === 'rectangle') {
@@ -184,6 +198,19 @@ export class AnnotationStore {
           y: shape.y,
           width: shape.width,
           height: shape.height,
+          imageWidth: this.imageWidth,
+          imageHeight: this.imageHeight
+        })
+        continue
+      }
+
+      if (shape.type === 'polygon') {
+        polygons.push({
+          id: shape.id,
+          relativePath,
+          labelId: shape.labelId,
+          zOrder: shape.zOrder,
+          points: shape.points,
           imageWidth: this.imageWidth,
           imageHeight: this.imageHeight
         })
@@ -211,13 +238,14 @@ export class AnnotationStore {
       relativePath,
       rectangles,
       masks,
+      polygons,
       this.imageWidth,
       this.imageHeight
     )
 
     const working: WorkingShape[] = []
     for (const shape of saved) {
-      if (shape.type === 'rectangle') {
+      if (shape.type === 'rectangle' || shape.type === 'polygon') {
         working.push(shape)
         continue
       }
@@ -295,6 +323,19 @@ export class AnnotationStore {
       zOrder: this.shapes[0]().length,
       bounds,
       data,
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  createPolygon(labelId: string, points: { x: number; y: number }[]): WorkingPolygon {
+    const now = new Date().toISOString()
+    return {
+      id: randomUUID(),
+      type: 'polygon',
+      labelId,
+      zOrder: this.shapes[0]().length,
+      points,
       createdAt: now,
       updatedAt: now
     }

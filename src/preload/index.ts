@@ -1,12 +1,16 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { FileEntry, RecentProject } from '../shared/types'
 import type {
+  AnnotationStats,
   CreateLabelInput,
   ImageStatus,
   SaveMaskInput,
+  SavePolygonInput,
   SaveRectangleInput,
+  SemanticMaskBlob,
   UpdateLabelInput
 } from '../shared/annotations'
+import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
 
 const api = {
   window: {
@@ -40,12 +44,16 @@ const api = {
     formatDisplay: (path: string): Promise<string> => ipcRenderer.invoke('paths:format-display', path)
   },
   project: {
-    open: (rootPath: string): Promise<{ rootPath: string; name: string }> =>
+    open: (rootPath: string): Promise<{ rootPath: string } & ProjectSettings> =>
       ipcRenderer.invoke('project:open', rootPath),
     close: (): Promise<void> => ipcRenderer.invoke('project:close'),
-    get: (): Promise<{ name: string }> => ipcRenderer.invoke('project:get'),
-    update: (input: { name: string }): Promise<{ name: string }> =>
-      ipcRenderer.invoke('project:update', input)
+    get: (): Promise<ProjectSettings> => ipcRenderer.invoke('project:get'),
+    update: (input: {
+      name?: string
+      segmentationMode?: SegmentationMode
+    }): Promise<ProjectSettings> => ipcRenderer.invoke('project:update', input),
+    getAnnotationStats: (): Promise<AnnotationStats> =>
+      ipcRenderer.invoke('project:get-annotation-stats')
   },
   labels: {
     list: (): Promise<import('../shared/annotations').Label[]> =>
@@ -82,6 +90,7 @@ const api = {
       relativePath: string,
       rectangles: SaveRectangleInput[],
       masks: { input: SaveMaskInput; data: ArrayBuffer }[],
+      polygons: SavePolygonInput[],
       imageWidth?: number,
       imageHeight?: number
     ): Promise<import('../shared/annotations').Shape[]> =>
@@ -90,6 +99,7 @@ const api = {
         relativePath,
         rectangles,
         masks,
+        polygons,
         imageWidth,
         imageHeight
       )
@@ -97,6 +107,23 @@ const api = {
   masks: {
     get: (shapeId: string): Promise<import('../shared/annotations').MaskBlob | null> =>
       ipcRenderer.invoke('masks:get', shapeId)
+  },
+  polygons: {
+    get: (shapeId: string): Promise<{ x: number; y: number }[] | null> =>
+      ipcRenderer.invoke('polygons:get', shapeId)
+  },
+  semanticMasks: {
+    get: (
+      relativePath: string
+    ): Promise<{ width: number; height: number; data: ArrayBuffer } | null> =>
+      ipcRenderer.invoke('semantic-masks:get', relativePath),
+    save: (
+      relativePath: string,
+      width: number,
+      height: number,
+      classMap: ArrayBuffer
+    ): Promise<SemanticMaskBlob> =>
+      ipcRenderer.invoke('semantic-masks:save', relativePath, width, height, classMap)
   }
 }
 

@@ -1,6 +1,7 @@
 import type { IconTypes } from 'solid-icons'
 import type { Component } from 'solid-js'
-import { For } from 'solid-js'
+import { For, Show } from 'solid-js'
+import type { SegmentationMode } from '../../../shared/segmentation'
 import {
     BrushToolIcon,
     CursorToolIcon,
@@ -19,6 +20,7 @@ const TOOLS: { id: AnnotationTool; label: string; icon: IconTypes }[] = [
 
 const AnnotationToolbar: Component<{
   activeTool: () => AnnotationTool
+  segmentationMode: () => SegmentationMode
   onToolChange: (tool: AnnotationTool) => void
 }> = (props) => (
   <aside
@@ -28,20 +30,22 @@ const AnnotationToolbar: Component<{
     <div class="flex flex-col py-1.5">
       <For each={TOOLS}>
         {(tool) => (
-          <button
-            type="button"
-            class="btn btn-square btn-ghost h-10 w-full rounded-none"
-            classList={{
-              'btn-active bg-primary/15 shadow-[inset_-3px_0_0_var(--color-primary)]':
-                props.activeTool() === tool.id
-            }}
-            title={tool.label}
-            aria-label={tool.label}
-            aria-pressed={props.activeTool() === tool.id}
-            onClick={() => props.onToolChange(tool.id)}
-          >
-            <tool.icon size={ICON_SIZE} aria-hidden="true" />
-          </button>
+          <Show when={tool.id !== 'rectangle' || props.segmentationMode() === 'instance'}>
+            <button
+              type="button"
+              class="btn btn-square btn-ghost h-10 w-full rounded-none"
+              classList={{
+                'btn-active bg-primary/15 shadow-[inset_-3px_0_0_var(--color-primary)]':
+                  props.activeTool() === tool.id
+              }}
+              title={tool.label}
+              aria-label={tool.label}
+              aria-pressed={props.activeTool() === tool.id}
+              onClick={() => props.onToolChange(tool.id)}
+            >
+              <tool.icon size={ICON_SIZE} aria-hidden="true" />
+            </button>
+          </Show>
         )}
       </For>
     </div>

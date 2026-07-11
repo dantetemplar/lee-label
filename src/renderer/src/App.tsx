@@ -2,6 +2,8 @@ import type { Component } from 'solid-js'
 import { createEffect, createSignal, on, onMount, Show, untrack } from 'solid-js'
 import type { FileEntry, RecentProject } from '../../shared/types'
 import type { ImageStatus, Label, LabelDeleteStats } from '../../shared/annotations'
+import type { ProjectSettings } from '../../shared/segmentation'
+import { DEFAULT_SEGMENTATION_MODE } from '../../shared/segmentation'
 import { getFileKind, type FileKind } from '../../shared/file-types'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
@@ -17,6 +19,7 @@ import type { ImageLayers } from '../../shared/image-layers'
 import { getAdjacentImagePaths } from './lib/tree-nav'
 import { APP_DISPLAY_NAME } from '../../shared/app-name'
 import { AnnotationStore } from './lib/annotation-store'
+import { SemanticMapStore } from './lib/semantic-map-store'
 import { toRelativePath } from '../../shared/paths'
 
 const App: Component = () => {
@@ -42,8 +45,15 @@ const App: Component = () => {
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
+  const [projectSettings, setProjectSettings] = createSignal<ProjectSettings>({
+    name: 'Explorer',
+    segmentationMode: DEFAULT_SEGMENTATION_MODE
+  })
 
   const annotationStore = new AnnotationStore(undefined, (relativePath, status) => {
+    setImageStatuses((current) => ({ ...current, [relativePath]: status }))
+  })
+  const semanticStore = new SemanticMapStore(undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
   })
 
@@ -158,6 +168,7 @@ const App: Component = () => {
 
   const flushAnnotations = async (): Promise<void> => {
     await annotationStore.flush()
+    await semanticStore.flush()
   }
 
   createEffect(
@@ -192,6 +203,7 @@ const App: Component = () => {
     setTextLoading(false)
     setTextLoadError(null)
     annotationStore.clear()
+    semanticStore.clear()
   }
 
   const openAnnotationProject = async (path: string): Promise<void> => {
@@ -200,7 +212,12 @@ const App: Component = () => {
       window.api.labels.list(),
       window.api.images.listStatuses()
     ])
+    setProjectSettings({
+      name: project.name,
+      segmentationMode: project.segmentationMode
+    })
     setFolderName(project.name)
+    annotationStore.setSegmentationMode(project.segmentationMode)
     setLabels(nextLabels)
     setImageStatuses(statuses)
     setActiveLabelId(nextLabels[0]?.id ?? null)
@@ -296,7 +313,7 @@ const App: Component = () => {
       size: file.size ?? 0,
       width: dims.width,
       height: dims.height,
-      dirty: annotationStore.dirty[0]()
+      dirty: annotationStore.dirty[0]() || semanticStore.dirty[0]()
     })
   }
 
@@ -363,10 +380,17 @@ const App: Component = () => {
       const relativePath = currentImageRelativePath()
       const info = fileInfo()
       if (relativePath && info?.width && info?.height) {
-        await annotationStore.loadForImage(relativePath, {
-          width: info.width,
-          height: info.height
-        })
+        if (projectSettings().segmentationMode === 'semantic') {
+          await semanticStore.loadForImage(relativePath, {
+            width: info.width,
+            height: info.height
+          })
+        } else {
+          await annotationStore.loadForImage(relativePath, {
+            width: info.width,
+            height: info.height
+          })
+        }
       }
 
       setLabelDeletePrompt(null)
@@ -402,7 +426,9 @@ const App: Component = () => {
   }
 
   const markImageStatus = (status: ImageStatus): void => {
-    void annotationStore.setImageStatus(status).then(() => {
+    const store =
+      projectSettings().segmentationMode === 'semantic' ? semanticStore : annotationStore
+    void store.setImageStatus(status).then(() => {
       const relativePath = currentImageRelativePath()
       if (relativePath) handleImageStatusChange(relativePath, status)
     })
@@ -413,15 +439,33 @@ const App: Component = () => {
 
   createEffect(
     on(
-      () => annotationStore.dirty[0](),
-      (dirty) => {
-        setFileInfo((info) => (info ? { ...info, dirty } : info))
+      () => [annotationStore.dirty[0](), semanticStore.dirty[0]()] as const,
+      ([annotationDirty, semanticDirty]) => {
+        setFileInfo((info) =>
+          info ? { ...info, dirty: annotationDirty || semanticDirty } : info
+        )
       }
     )
   )
 
-  const handleUpdateProjectName = async (name: string): Promise<void> => {
-    const updated = await window.api.project.update({ name })
+  createEffect(
+    on(
+      () => projectSettings().segmentationMode,
+      (mode) => {
+        annotationStore.setSegmentationMode(mode)
+        if (mode === 'semantic' && activeTool() === 'rectangle') {
+          setActiveTool('cursor')
+        }
+      }
+    )
+  )
+
+  const handleUpdateProjectSettings = async (settings: {
+    name: string
+    segmentationMode: ProjectSettings['segmentationMode']
+  }): Promise<void> => {
+    const updated = await window.api.project.update(settings)
+    setProjectSettings(updated)
     setFolderName(updated.name)
     const path = folderPath()
     if (path) {
@@ -458,7 +502,8 @@ const App: Component = () => {
                 imageStatuses={imageStatuses}
                 onSelect={(node) => void selectFile(node)}
                 onFocusChange={handleTreeFocusChange}
-                onProjectNameChange={handleUpdateProjectName}
+                onProjectSettingsChange={handleUpdateProjectSettings}
+                projectSettings={projectSettings}
               />
             }
           >
@@ -502,6 +547,8 @@ const App: Component = () => {
               labels={labels}
               activeLabelId={activeLabelId}
               annotationStore={annotationStore}
+              semanticStore={semanticStore}
+              segmentationMode={() => projectSettings().segmentationMode}
               activeTool={activeTool}
               onToolChange={setActiveTool}
               brushSize={brushSize}

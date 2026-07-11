@@ -3,9 +3,11 @@ import { Match, Show, Switch, createEffect, createSignal, on } from 'solid-js'
 import type { FileKind } from '../../../shared/file-types'
 import type { ImageLayers } from '../../../shared/image-layers'
 import type { Label } from '../../../shared/annotations'
+import type { SegmentationMode } from '../../../shared/segmentation'
 import AnnotationToolbar, { type AnnotationTool } from './AnnotationToolbar'
 import ImageViewer from './ImageViewer'
 import type { AnnotationStore } from '../lib/annotation-store'
+import type { SemanticMapStore } from '../lib/semantic-map-store'
 import { toRelativePath } from '../../../shared/paths'
 
 export interface FileInfo {
@@ -54,6 +56,8 @@ const FileViewer: Component<{
   labels: () => Label[]
   activeLabelId: () => string | null
   annotationStore: AnnotationStore | null
+  semanticStore: SemanticMapStore | null
+  segmentationMode: () => SegmentationMode
   onImageLoad: (dims: { width: number; height: number }) => void
   onTextChange: (value: string) => void
   onTextSave: () => void
@@ -78,17 +82,21 @@ const FileViewer: Component<{
       () => {
         const layers = props.imageLayers()
         const root = props.projectRoot()
-        const store = props.annotationStore
         const dims = imageDimensions()
-        if (!layers || !root || !store || !dims) return null
+        if (!layers || !root || !dims) return null
         return {
           relativePath: toRelativePath(root, layers.currentPath),
-          dims
+          dims,
+          mode: props.segmentationMode()
         }
       },
       (payload) => {
         if (!payload) return
-        void props.annotationStore?.loadForImage(payload.relativePath, payload.dims)
+        if (payload.mode === 'semantic') {
+          void props.semanticStore?.loadForImage(payload.relativePath, payload.dims)
+        } else {
+          void props.annotationStore?.loadForImage(payload.relativePath, payload.dims)
+        }
       }
     )
   )
@@ -159,12 +167,15 @@ const FileViewer: Component<{
                       brushSize={props.brushSize}
                       shrinkBrushAtMaxZoom={props.shrinkBrushAtMaxZoom}
                       annotationStore={props.annotationStore}
+                      semanticStore={props.semanticStore}
+                      segmentationMode={props.segmentationMode}
                       onLoad={handleImageLoad}
                       onError={() => setImageError(true)}
                     />
                   </Show>
                   <AnnotationToolbar
                     activeTool={props.activeTool}
+                    segmentationMode={props.segmentationMode}
                     onToolChange={props.onToolChange}
                   />
                 </div>

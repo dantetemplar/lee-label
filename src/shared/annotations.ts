@@ -5,6 +5,7 @@ export interface Label {
   id: string
   name: string
   color: string
+  classId: number
   sortOrder: number
   shortcut?: string
 }
@@ -46,7 +47,17 @@ export interface MaskShape {
   updatedAt: string
 }
 
-export type Shape = RectangleShape | MaskShape
+export interface PolygonShape {
+  id: string
+  type: 'polygon'
+  labelId: string
+  zOrder: number
+  points: { x: number; y: number }[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type Shape = RectangleShape | MaskShape | PolygonShape
 
 export interface MaskBlob {
   width: number
@@ -81,6 +92,30 @@ export interface SaveMaskInput {
   }
   imageWidth?: number
   imageHeight?: number
+}
+
+export interface SavePolygonInput {
+  id: string
+  relativePath: string
+  labelId: string
+  zOrder: number
+  points: { x: number; y: number }[]
+  imageWidth?: number
+  imageHeight?: number
+}
+
+export type SemanticMaskFormat = 'png16'
+
+export interface SemanticMaskBlob {
+  width: number
+  height: number
+  format: SemanticMaskFormat
+  data: ArrayBuffer
+}
+
+export interface AnnotationStats {
+  shapeCount: number
+  semanticMaskCount: number
 }
 
 export interface CreateLabelInput {

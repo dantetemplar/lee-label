@@ -75,7 +75,10 @@ in vec2 vUv;
 
 uniform sampler2D uSessionMask;
 uniform sampler2D uActiveStrokeMask;
-uniform vec3 uMaskColor;
+uniform sampler2D uTopologyIssueMask;
+uniform vec3 uSessionMaskColor;
+uniform vec3 uActiveMaskColor;
+uniform vec3 uActiveOutsideMaskColor;
 uniform float uSessionOpacity;
 uniform float uActiveOpacity;
 
@@ -84,11 +87,19 @@ out vec4 outColor;
 void main() {
   float sessionCov = step(0.5, texture(uSessionMask, vUv).r);
   float activeCov = step(0.5, texture(uActiveStrokeMask, vUv).r);
-  float alpha = max(sessionCov * uSessionOpacity, activeCov * uActiveOpacity);
-  if (alpha < 0.001) {
+  float issueCov = step(0.5, texture(uTopologyIssueMask, vUv).r);
+  if (activeCov > 0.0) {
+    if (issueCov > 0.0) {
+      outColor = vec4(uActiveMaskColor, 1.0);
+      return;
+    }
+    outColor = vec4(uActiveOutsideMaskColor * uActiveOpacity, uActiveOpacity);
+    return;
+  }
+  if (sessionCov < 0.5) {
     discard;
   }
-  outColor = vec4(uMaskColor * alpha, alpha);
+  outColor = vec4(uSessionMaskColor * uSessionOpacity, uSessionOpacity);
 }
 `
 
@@ -271,3 +282,4 @@ void main() {
   outColor = vec4(uMaskColor * uOpacity, uOpacity);
 }
 `
+

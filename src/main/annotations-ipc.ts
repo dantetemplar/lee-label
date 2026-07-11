@@ -3,9 +3,11 @@ import type {
   CreateLabelInput,
   ImageStatus,
   SaveMaskInput,
+  SavePolygonInput,
   SaveRectangleInput,
   UpdateLabelInput
 } from '../shared/annotations'
+import type { SegmentationMode } from '../shared/segmentation'
 import { projectDatabase } from './db/project-db'
 
 function requireOpenProject(): void {
@@ -17,7 +19,8 @@ function requireOpenProject(): void {
 export function registerAnnotationsIpc(): void {
   ipcMain.handle('project:open', (_, rootPath: string) => {
     projectDatabase.open(rootPath)
-    return { rootPath, ...projectDatabase.getProject() }
+    const settings = projectDatabase.getProject()
+    return { rootPath, ...settings }
   })
 
   ipcMain.handle('project:close', () => {
@@ -29,9 +32,23 @@ export function registerAnnotationsIpc(): void {
     return projectDatabase.getProject()
   })
 
-  ipcMain.handle('project:update', (_, input: { name: string }) => {
+  ipcMain.handle(
+    'project:update',
+    (
+      _,
+      input: {
+        name?: string
+        segmentationMode?: SegmentationMode
+      }
+    ) => {
+      requireOpenProject()
+      return projectDatabase.updateProject(input)
+    }
+  )
+
+  ipcMain.handle('project:get-annotation-stats', () => {
     requireOpenProject()
-    return projectDatabase.updateProjectName(input.name)
+    return projectDatabase.getAnnotationStats()
   })
 
   ipcMain.handle('labels:list', () => {
@@ -89,6 +106,7 @@ export function registerAnnotationsIpc(): void {
       relativePath: string,
       rectangles: SaveRectangleInput[],
       masks: { input: SaveMaskInput; data: ArrayBuffer }[],
+      polygons: SavePolygonInput[],
       imageWidth?: number,
       imageHeight?: number
     ) => {
@@ -101,6 +119,7 @@ export function registerAnnotationsIpc(): void {
         relativePath,
         rectangles,
         maskBuffers,
+        polygons,
         imageWidth,
         imageHeight
       )
@@ -111,6 +130,35 @@ export function registerAnnotationsIpc(): void {
     requireOpenProject()
     return projectDatabase.getMaskBlob(shapeId)
   })
+
+  ipcMain.handle('polygons:get', (_, shapeId: string) => {
+    requireOpenProject()
+    return projectDatabase.getPolygonPoints(shapeId)
+  })
+
+  ipcMain.handle('semantic-masks:get', (_, relativePath: string) => {
+    requireOpenProject()
+    const blob = projectDatabase.getSemanticMask(relativePath)
+    if (!blob) return null
+    const classMap = projectDatabase.decodeSemanticMask(blob)
+    return {
+      width: blob.width,
+      height: blob.height,
+      data: classMap.buffer.slice(
+        classMap.byteOffset,
+        classMap.byteOffset + classMap.byteLength
+      ) as ArrayBuffer
+    }
+  })
+
+  ipcMain.handle(
+    'semantic-masks:save',
+    (_, relativePath: string, width: number, height: number, classMap: ArrayBuffer) => {
+      requireOpenProject()
+      const data = new Uint16Array(classMap)
+      return projectDatabase.saveSemanticMask(relativePath, width, height, data)
+    }
+  )
 }
 
 export function closeProjectDatabase(): void {

@@ -35,6 +35,16 @@ export interface CapsuleSegment {
   to: Point2D
 }
 
+export interface TopologyHint {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  data: Uint8Array
+  colorRgb: [number, number, number]
+}
+
 export type StampTarget = 'active' | 'session'
 export type StampMode = 'paint' | 'erase'
 
@@ -177,6 +187,7 @@ export class BrushEngine {
 
   private sessionTexture: WebGLTexture | null = null
   private activeTexture: WebGLTexture | null = null
+  private topologyIssueTexture: WebGLTexture | null = null
   private sessionFramebuffer: WebGLFramebuffer | null = null
   private activeFramebuffer: WebGLFramebuffer | null = null
   private maskReadFormat: number = 0
@@ -214,7 +225,10 @@ export class BrushEngine {
 
   private compositeSessionMask: WebGLUniformLocation
   private compositeActiveMask: WebGLUniformLocation
-  private compositeMaskColor: WebGLUniformLocation
+  private compositeTopologyIssueMask: WebGLUniformLocation
+  private compositeSessionMaskColor: WebGLUniformLocation
+  private compositeActiveMaskColor: WebGLUniformLocation
+  private compositeActiveOutsideMaskColor: WebGLUniformLocation
   private compositeSessionOpacity: WebGLUniformLocation
   private compositeActiveOpacity: WebGLUniformLocation
 
@@ -236,12 +250,15 @@ export class BrushEngine {
   private instanceCapacity = 0
   private segmentData = new Float32Array(0)
   private savedMaskCache = new Map<string, CachedSavedMask>()
+  private topologyHintCache = new Map<string, WebGLTexture>()
+  private topologyHintSignature = ''
 
-  private hasDirty = false
-  private dirtyMinX = 0
-  private dirtyMinY = 0
-  private dirtyMaxX = 0
-  private dirtyMaxY = 0
+  private sessionDirty = false
+  private sessionDirtyMinX = 0
+  private sessionDirtyMinY = 0
+  private sessionDirtyMaxX = 0
+  private sessionDirtyMaxY = 0
+  private activeDirty = false
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', {
@@ -330,7 +347,16 @@ export class BrushEngine {
 
     this.compositeSessionMask = gl.getUniformLocation(this.compositeProgram, 'uSessionMask')!
     this.compositeActiveMask = gl.getUniformLocation(this.compositeProgram, 'uActiveStrokeMask')!
-    this.compositeMaskColor = gl.getUniformLocation(this.compositeProgram, 'uMaskColor')!
+    this.compositeTopologyIssueMask = gl.getUniformLocation(
+      this.compositeProgram,
+      'uTopologyIssueMask'
+    )!
+    this.compositeSessionMaskColor = gl.getUniformLocation(this.compositeProgram, 'uSessionMaskColor')!
+    this.compositeActiveMaskColor = gl.getUniformLocation(this.compositeProgram, 'uActiveMaskColor')!
+    this.compositeActiveOutsideMaskColor = gl.getUniformLocation(
+      this.compositeProgram,
+      'uActiveOutsideMaskColor'
+    )!
     this.compositeSessionOpacity = gl.getUniformLocation(this.compositeProgram, 'uSessionOpacity')!
     this.compositeActiveOpacity = gl.getUniformLocation(this.compositeProgram, 'uActiveOpacity')!
 
@@ -365,16 +391,19 @@ export class BrushEngine {
     this.maskReadFormat = session.format
     this.sessionTexture = session.texture
     this.activeTexture = active.texture
+    this.topologyIssueTexture = uploadMaskDataTexture(gl, new Uint8Array(width * height), width, height)
     this.sessionFramebuffer = createFramebuffer(gl, this.sessionTexture)
     this.activeFramebuffer = createFramebuffer(gl, this.activeTexture)
 
-    this.resetDirtyBounds()
+    this.resetSessionDirtyBounds()
+    this.topologyHintSignature = ''
   }
 
   dispose(): void {
     const { gl } = this
     this.disposeMaskTargets()
     this.disposeSavedMaskCache()
+    this.disposeTopologyHintCache()
     gl.deleteProgram(this.capsuleProgram)
     gl.deleteProgram(this.pixelBrushProgram)
     gl.deleteProgram(this.compositeProgram)
@@ -420,16 +449,30 @@ export class BrushEngine {
   }
 
   hasSessionContent(): boolean {
-    return this.hasDirty
+    return this.sessionDirty
+  }
+
+  hasActiveContent(): boolean {
+    return this.activeDirty
+  }
+
+  hasCommitContent(): boolean {
+    return this.sessionDirty || this.activeDirty
   }
 
   clearActiveStroke(): void {
     this.clearFramebuffer(this.activeFramebuffer)
+    this.activeDirty = false
   }
 
   clearSession(): void {
     this.clearFramebuffer(this.sessionFramebuffer)
-    this.resetDirtyBounds()
+    this.resetSessionDirtyBounds()
+  }
+
+  clearBrushOverlays(): void {
+    this.clearSession()
+    this.clearActiveStroke()
   }
 
   stampCapsules(
@@ -444,8 +487,12 @@ export class BrushEngine {
     const framebuffer = target === 'session' ? this.sessionFramebuffer : this.activeFramebuffer
     if (!framebuffer) return
 
-    for (const segment of segments) {
-      this.expandDirtyBoundsForSegment(segment.from, segment.to, radiusPx)
+    if (target === 'session') {
+      for (const segment of segments) {
+        this.expandSessionDirtyBoundsForSegment(segment.from, segment.to, radiusPx)
+      }
+    } else {
+      this.activeDirty = true
     }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
@@ -494,7 +541,11 @@ export class BrushEngine {
     if (!framebuffer) return
 
     const bounds = expandPixelBrushStrokeBounds(center.x, center.y, center.x, center.y, brushSize)
-    this.expandDirtyBounds(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
+    if (target === 'session') {
+      this.expandSessionDirtyBounds(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
+    } else {
+      this.activeDirty = true
+    }
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
     gl.viewport(0, 0, this.width, this.height)
@@ -527,9 +578,6 @@ export class BrushEngine {
   ): void {
     if (!this.sessionTexture || !this.activeTexture) return
 
-    const bounds = expandPixelBrushStrokeBounds(from.x, from.y, to.x, to.y, brushSize)
-    this.expandDirtyBounds(bounds.minX, bounds.minY, bounds.maxX, bounds.maxY)
-
     forEachBrushStrokeCenter(from.x, from.y, to.x, to.y, (centerX, centerY) => {
       this.stampPixelBrushAt({ x: centerX, y: centerY }, brushSize, target, mode)
     })
@@ -556,7 +604,7 @@ export class BrushEngine {
 
   renderScene(
     savedMasks: SavedMaskLayer[],
-    brushColorRgb: [number, number, number],
+    sessionBrushColorRgb: [number, number, number],
     showPreview: boolean,
     preview?: {
       center: Point2D
@@ -566,11 +614,15 @@ export class BrushEngine {
       outerOpacity: number
       innerOpacity: number
       filled: boolean
-    }
+    },
+    topologyHints: TopologyHint[] = [],
+    activeBrushColorRgb: [number, number, number] = sessionBrushColorRgb,
+    activeOutsideBrushColorRgb: [number, number, number] = sessionBrushColorRgb
   ): void {
     if (!this.sessionTexture || !this.activeTexture || this.width <= 0 || this.height <= 0) return
 
     this.syncSavedMasks(savedMasks)
+    this.syncTopologyHints(topologyHints)
 
     const { gl } = this
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
@@ -583,20 +635,28 @@ export class BrushEngine {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
     this.drawSavedMasks(savedMasks)
+    this.drawTopologyHints(topologyHints)
 
-    gl.useProgram(this.compositeProgram)
-    gl.activeTexture(gl.TEXTURE0)
-    gl.bindTexture(gl.TEXTURE_2D, this.sessionTexture)
-    gl.uniform1i(this.compositeSessionMask, 0)
-    gl.activeTexture(gl.TEXTURE1)
-    gl.bindTexture(gl.TEXTURE_2D, this.activeTexture)
-    gl.uniform1i(this.compositeActiveMask, 1)
-    gl.uniform3fv(this.compositeMaskColor, brushColorRgb)
-    gl.uniform1f(this.compositeSessionOpacity, SESSION_MASK_OPACITY)
-    gl.uniform1f(this.compositeActiveOpacity, ACTIVE_STROKE_OPACITY)
-    gl.bindVertexArray(this.compositeVao)
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-    gl.bindVertexArray(null)
+    if (this.sessionDirty || this.activeDirty) {
+      gl.useProgram(this.compositeProgram)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, this.sessionTexture)
+      gl.uniform1i(this.compositeSessionMask, 0)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, this.activeTexture)
+      gl.uniform1i(this.compositeActiveMask, 1)
+      gl.activeTexture(gl.TEXTURE2)
+      gl.bindTexture(gl.TEXTURE_2D, this.topologyIssueTexture)
+      gl.uniform1i(this.compositeTopologyIssueMask, 2)
+      gl.uniform3fv(this.compositeSessionMaskColor, sessionBrushColorRgb)
+      gl.uniform3fv(this.compositeActiveMaskColor, activeBrushColorRgb)
+      gl.uniform3fv(this.compositeActiveOutsideMaskColor, activeOutsideBrushColorRgb)
+      gl.uniform1f(this.compositeSessionOpacity, SESSION_MASK_OPACITY)
+      gl.uniform1f(this.compositeActiveOpacity, ACTIVE_STROKE_OPACITY)
+      gl.bindVertexArray(this.compositeVao)
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      gl.bindVertexArray(null)
+    }
 
     if (showPreview && preview) {
       gl.useProgram(this.previewProgram)
@@ -617,20 +677,23 @@ export class BrushEngine {
   }
 
   readSessionMask(): Uint8Array | null {
-    if (!this.sessionFramebuffer || !this.hasDirty) return null
+    if (!this.sessionFramebuffer || !this.sessionDirty) return null
 
     const { gl, width, height } = this
-    const minX = Math.max(0, Math.floor(this.dirtyMinX))
-    const minY = Math.max(0, Math.floor(this.dirtyMinY))
-    const maxX = Math.min(width - 1, Math.ceil(this.dirtyMaxX))
-    const maxY = Math.min(height - 1, Math.ceil(this.dirtyMaxY))
+    const minX = Math.max(0, Math.floor(this.sessionDirtyMinX))
+    const minY = Math.max(0, Math.floor(this.sessionDirtyMinY))
+    const maxX = Math.min(width - 1, Math.ceil(this.sessionDirtyMaxX))
+    const maxY = Math.min(height - 1, Math.ceil(this.sessionDirtyMaxY))
     const regionW = maxX - minX + 1
     const regionH = maxY - minY + 1
     if (regionW <= 0 || regionH <= 0) return null
 
     const pixels = new Uint8Array(regionW * regionH * (this.maskReadFormat === gl.RGBA ? 4 : 1))
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sessionFramebuffer)
+    const previousPackAlignment = gl.getParameter(gl.PACK_ALIGNMENT) as number
+    gl.pixelStorei(gl.PACK_ALIGNMENT, 1)
     gl.readPixels(minX, height - maxY - 1, regionW, regionH, this.maskReadFormat, gl.UNSIGNED_BYTE, pixels)
+    gl.pixelStorei(gl.PACK_ALIGNMENT, previousPackAlignment)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
     const full = new Uint8Array(width * height)
@@ -644,6 +707,39 @@ export class BrushEngine {
     }
 
     return full
+  }
+
+  /** Read session + in-progress active stroke for commit (max-combined). */
+  readCommitMask(): Uint8Array | null {
+    if (!this.hasCommitContent()) return null
+
+    const { width, height } = this
+    const full = new Uint8Array(width * height)
+    let hasForeground = false
+
+    if (this.sessionDirty) {
+      const session = this.readSessionMask()
+      if (session) {
+        for (let i = 0; i < full.length; i++) {
+          if (session[i] > 0) {
+            full[i] = session[i]
+            hasForeground = true
+          }
+        }
+      }
+    }
+
+    if (this.activeDirty && this.activeFramebuffer) {
+      const active = this.readFullFramebuffer(this.activeFramebuffer)
+      for (let i = 0; i < full.length; i++) {
+        if (active[i] > 0) {
+          full[i] = Math.max(full[i], active[i])
+          hasForeground = true
+        }
+      }
+    }
+
+    return hasForeground ? full : null
   }
 
   getDimensions(): { width: number; height: number } {
@@ -680,6 +776,69 @@ export class BrushEngine {
     gl.bindVertexArray(null)
   }
 
+  private drawTopologyHints(hints: TopologyHint[]): void {
+    if (hints.length === 0) return
+
+    const { gl } = this
+    gl.useProgram(this.placedMaskProgram)
+    gl.uniform2f(this.placedImageSizePx, this.width, this.height)
+    gl.uniform1f(this.placedOpacity, 0.6)
+    gl.uniform1i(this.placedMaskSampler, 0)
+    gl.bindVertexArray(this.placedMaskVao)
+
+    for (const hint of hints) {
+      const texture = this.topologyHintCache.get(hint.id)
+      if (!texture) continue
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, texture)
+      gl.uniform4f(this.placedBounds, hint.x, hint.y, hint.width, hint.height)
+      gl.uniform3fv(this.placedMaskColor, hint.colorRgb)
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    }
+
+    gl.bindVertexArray(null)
+  }
+
+  private syncTopologyHints(hints: TopologyHint[]): void {
+    const { gl } = this
+    const nextIds = new Set(hints.map((hint) => hint.id))
+    for (const [id, texture] of this.topologyHintCache) {
+      if (nextIds.has(id)) continue
+      gl.deleteTexture(texture)
+      this.topologyHintCache.delete(id)
+    }
+    for (const hint of hints) {
+      if (this.topologyHintCache.has(hint.id)) continue
+      this.topologyHintCache.set(
+        hint.id,
+        uploadMaskDataTexture(gl, hint.data, hint.width, hint.height)
+      )
+    }
+
+    const signature = hints.map((hint) => hint.id).join('|')
+    if (signature === this.topologyHintSignature) return
+
+    const mask = new Uint8Array(this.width * this.height)
+    for (const hint of hints) {
+      for (let y = 0; y < hint.height; y++) {
+        const imageY = hint.y + y
+        if (imageY < 0 || imageY >= this.height) continue
+        for (let x = 0; x < hint.width; x++) {
+          const imageX = hint.x + x
+          if (imageX < 0 || imageX >= this.width) continue
+          const value = hint.data[y * hint.width + x]
+          if (value > 0) {
+            mask[(this.height - 1 - imageY) * this.width + imageX] = value
+          }
+        }
+      }
+    }
+
+    if (this.topologyIssueTexture) gl.deleteTexture(this.topologyIssueTexture)
+    this.topologyIssueTexture = uploadMaskDataTexture(gl, mask, this.width, this.height)
+    this.topologyHintSignature = signature
+  }
+
   private disposeSavedMaskCache(): void {
     const { gl } = this
     for (const cached of this.savedMaskCache.values()) {
@@ -688,17 +847,28 @@ export class BrushEngine {
     this.savedMaskCache.clear()
   }
 
+  private disposeTopologyHintCache(): void {
+    const { gl } = this
+    for (const texture of this.topologyHintCache.values()) {
+      gl.deleteTexture(texture)
+    }
+    this.topologyHintCache.clear()
+  }
+
   private disposeMaskTargets(): void {
     const { gl } = this
     if (this.sessionTexture) gl.deleteTexture(this.sessionTexture)
     if (this.activeTexture) gl.deleteTexture(this.activeTexture)
+    if (this.topologyIssueTexture) gl.deleteTexture(this.topologyIssueTexture)
     if (this.sessionFramebuffer) gl.deleteFramebuffer(this.sessionFramebuffer)
     if (this.activeFramebuffer) gl.deleteFramebuffer(this.activeFramebuffer)
     this.sessionTexture = null
     this.activeTexture = null
+    this.topologyIssueTexture = null
     this.sessionFramebuffer = null
     this.activeFramebuffer = null
-    this.resetDirtyBounds()
+    this.resetSessionDirtyBounds()
+    this.activeDirty = false
   }
 
   private clearFramebuffer(framebuffer: WebGLFramebuffer | null): void {
@@ -711,35 +881,57 @@ export class BrushEngine {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
 
-  private resetDirtyBounds(): void {
-    this.hasDirty = false
-    this.dirtyMinX = 0
-    this.dirtyMinY = 0
-    this.dirtyMaxX = 0
-    this.dirtyMaxY = 0
+  private readFullFramebuffer(framebuffer: WebGLFramebuffer): Uint8Array {
+    const { gl, width, height } = this
+    const channels = this.maskReadFormat === gl.RGBA ? 4 : 1
+    const pixels = new Uint8Array(width * height * channels)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+    const previousPackAlignment = gl.getParameter(gl.PACK_ALIGNMENT) as number
+    gl.pixelStorei(gl.PACK_ALIGNMENT, 1)
+    gl.readPixels(0, 0, width, height, this.maskReadFormat, gl.UNSIGNED_BYTE, pixels)
+    gl.pixelStorei(gl.PACK_ALIGNMENT, previousPackAlignment)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+
+    const full = new Uint8Array(width * height)
+    for (let row = 0; row < height; row++) {
+      const imageY = height - 1 - row
+      for (let col = 0; col < width; col++) {
+        const srcIndex = channels === 4 ? (row * width + col) * 4 : row * width + col
+        full[imageY * width + col] = pixels[srcIndex]
+      }
+    }
+    return full
   }
 
-  private expandDirtyBounds(minX: number, minY: number, maxX: number, maxY: number): void {
-    if (!this.hasDirty) {
-      this.dirtyMinX = minX
-      this.dirtyMinY = minY
-      this.dirtyMaxX = maxX
-      this.dirtyMaxY = maxY
-      this.hasDirty = true
+  private resetSessionDirtyBounds(): void {
+    this.sessionDirty = false
+    this.sessionDirtyMinX = 0
+    this.sessionDirtyMinY = 0
+    this.sessionDirtyMaxX = 0
+    this.sessionDirtyMaxY = 0
+  }
+
+  private expandSessionDirtyBounds(minX: number, minY: number, maxX: number, maxY: number): void {
+    if (!this.sessionDirty) {
+      this.sessionDirtyMinX = minX
+      this.sessionDirtyMinY = minY
+      this.sessionDirtyMaxX = maxX
+      this.sessionDirtyMaxY = maxY
+      this.sessionDirty = true
       return
     }
-    this.dirtyMinX = Math.min(this.dirtyMinX, minX)
-    this.dirtyMinY = Math.min(this.dirtyMinY, minY)
-    this.dirtyMaxX = Math.max(this.dirtyMaxX, maxX)
-    this.dirtyMaxY = Math.max(this.dirtyMaxY, maxY)
+    this.sessionDirtyMinX = Math.min(this.sessionDirtyMinX, minX)
+    this.sessionDirtyMinY = Math.min(this.sessionDirtyMinY, minY)
+    this.sessionDirtyMaxX = Math.max(this.sessionDirtyMaxX, maxX)
+    this.sessionDirtyMaxY = Math.max(this.sessionDirtyMaxY, maxY)
   }
 
-  private expandDirtyBoundsForSegment(from: Point2D, to: Point2D, radius: number): void {
+  private expandSessionDirtyBoundsForSegment(from: Point2D, to: Point2D, radius: number): void {
     const minX = Math.min(from.x, to.x) - radius
     const minY = Math.min(from.y, to.y) - radius
     const maxX = Math.max(from.x, to.x) + radius
     const maxY = Math.max(from.y, to.y) + radius
-    this.expandDirtyBounds(minX, minY, maxX, maxY)
+    this.expandSessionDirtyBounds(minX, minY, maxX, maxY)
   }
 
   private uploadSegments(segments: CapsuleSegment[]): void {

@@ -1,10 +1,13 @@
 import type { Component } from 'solid-js'
 import { createEffect, createSignal, on, onCleanup, onMount, For, Show } from 'solid-js'
+import { BsX } from 'solid-icons/bs'
 import type { ImageLayers } from '../../../shared/image-layers'
 import type { Label } from '../../../shared/annotations'
+import type { SegmentationMode } from '../../../shared/segmentation'
 import type { AnnotationTool } from './AnnotationToolbar'
-import AnnotationOverlay from './AnnotationOverlay'
+import AnnotationOverlay, { type TopologyAlert } from './AnnotationOverlay'
 import type { AnnotationStore } from '../lib/annotation-store'
+import type { SemanticMapStore } from '../lib/semantic-map-store'
 import type { ViewTransform } from '../lib/annotation-coords'
 import {
   panFromScreenDrag,
@@ -118,6 +121,8 @@ const ImageViewer: Component<{
   brushSize: () => number
   shrinkBrushAtMaxZoom: () => boolean
   annotationStore: AnnotationStore | null
+  semanticStore: SemanticMapStore | null
+  segmentationMode: () => SegmentationMode
   onLoad: (dims: { width: number; height: number }) => void
   onError: () => void
 }> = (props) => {
@@ -131,6 +136,8 @@ const ImageViewer: Component<{
   const [scale, setScale] = createSignal(1)
   const [panX, setPanX] = createSignal(0)
   const [panY, setPanY] = createSignal(0)
+  const [topologyAlert, setTopologyAlert] = createSignal<TopologyAlert | null>(null)
+  const [topologyAlertOnLeft, setTopologyAlertOnLeft] = createSignal(false)
   const [fitScale, setFitScale] = createSignal(1)
   const [minScale, setMinScale] = createSignal(0.1)
   const [initialPaddings, setInitialPaddings] = createSignal<SidePadding>(EMPTY_PADDING)
@@ -156,6 +163,7 @@ const ImageViewer: Component<{
   let panOriginX = 0
   let panOriginY = 0
   let paintGeneration = 0
+  let lastPointerClient: { x: number; y: number } | null = null
   let currentActivation = 0
   let navigationLayers: ImageLayers = { prevPath: null, currentPath: '', nextPath: null }
   let navigationPath = ''
@@ -546,6 +554,28 @@ const ImageViewer: Component<{
     }
   }
 
+  const positionTopologyAlert = (clientX: number, clientY: number): void => {
+    if (!viewportRef) return
+    const bounds = viewportRef.getBoundingClientRect()
+    const pointerInRightBottom =
+      clientX >= bounds.left + bounds.width * 0.6 &&
+      clientY >= bounds.top + bounds.height * 0.6
+    setTopologyAlertOnLeft(pointerInRightBottom)
+  }
+
+  const handleViewportPointerMove = (event: PointerEvent): void => {
+    lastPointerClient = { x: event.clientX, y: event.clientY }
+  }
+
+  const handleTopologyAlertChange = (alert: TopologyAlert | null): void => {
+    if (alert && lastPointerClient) {
+      positionTopologyAlert(lastPointerClient.x, lastPointerClient.y)
+    } else {
+      setTopologyAlertOnLeft(false)
+    }
+    setTopologyAlert(alert)
+  }
+
   onMount(() => {
     const viewport = viewportRef
     if (!viewport) return
@@ -562,8 +592,34 @@ const ImageViewer: Component<{
       tabindex={0}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
+      onPointerMove={handleViewportPointerMove}
       onContextMenu={(event) => event.preventDefault()}
     >
+      <Show when={topologyAlert()}>
+        {(alert) => (
+          <div
+            class="alert alert-error alert-vertical absolute bottom-3 z-20 w-80 max-w-[calc(100%-1.5rem)] cursor-default rounded-none border border-error/40 bg-base-100 text-base-content px-3 py-2 shadow-lg"
+            classList={{
+              'right-3': !topologyAlertOnLeft(),
+              'left-3': topologyAlertOnLeft()
+            }}
+            role="alert"
+          >
+            <p class="min-w-0 pr-8 text-sm leading-snug">{alert().message}</p>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm btn-square absolute top-1 right-1 z-10 cursor-pointer text-base-content shadow-none"
+              aria-label="Dismiss"
+              onClick={() => {
+                alert().onDismiss()
+                queueMicrotask(focusWorkspace)
+              }}
+            >
+              <BsX size={18} aria-hidden="true" />
+            </button>
+          </div>
+        )}
+      </Show>
       <For each={LAYERS}>
         {(role) => (
           <img
@@ -607,6 +663,9 @@ const ImageViewer: Component<{
           shrinkBrushAtMaxZoom={props.shrinkBrushAtMaxZoom}
           labels={props.labels}
           store={props.annotationStore!}
+          semanticStore={props.semanticStore}
+          segmentationMode={props.segmentationMode}
+          onTopologyAlertChange={handleTopologyAlertChange}
         />
       </Show>
     </div>
