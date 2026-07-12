@@ -1,6 +1,7 @@
 import type { Component, JSX } from 'solid-js'
 import { Show, createEffect, createSignal, onCleanup } from 'solid-js'
 import { Portal } from 'solid-js/web'
+import { blurTextEditableOnEscape } from '../lib/shortcut-guards'
 
 const FloatingModal: Component<{
   open: () => boolean
@@ -29,6 +30,7 @@ const FloatingModal: Component<{
       // Children (inputs, etc.) already received the event; block document-level shortcuts.
       event.stopPropagation()
       if (event.key !== 'Escape') return
+      if (blurTextEditableOnEscape(event)) return
       event.preventDefault()
       props.onClose()
     }

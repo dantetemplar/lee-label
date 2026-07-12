@@ -1,16 +1,22 @@
 import type { IconTypes } from 'solid-icons'
 import { BsArrowClockwise, BsArrowCounterclockwise } from 'solid-icons/bs'
-import type { Component, JSX } from 'solid-js'
+import type { Component } from 'solid-js'
 import { For, Show } from 'solid-js'
 import type { SegmentationMode } from '../../../shared/segmentation'
 import { getActiveStore } from '../lib/annotation-backend'
+import { hasModifierKey, hasShiftKey } from '../lib/pressed-keys'
 import { useProjectContext } from '../lib/project-context'
+import {
+  isToolShortcutEmphasized,
+  isToolShortcutPressed
+} from '../lib/tool-shortcut-pressed'
 import {
   BrushToolIcon,
   CursorToolIcon,
   DeleteToolIcon,
   RectangleToolIcon
 } from '../lib/annotation-tool-icons'
+import KeyboardHint from './KeyboardHint'
 
 export type AnnotationTool = 'cursor' | 'rectangle' | 'mask'
 
@@ -18,24 +24,11 @@ const ICON_SIZE = 22
 const TOOL_BUTTON_CLASS =
   'relative inline-flex h-14 min-h-14 w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 border-0 px-0 text-base-content'
 
-const TOOLS: { id: AnnotationTool; label: string; icon: IconTypes; hint: string }[] = [
-  { id: 'cursor', label: 'Cursor', icon: CursorToolIcon, hint: 'Esc' },
-  { id: 'rectangle', label: 'Rectangle', icon: RectangleToolIcon, hint: '1' },
-  { id: 'mask', label: 'Mask', icon: BrushToolIcon, hint: '2' }
+const TOOLS: { id: AnnotationTool; label: string; icon: IconTypes; hint: string; shortcut: string }[] = [
+  { id: 'cursor', label: 'Cursor', icon: CursorToolIcon, hint: '~', shortcut: 'Backquote' },
+  { id: 'rectangle', label: 'Rectangle', icon: RectangleToolIcon, hint: '~1', shortcut: 'Backquote 1' },
+  { id: 'mask', label: 'Mask', icon: BrushToolIcon, hint: '~2', shortcut: 'Backquote 2' }
 ]
-
-const ToolKeyHint: Component<{ available: boolean; children: JSX.Element }> = (props) => (
-  <kbd
-    class="kbd kbd-xs pointer-events-none h-3.5 min-h-0 px-1 text-[9px] leading-none"
-    classList={{
-      'opacity-60': props.available,
-      'opacity-25': !props.available
-    }}
-    aria-disabled={!props.available}
-  >
-    {props.children}
-  </kbd>
-)
 
 const AnnotationToolbar: Component<{
   activeTool: () => AnnotationTool
@@ -48,13 +41,7 @@ const AnnotationToolbar: Component<{
   const hasSelection = (): boolean => project.annotationStore.selectedShapeId[0]() !== null
   const canUndo = (): boolean => activeStore().canUndo[0]()
   const canRedo = (): boolean => activeStore().canRedo[0]()
-  const isCursor = (): boolean => props.activeTool() === 'cursor'
-
-  const isHintAvailable = (toolId: AnnotationTool): boolean => {
-    if (toolId === 'cursor') return !isCursor() || hasSelection()
-    if (toolId === 'rectangle' || toolId === 'mask') return isCursor()
-    return false
-  }
+  const pressedKeys = (): ReadonlySet<string> => project.pressedKeys()
 
   return (
     <aside
@@ -74,9 +61,9 @@ const AnnotationToolbar: Component<{
                     'bg-primary/15': isActive(),
                     'bg-transparent hover:bg-base-content/8': !isActive()
                   }}
-                  title={`${tool.label} (${tool.hint})`}
+                  title={`${tool.label} (${tool.id === 'cursor' ? '~' : tool.hint.replace('~', '~+')})`}
                   aria-label={tool.label}
-                  aria-keyshortcuts={tool.hint === 'Esc' ? 'Escape' : tool.hint}
+                  aria-keyshortcuts={tool.shortcut}
                   aria-pressed={isActive()}
                   onClick={(event) => {
                     props.onToolChange(tool.id)
@@ -84,7 +71,18 @@ const AnnotationToolbar: Component<{
                   }}
                 >
                   <tool.icon size={ICON_SIZE} aria-hidden="true" />
-                  <ToolKeyHint available={isHintAvailable(tool.id)}>{tool.hint}</ToolKeyHint>
+                  <KeyboardHint
+                    pressed={() =>
+                      isToolShortcutPressed(
+                        tool.id,
+                        pressedKeys(),
+                        props.segmentationMode() === 'instance'
+                      )
+                    }
+                    emphasized={() => isToolShortcutEmphasized(tool.id, pressedKeys())}
+                  >
+                    {tool.hint}
+                  </KeyboardHint>
                   <Show when={isActive()}>
                     <span
                       class="pointer-events-none absolute inset-y-0 right-0 w-[3px] bg-primary"
@@ -115,7 +113,15 @@ const AnnotationToolbar: Component<{
           }}
         >
           <BsArrowCounterclockwise size={ICON_SIZE} aria-hidden="true" />
-          <ToolKeyHint available={canUndo()}>⌃Z</ToolKeyHint>
+          <KeyboardHint
+            disabled={() => !canUndo()}
+            pressed={() => {
+              const keys = pressedKeys()
+              return hasModifierKey(keys) && keys.has('KeyZ') && !hasShiftKey(keys)
+            }}
+          >
+            ⌃Z
+          </KeyboardHint>
         </button>
         <button
           type="button"
@@ -134,7 +140,15 @@ const AnnotationToolbar: Component<{
           }}
         >
           <BsArrowClockwise size={ICON_SIZE} aria-hidden="true" />
-          <ToolKeyHint available={canRedo()}>⌃⇧Z</ToolKeyHint>
+          <KeyboardHint
+            disabled={() => !canRedo()}
+            pressed={() => {
+              const keys = pressedKeys()
+              return hasModifierKey(keys) && keys.has('KeyZ') && hasShiftKey(keys)
+            }}
+          >
+            ⌃⇧Z
+          </KeyboardHint>
         </button>
         <button
           type="button"
@@ -153,7 +167,15 @@ const AnnotationToolbar: Component<{
           }}
         >
           <DeleteToolIcon size={ICON_SIZE} aria-hidden="true" />
-          <ToolKeyHint available={hasSelection()}>Del</ToolKeyHint>
+          <KeyboardHint
+            disabled={() => !hasSelection()}
+            pressed={() => {
+              const keys = pressedKeys()
+              return keys.has('Delete') || keys.has('Backspace')
+            }}
+          >
+            Del
+          </KeyboardHint>
         </button>
       </div>
     </aside>

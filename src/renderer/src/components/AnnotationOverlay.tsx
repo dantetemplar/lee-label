@@ -59,6 +59,7 @@ import {
 } from '../lib/polygon/topology-session'
 import type { TopologyIssueMask } from '../lib/polygon/worker-types'
 import { useProjectContext } from '../lib/project-context'
+import { isShortcutBlockedTarget } from '../lib/shortcut-guards'
 import { renderSemanticOverlay, stampClassIdStroke } from '../lib/semantic-class-map'
 import type { SemanticMapStore } from '../lib/semantic-map-store'
 import AnnotationShapeLayer from './AnnotationShapeLayer'
@@ -1245,13 +1246,7 @@ const AnnotationOverlay: Component<{
 
     const handleSpace = (event: KeyboardEvent): void => {
       if (event.code !== 'Space' && event.key !== ' ') return
-      const target = event.target
-      if (target instanceof HTMLElement) {
-        const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-          return
-        }
-      }
+      if (isShortcutBlockedTarget(event.target)) return
       event.preventDefault()
       void commitSessionPolygon()
     }

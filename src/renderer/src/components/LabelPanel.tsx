@@ -8,7 +8,9 @@ import {
   shortcutCodeForLabelIndex
 } from '../lib/label-shortcuts'
 import { createKeyboardLayoutLabels } from '../lib/useKeyboardLayoutLabels'
+import { useProjectContext } from '../lib/project-context'
 import LabelColorPicker, { type PickerSession } from './LabelColorPicker'
+import KeyboardHint from './KeyboardHint'
 
 const LabelPanel: Component<{
   labels: () => Label[]
@@ -20,6 +22,7 @@ const LabelPanel: Component<{
   showShortcuts: () => boolean
   error: () => string | null
 }> = (props) => {
+  const project = useProjectContext()
   const [newName, setNewName] = createSignal('')
   const [editingId, setEditingId] = createSignal<string | null>(null)
   const [editName, setEditName] = createSignal('')
@@ -125,14 +128,30 @@ const LabelPanel: Component<{
                       <span class="truncate">{label().name}</span>
                     </button>
                     <Show when={props.showShortcuts() && shortcutHint(index)}>
-                      {(hint) => (
-                        <kbd
-                          class="kbd kbd-xs pointer-events-none h-4 min-h-0 min-w-4 shrink-0 px-1.5 text-[11px] leading-none opacity-70"
-                          title={`Select label (${hint()})`}
-                        >
-                          {hint()}
-                        </kbd>
-                      )}
+                      {(hint) => {
+                        const code = (): string | null => shortcutCodeForLabelIndex(index)
+                        return (
+                          <KeyboardHint
+                            size="md"
+                            title={`Select label (${hint()})`}
+                            pressed={() => {
+                              if (!props.showShortcuts()) return false
+                              const shortcutCode = code()
+                              if (!shortcutCode) return false
+                              const keys = project.pressedKeys()
+                              if (
+                                keys.has('Backquote') &&
+                                (shortcutCode === 'Digit1' || shortcutCode === 'Digit2')
+                              ) {
+                                return false
+                              }
+                              return keys.has(shortcutCode)
+                            }}
+                          >
+                            {hint()}
+                          </KeyboardHint>
+                        )
+                      }}
                     </Show>
                     <button
                       type="button"

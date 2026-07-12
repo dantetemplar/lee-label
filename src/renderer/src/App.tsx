@@ -27,7 +27,15 @@ import { getActiveStore } from './lib/annotation-backend'
 import { AnnotationStore } from './lib/annotation-store'
 import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
 import { labelIndexFromCode } from './lib/label-shortcuts'
+import {
+  clearPressedKeys,
+  getPressedKeys,
+  pressKey,
+  releaseKey,
+  usePressedKeys
+} from './lib/pressed-keys'
 import { ProjectContext } from './lib/project-context'
+import { isShortcutBlockedTarget, blurTextEditableOnEscape } from './lib/shortcut-guards'
 import { SemanticMapStore } from './lib/semantic-map-store'
 import {
   countImageStatuses,
@@ -63,6 +71,7 @@ const App: Component = () => {
   const [importModalOpen, setImportModalOpen] = createSignal(false)
   const [exportModalOpen, setExportModalOpen] = createSignal(false)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
+  const [toolModifierHeld, setToolModifierHeld] = createSignal(false)
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
   const [projectSettings, setProjectSettings] = createSignal<ProjectSettings>({
@@ -393,14 +402,73 @@ const App: Component = () => {
   )
 
   createEffect(() => {
-    const isEditableTarget = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) return false
-      const tag = target.tagName
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+    const blockShortcuts = (): void => {
+      clearPressedKeys()
+      setToolModifierHeld(false)
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) return
+      if (event.repeat || isShortcutBlockedTarget(event.target)) return
+      pressKey(event.code)
+    }
+
+    const handleKeyUp = (event: KeyboardEvent): void => {
+      releaseKey(event.code)
+    }
+
+    const handleFocusIn = (event: FocusEvent): void => {
+      if (isShortcutBlockedTarget(event.target)) blockShortcuts()
+    }
+
+    document.addEventListener('keydown', handleKeyDown, true)
+    document.addEventListener('keyup', handleKeyUp, true)
+    document.addEventListener('focusin', handleFocusIn, true)
+    window.addEventListener('blur', blockShortcuts)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keyup', handleKeyUp, true)
+      document.removeEventListener('focusin', handleFocusIn, true)
+      window.removeEventListener('blur', blockShortcuts)
+      blockShortcuts()
+    })
+  })
+
+  createEffect(() => {
+    let toolModifierChordUsed = false
+
+    const resetToolModifier = (): void => {
+      setToolModifierHeld(false)
+      toolModifierChordUsed = false
+    }
+
+    const isToolModifierDown = (): boolean =>
+      getPressedKeys().has('Backquote') || toolModifierHeld()
+
+    const activateToolWithModifier = (event: KeyboardEvent, tool: AnnotationTool): void => {
+      event.preventDefault()
+      setToolModifierHeld(true)
+      setActiveTool(tool)
+      toolModifierChordUsed = true
+    }
+
+    const tryActivateToolWithModifier = (event: KeyboardEvent): boolean => {
+      const keys = getPressedKeys()
+      if (keys.has('Digit1') && projectSettings().segmentationMode === 'instance') {
+        activateToolWithModifier(event, 'rectangle')
+        return true
+      }
+
+      if (keys.has('Digit2')) {
+        activateToolWithModifier(event, 'mask')
+        return true
+      }
+
+      return false
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (blurTextEditableOnEscape(event)) return
+      if (event.defaultPrevented || isShortcutBlockedTarget(event.target)) return
 
       const isImage = selectedKind() === 'image' && selectedPath() !== null
 
@@ -426,49 +494,87 @@ const App: Component = () => {
 
       if (event.ctrlKey || event.metaKey || event.altKey) return
 
-      if (event.key === 'Escape') {
-        if (activeTool() === 'cursor') {
-          if (annotationStore.selectedShapeId[0]()) {
-            event.preventDefault()
-            annotationStore.setSelectedShapeId(null)
-          }
-          return
+      if (event.code === 'Backquote') {
+        if (!event.repeat) {
+          setToolModifierHeld(true)
+          toolModifierChordUsed = false
+          if (tryActivateToolWithModifier(event)) return
         }
         event.preventDefault()
-        setActiveTool('cursor')
         return
+      }
+
+      if (isToolModifierDown()) {
+        if (event.code === 'Digit1' && projectSettings().segmentationMode === 'instance') {
+          activateToolWithModifier(event, 'rectangle')
+          return
+        }
+
+        if (event.code === 'Digit2') {
+          activateToolWithModifier(event, 'mask')
+          return
+        }
       }
 
       const tool = activeTool()
       if (tool === 'rectangle' || tool === 'mask') {
         const labelIndex = labelIndexFromCode(event.code)
         if (labelIndex !== null) {
+          if (event.code === 'Digit1' || event.code === 'Digit2') {
+            queueMicrotask(() => {
+              if (
+                toolModifierChordUsed ||
+                getPressedKeys().has('Backquote') ||
+                isShortcutBlockedTarget(document.activeElement)
+              ) {
+                return
+              }
+              const label = labels()[labelIndex]
+              if (label) setActiveLabelId(label.id)
+            })
+            return
+          }
+
           const label = labels()[labelIndex]
           if (label) {
             event.preventDefault()
             setActiveLabelId(label.id)
           }
-          return
         }
-      }
-
-      if (tool !== 'cursor') return
-
-      if (event.code === 'Digit1' && projectSettings().segmentationMode === 'instance') {
-        event.preventDefault()
-        setActiveTool('rectangle')
-        return
-      }
-
-      if (event.code === 'Digit2') {
-        event.preventDefault()
-        setActiveTool('mask')
       }
     }
 
+    const handleKeyUp = (event: KeyboardEvent): void => {
+      if (event.code !== 'Backquote') return
+      if (isShortcutBlockedTarget(event.target)) {
+        resetToolModifier()
+        return
+      }
+
+      if (!toolModifierChordUsed) {
+        if (activeTool() === 'cursor') {
+          if (annotationStore.selectedShapeId[0]()) {
+            annotationStore.setSelectedShapeId(null)
+          }
+        } else {
+          setActiveTool('cursor')
+        }
+      }
+
+      resetToolModifier()
+    }
+
     document.addEventListener('keydown', handleKeyDown)
-    onCleanup(() => document.removeEventListener('keydown', handleKeyDown))
+    document.addEventListener('keyup', handleKeyUp)
+    window.addEventListener('blur', resetToolModifier)
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('keyup', handleKeyUp)
+      window.removeEventListener('blur', resetToolModifier)
+    })
   })
+
+  const pressedKeys = usePressedKeys()
 
   const handleUpdateProjectSettings = async (settings: {
     name: string
@@ -532,6 +638,8 @@ const App: Component = () => {
     projectSettings,
     activeTool,
     setActiveTool,
+    toolModifierHeld,
+    pressedKeys,
     brushSize,
     setBrushSize,
     shrinkBrushAtMaxZoom,

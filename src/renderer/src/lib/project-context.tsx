@@ -14,6 +14,8 @@ export interface ProjectContextValue {
   projectSettings: () => ProjectSettings
   activeTool: () => AnnotationTool
   setActiveTool: (tool: AnnotationTool) => void
+  toolModifierHeld: () => boolean
+  pressedKeys: () => ReadonlySet<string>
   brushSize: () => number
   setBrushSize: (size: number) => void
   shrinkBrushAtMaxZoom: () => boolean
