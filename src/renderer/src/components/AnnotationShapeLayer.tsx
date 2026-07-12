@@ -101,18 +101,20 @@ const AnnotationShapeLayer: Component<{
                 stroke={color()}
                 stroke-width={selected() || marked() ? 2.5 : 1.5}
               />
-              <For each={CORNER_KEYS}>
-                {(key) => (
-                  <circle
-                    cx={corners()[key].x}
-                    cy={corners()[key].y}
-                    r={cornerRadius()}
-                    fill="#ffffff"
-                    stroke={color()}
-                    stroke-width={cornerStroke()}
-                  />
-                )}
-              </For>
+              <Show when={selected()}>
+                <For each={CORNER_KEYS}>
+                  {(key) => (
+                    <circle
+                      cx={corners()[key].x}
+                      cy={corners()[key].y}
+                      r={cornerRadius()}
+                      fill="#ffffff"
+                      stroke={color()}
+                      stroke-width={cornerStroke()}
+                    />
+                  )}
+                </For>
+              </Show>
             </g>
           )
         }}

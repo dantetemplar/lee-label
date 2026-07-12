@@ -44,6 +44,7 @@ interface ParsedImageImport {
 
 export interface ImportScan {
   images: ParsedImageImport[]
+  unmatchedRelativePaths: string[]
   labels: YoloPreviewLabel[]
   warnings: string[]
   labelFileCount: number
@@ -339,8 +340,20 @@ async function scanYoloImport(options: YoloImportOptions): Promise<ImportScan> {
   }
 
   const labels = [...labelCache.values()].sort((a, b) => a.classId - b.classId)
+  const matchedPaths = new Set(images.map((image) => image.relativePath))
+  const unmatchedRelativePaths: string[] = []
+  for (const candidates of projectImages.values()) {
+    for (const image of candidates) {
+      if (!matchedPaths.has(image.relativePath)) {
+        unmatchedRelativePaths.push(image.relativePath)
+      }
+    }
+  }
+  unmatchedRelativePaths.sort((a, b) => a.localeCompare(b))
+
   const scan: ImportScan = {
     images,
+    unmatchedRelativePaths,
     labels,
     warnings: warnings.slice(0, 40),
     labelFileCount: labelFiles.length,
@@ -457,6 +470,7 @@ export async function previewYoloUltralytics(
     totalShapes,
     labelFileCount: scan.labelFileCount,
     missingImages: scan.missingImages,
+    unmatchedImages: scan.unmatchedRelativePaths.length,
     skippedLabelFiles: scan.skippedLabelFiles,
     newLabelCount,
     existingLabelCount: scan.labels.length - newLabelCount,
@@ -482,9 +496,9 @@ export async function importYoloUltralytics(
     labelIdByClass.set(previewLabel.classId, label.id)
   }
 
-  const statuses = projectDatabase.listImageStatuses()
-  const pathsToMarkInProgress: string[] = []
+  const pathsToMarkMatched: { relativePath: string; empty: boolean }[] = []
   let importedShapes = 0
+  let unmatchedUpdated = 0
 
   const db = projectDatabase.requireDb()
   const writeAll = db.transaction(() => {
@@ -559,22 +573,32 @@ export async function importYoloUltralytics(
         image.height
       )
 
-      if (
-        finalRectangles.length + finalPolygons.length > 0 &&
-        (statuses[image.relativePath] ?? 'todo') === 'todo'
-      ) {
-        pathsToMarkInProgress.push(image.relativePath)
-      }
-
+      pathsToMarkMatched.push({
+        relativePath: image.relativePath,
+        empty: image.shapes.length === 0
+      })
       importedShapes += rectangles.length + polygons.length
     }
 
     const now = new Date().toISOString()
-    const updateStatus = db.prepare(
-      `UPDATE images SET status = 'in_progress', updated_at = ? WHERE relative_path = ? AND status = 'todo'`
+    const updateMatched = db.prepare(
+      `UPDATE images SET status = ?, updated_at = ? WHERE relative_path = ?`
     )
-    for (const relativePath of pathsToMarkInProgress) {
-      updateStatus.run(now, relativePath)
+    for (const item of pathsToMarkMatched) {
+      if (item.empty) {
+        if (options.emptyMatchedAction === 'leave') continue
+        updateMatched.run(options.emptyMatchedAction, now, item.relativePath)
+      } else {
+        updateMatched.run(options.matchedStatus, now, item.relativePath)
+      }
+    }
+
+    if (options.unmatchedAction !== 'leave') {
+      const status = options.unmatchedAction
+      for (const relativePath of scan.unmatchedRelativePaths) {
+        projectDatabase.setImageStatus(relativePath, status)
+        unmatchedUpdated += 1
+      }
     }
   })
 
@@ -587,6 +611,8 @@ export async function importYoloUltralytics(
     createdLabels: createdLabelIds.size,
     skippedLabelFiles: scan.skippedLabelFiles,
     missingImages: scan.missingImages,
+    unmatchedImages: scan.unmatchedRelativePaths.length,
+    unmatchedUpdated,
     warnings: scan.warnings.slice(0, 20)
   }
 }

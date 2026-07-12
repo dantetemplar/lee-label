@@ -3,66 +3,66 @@ import { Show, createEffect, createMemo, createSignal, on, onCleanup } from 'sol
 import type { Label } from '../../../shared/annotations'
 import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY } from '../../../shared/annotations'
 import type { Point2D } from '../../../shared/geometry'
+import { hexToRgbNormalized } from '../../../shared/label-color'
 import type { SegmentationMode } from '../../../shared/segmentation'
 import {
-  POLYGON_SIMPLIFICATION,
-  POLYGON_SIMPLIFICATION_EDIT
+    POLYGON_SIMPLIFICATION,
+    POLYGON_SIMPLIFICATION_EDIT
 } from '../../../shared/segmentation'
-import { hexToRgbNormalized } from '../../../shared/label-color'
 import type { RectCorner, ViewTransform } from '../lib/annotation-coords'
 import {
-  clampToImage,
-  hitTestMaskBounds,
-  hitTestPolygon,
-  hitTestRectangle,
-  hitTestRectangleCorner,
-  normalizeRectFromPoints,
-  oppositeRectCorner,
-  rectangleCornerPoints,
-  rectanglesIntersect,
-  snapPointToImagePixel,
-  viewportToImage
+    clampToImage,
+    hitTestMaskBounds,
+    hitTestPolygon,
+    hitTestRectangle,
+    hitTestRectangleCorner,
+    normalizeRectFromPoints,
+    oppositeRectCorner,
+    rectangleCornerPoints,
+    rectanglesIntersect,
+    snapPointToImagePixel,
+    viewportToImage
 } from '../lib/annotation-coords'
-import {
-  eraseCapsuleFromMaskData,
-  erasePixelBrushStrokeFromMaskData,
-  expandMaskBitmap,
-  tightenMaskBitmap
-} from '../lib/mask-bitmap'
 import type { WorkingShape } from '../lib/annotation-store'
 import { AnnotationStore } from '../lib/annotation-store'
 import {
-  BrushEngine,
-  type SavedMaskLayer
+    BrushEngine,
+    type SavedMaskLayer
 } from '../lib/brush/brush-engine'
 import {
-  applyManualIssueGuesses,
-  createBrushSessionState,
-  resetBrushSessionState
+    applyManualIssueGuesses,
+    createBrushSessionState,
+    resetBrushSessionState
 } from '../lib/brush/brush-session'
 import {
-  BRUSH_PREVIEW_FILLED_OPACITY,
-  COMMITTED_MASK_OPACITY,
-  getBrushPreviewSettings,
-  getEffectiveBrushDiameter,
-  usesSvgBrushPreview
+    forEachPixelBrushPixel,
+    usesPixelBrushShape
+} from '../lib/brush/brush-shapes'
+import {
+    BRUSH_PREVIEW_FILLED_OPACITY,
+    COMMITTED_MASK_OPACITY,
+    getBrushPreviewSettings,
+    getEffectiveBrushDiameter,
+    usesSvgBrushPreview
 } from '../lib/brush/constants'
 import {
-  forEachPixelBrushPixel,
-  usesPixelBrushShape
-} from '../lib/brush/brush-shapes'
+    eraseCapsuleFromMaskData,
+    erasePixelBrushStrokeFromMaskData,
+    expandMaskBitmap,
+    tightenMaskBitmap
+} from '../lib/mask-bitmap'
 import { rasterizePolygon } from '../lib/polygon/rasterize'
 import {
-  TopologySession,
-  topologyHintsFromIssues,
-  type TopologyAlert
+    TopologySession,
+    topologyHintsFromIssues,
+    type TopologyAlert
 } from '../lib/polygon/topology-session'
 import type { TopologyIssueMask } from '../lib/polygon/worker-types'
 import { useProjectContext } from '../lib/project-context'
 import { renderSemanticOverlay, stampClassIdStroke } from '../lib/semantic-class-map'
 import type { SemanticMapStore } from '../lib/semantic-map-store'
-import type { AnnotationTool } from './AnnotationToolbar'
 import AnnotationShapeLayer from './AnnotationShapeLayer'
+import type { AnnotationTool } from './AnnotationToolbar'
 
 export type { TopologyAlert }
 
@@ -85,21 +85,6 @@ function findShapeAtPoint(
 
 function cornerCursor(corner: RectCorner): string {
   return corner === 'ne' || corner === 'sw' ? 'nesw-resize' : 'nwse-resize'
-}
-
-function findRectangleCornerAtPoint(
-  shapes: WorkingShape[],
-  x: number,
-  y: number,
-  hitRadius: number
-): { shape: WorkingShape & { type: 'rectangle' }; corner: RectCorner } | null {
-  for (let index = shapes.length - 1; index >= 0; index--) {
-    const shape = shapes[index]
-    if (shape.type !== 'rectangle') continue
-    const corner = hitTestRectangleCorner(x, y, shape, hitRadius)
-    if (corner) return { shape, corner }
-  }
-  return null
 }
 
 const AnnotationOverlay: Component<{
@@ -1040,16 +1025,18 @@ const AnnotationOverlay: Component<{
 
     if (tool === 'rectangle' && props.segmentationMode() === 'instance') {
       const pendingOrigin = pendingRectOrigin()
-      const cornerHit = findRectangleCornerAtPoint(
-        props.store.shapes[0](),
-        point.x,
-        point.y,
-        cornerHitRadius()
-      )
-
-      if (cornerHit && !pendingOrigin) {
-        beginRectangleCornerResize(event, cornerHit.shape, cornerHit.corner)
-        return
+      if (!pendingOrigin) {
+        const selectedId = props.store.selectedShapeId[0]()
+        if (selectedId) {
+          const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
+          if (selected?.type === 'rectangle') {
+            const corner = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
+            if (corner) {
+              beginRectangleCornerResize(event, selected, corner)
+              return
+            }
+          }
+        }
       }
 
       if (pendingOrigin) {
@@ -1117,16 +1104,17 @@ const AnnotationOverlay: Component<{
       }
 
       if (dragMode !== 'none') return
-      const cornerHit =
-        pendingOrigin == null
-          ? findRectangleCornerAtPoint(
-              props.store.shapes[0](),
-              point.x,
-              point.y,
-              cornerHitRadius()
-            )
-          : null
-      overlayRef.style.cursor = cornerHit ? cornerCursor(cornerHit.corner) : 'crosshair'
+      let cornerHit: RectCorner | null = null
+      if (pendingOrigin == null) {
+        const selectedId = props.store.selectedShapeId[0]()
+        if (selectedId) {
+          const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
+          if (selected?.type === 'rectangle') {
+            cornerHit = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
+          }
+        }
+      }
+      overlayRef.style.cursor = cornerHit ? cornerCursor(cornerHit) : 'crosshair'
       return
     }
 
@@ -1143,12 +1131,25 @@ const AnnotationOverlay: Component<{
     setHoverPoint(point)
 
     if (brushSession.isDrawing && brushSession.lastPoint) {
-      if (point.x === brushSession.lastPoint.x && point.y === brushSession.lastPoint.y) {
-        requestOverlayRender()
-        return
+      const coalesced =
+        typeof event.getCoalescedEvents === 'function' ? event.getCoalescedEvents() : []
+      const samples = coalesced.length > 0 ? coalesced : [event]
+
+      for (const sample of samples) {
+        lastPointerClient = { x: sample.clientX, y: sample.clientY }
+        const samplePoint = getImagePoint(sample)
+        if (!samplePoint || !brushSession.lastPoint) continue
+        if (
+          samplePoint.x === brushSession.lastPoint.x &&
+          samplePoint.y === brushSession.lastPoint.y
+        ) {
+          continue
+        }
+        addStrokeSegment(brushSession.lastPoint, samplePoint)
+        brushSession.lastPoint = samplePoint
+        setHoverPoint(samplePoint)
       }
-      addStrokeSegment(brushSession.lastPoint, point)
-      brushSession.lastPoint = point
+
       requestOverlayRender()
       return
     }

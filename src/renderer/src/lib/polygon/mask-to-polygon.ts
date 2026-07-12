@@ -1,9 +1,9 @@
 import type { PolygonSimplificationSettings } from '../../../../shared/segmentation'
 import type { Point2D } from '../../../../shared/geometry'
 import {
-  extractComponentMask,
+  extractLabeledComponentMask,
   extractExternalContour,
-  findConnectedComponents
+  labelConnectedComponents
 } from './contour-trace'
 import { approxPolyDPFromSettings } from './simplify'
 import { binarizeMask, isSimplePolygon } from './validate'
@@ -92,16 +92,15 @@ export function maskToPolygon(
   settings: PolygonSimplificationSettings
 ): Point2D[] | null {
   const binary = binarizeMask(data)
-  const components = findConnectedComponents(binary, width, height)
+  const { labels, components } = labelConnectedComponents(binary, width, height)
   if (components.length === 0) return null
 
   const component = components[0]
-  const mask = extractComponentMask(binary, width, height, component)
-
-  if (component.pixels.length === 1) {
+  if (component.pixelCount === 1) {
     return boundingBoxRing(component.bounds)
   }
 
+  const mask = extractLabeledComponentMask(labels, width, height, component.label)
   const contour = extractExternalContour(mask, width, height)
   const source = contour.length >= 3 ? contour : boundingBoxRing(component.bounds)
   const polygon = approximateContour(source, settings)

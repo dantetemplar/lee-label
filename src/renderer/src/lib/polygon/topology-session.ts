@@ -1,6 +1,7 @@
 import type { Point2D } from '../../../../shared/geometry'
 import type { PolygonSimplificationSettings } from '../../../../shared/segmentation'
 import { POLYGON_SIMPLIFICATION } from '../../../../shared/segmentation'
+import { computeMaskBounds, cropMaskBitmap } from '../mask-bitmap'
 import type {
   SegmentationWorkerRequest,
   SegmentationWorkerResult,
@@ -8,6 +9,15 @@ import type {
 } from '../polygon/worker-types'
 
 export type { SegmentationWorkerResult, TopologyIssueMask }
+
+const CROP_PAD = 1
+
+function transferableMaskBuffer(data: Uint8Array): ArrayBuffer {
+  if (data.byteOffset === 0 && data.byteLength === data.buffer.byteLength) {
+    return data.buffer as ArrayBuffer
+  }
+  return data.slice().buffer as ArrayBuffer
+}
 
 export class TopologySession {
   private worker: Worker | null = null
@@ -24,18 +34,31 @@ export class TopologySession {
     repairTopology: boolean,
     simplification: PolygonSimplificationSettings = POLYGON_SIMPLIFICATION
   ): Promise<SegmentationWorkerResult> {
-    const worker = this.getWorker()
     const id = ++this.nextRequestId
-    const buffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer
+    const bounds = computeMaskBounds(data, width, height)
+    if (!bounds) {
+      return Promise.resolve({ id, issues: [], polygon: null })
+    }
 
+    const x = Math.max(0, bounds.x - CROP_PAD)
+    const y = Math.max(0, bounds.y - CROP_PAD)
+    const right = Math.min(width, bounds.x + bounds.width + CROP_PAD)
+    const bottom = Math.min(height, bounds.y + bounds.height + CROP_PAD)
+    const crop = { x, y, width: right - x, height: bottom - y }
+    const cropped = cropMaskBitmap(data, width, crop)
+    const buffer = transferableMaskBuffer(cropped)
+
+    const worker = this.getWorker()
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(id, { resolve, reject })
       worker.postMessage(
         {
           id,
           data: buffer,
-          width,
-          height,
+          width: crop.width,
+          height: crop.height,
+          offsetX: crop.x,
+          offsetY: crop.y,
           repairTopology,
           simplification
         } satisfies SegmentationWorkerRequest,

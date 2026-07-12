@@ -13,7 +13,12 @@ interface WorkerScope {
   postMessage(message: SegmentationWorkerResult, transfer?: Transferable[]): void
 }
 
-function toIssueMask(issue: MaskTopologyIssue, id: string): TopologyIssueMask {
+function toIssueMask(
+  issue: MaskTopologyIssue,
+  id: string,
+  offsetX: number,
+  offsetY: number
+): TopologyIssueMask {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
@@ -36,8 +41,8 @@ function toIssueMask(issue: MaskTopologyIssue, id: string): TopologyIssueMask {
   return {
     id,
     kind: issue.kind,
-    x: minX,
-    y: minY,
+    x: minX + offsetX,
+    y: minY + offsetY,
     width,
     height,
     data
@@ -47,13 +52,15 @@ function toIssueMask(issue: MaskTopologyIssue, id: string): TopologyIssueMask {
 const workerScope = self as unknown as WorkerScope
 
 workerScope.onmessage = (event: MessageEvent<SegmentationWorkerRequest>): void => {
-  const { id, data, width, height, repairTopology, simplification } = event.data
+  const { id, data, width, height, offsetX, offsetY, repairTopology, simplification } = event.data
   let mask = binarizeMask(new Uint8Array(data))
   const topology = analyzeMaskTopology(mask, width, height)
   const issues = [...topology.islands, ...topology.holes]
 
   if (issues.length > 0 && !repairTopology) {
-    const issueMasks = issues.map((issue, index) => toIssueMask(issue, `${id}:${index}`))
+    const issueMasks = issues.map((issue, index) =>
+      toIssueMask(issue, `${id}:${index}`, offsetX, offsetY)
+    )
     workerScope.postMessage(
       { id, issues: issueMasks, polygon: null } satisfies SegmentationWorkerResult,
       issueMasks.map((issue) => issue.data.buffer as ArrayBuffer)
@@ -71,5 +78,14 @@ workerScope.onmessage = (event: MessageEvent<SegmentationWorkerRequest>): void =
     height,
     simplification ?? POLYGON_SIMPLIFICATION
   )
-  workerScope.postMessage({ id, issues: [], polygon } satisfies SegmentationWorkerResult)
+  const offsetPolygon =
+    polygon && (offsetX !== 0 || offsetY !== 0)
+      ? polygon.map((point) => ({ x: point.x + offsetX, y: point.y + offsetY }))
+      : polygon
+
+  workerScope.postMessage({
+    id,
+    issues: [],
+    polygon: offsetPolygon
+  } satisfies SegmentationWorkerResult)
 }

@@ -1,10 +1,22 @@
 export type YoloImportFormat = 'detection' | 'segmentation'
 
+/** Status applied to matched images that have shapes. */
+export type YoloMatchedStatus = 'in_progress' | 'done'
+
+/** Status action for matched empty label files. */
+export type YoloEmptyMatchedAction = 'leave' | 'in_progress' | 'done'
+
+/** What to do with project images that have no matching label file. */
+export type YoloUnmatchedAction = 'leave' | 'done' | 'skipped'
+
 export interface YoloImportOptions {
   format: YoloImportFormat
   labelsDir: string
   classesPath?: string | null
   replaceExisting: boolean
+  matchedStatus: YoloMatchedStatus
+  emptyMatchedAction: YoloEmptyMatchedAction
+  unmatchedAction: YoloUnmatchedAction
   /** Optional classId → display name overrides from the preview step. */
   labelNames?: Record<number, string>
 }
@@ -15,6 +27,8 @@ export interface YoloImportResult {
   createdLabels: number
   skippedLabelFiles: number
   missingImages: number
+  unmatchedImages: number
+  unmatchedUpdated: number
   warnings: string[]
 }
 
@@ -57,6 +71,7 @@ export interface YoloImportPreview {
   totalShapes: number
   labelFileCount: number
   missingImages: number
+  unmatchedImages: number
   skippedLabelFiles: number
   newLabelCount: number
   existingLabelCount: number

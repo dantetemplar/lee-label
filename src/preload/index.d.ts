@@ -15,6 +15,12 @@ import type {
 } from '../shared/annotations'
 import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
 import type { YoloImportOptions, YoloImportPreview, YoloImportResult } from '../shared/import'
+import type {
+  YoloExportOptions,
+  YoloExportPreview,
+  YoloExportProgress,
+  YoloExportResult
+} from '../shared/export'
 
 export interface AppAPI {
   window: {
@@ -29,6 +35,7 @@ export interface AppAPI {
   }
   files: {
     openFolder: () => Promise<string | null>
+    saveFolder: () => Promise<string | null>
     openFile: (filters?: { name: string; extensions: string[] }[]) => Promise<string | null>
     readDirectoryTree: (path: string) => Promise<import('../shared/types').FileEntry[]>
     readTextFile: (path: string) => Promise<string>
@@ -92,6 +99,12 @@ export interface AppAPI {
   import: {
     yoloUltralyticsPreview: (options: YoloImportOptions) => Promise<YoloImportPreview>
     yoloUltralytics: (options: YoloImportOptions) => Promise<YoloImportResult>
+  }
+  export: {
+    yoloUltralyticsPreview: (options: YoloExportOptions) => Promise<YoloExportPreview>
+    yoloUltralytics: (options: YoloExportOptions) => Promise<YoloExportResult>
+    cancelYoloUltralytics: () => Promise<void>
+    onYoloUltralyticsProgress: (callback: (progress: YoloExportProgress) => void) => () => void
   }
 }
 

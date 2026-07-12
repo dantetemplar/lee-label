@@ -29,6 +29,7 @@
     "@floating-ui/dom": "^1.7.6",
     "better-sqlite3": "^12.11.1",
     "fast-png": "^8.0.0",
+    "sharp": "^0.35.3",
     "solid-icons": "^1.2.0"
   },
   "devDependencies": {

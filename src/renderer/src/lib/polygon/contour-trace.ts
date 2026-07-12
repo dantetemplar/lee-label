@@ -2,9 +2,29 @@ import type { Point2D } from '../../../../shared/geometry'
 
 export type { Point2D }
 
+export interface MaskRegionBounds {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+export interface MaskComponent {
+  label: number
+  pixelCount: number
+  bounds: MaskRegionBounds
+}
+
+export interface LabeledComponents {
+  labels: Int32Array
+  components: MaskComponent[]
+}
+
 export interface MaskRegion {
   pixels: Point2D[]
-  bounds: { minX: number; minY: number; maxX: number; maxY: number }
+  bounds: MaskRegionBounds
+  pixelCount?: number
+  label?: number
 }
 
 function isForeground(data: Uint8Array, width: number, x: number, y: number): boolean {
@@ -14,48 +34,116 @@ function isForeground(data: Uint8Array, width: number, x: number, y: number): bo
   return data[index] > 0
 }
 
+/** 4-connected foreground labeling without per-neighbor object allocation. */
+export function labelConnectedComponents(
+  data: Uint8Array,
+  width: number,
+  height: number
+): LabeledComponents {
+  const labels = new Int32Array(data.length)
+  const components: MaskComponent[] = []
+  const stack = new Int32Array(data.length)
+  let nextLabel = 0
+
+  for (let start = 0; start < data.length; start++) {
+    if (!data[start] || labels[start] !== 0) continue
+
+    nextLabel++
+    let pixelCount = 0
+    let minX = start % width
+    let maxX = minX
+    let minY = (start / width) | 0
+    let maxY = minY
+    let sp = 0
+
+    // Mark on push so each index is stacked at most once (stack length <= N).
+    // Pushing unlabeled neighbors repeatedly overflows a length-N stack and
+    // silently drops indices on TypedArrays — false islands on cropped masks.
+    labels[start] = nextLabel
+    stack[sp++] = start
+
+    while (sp > 0) {
+      const index = stack[--sp]
+      pixelCount++
+
+      const x = index % width
+      const y = (index / width) | 0
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+
+      const tryPush = (ni: number): void => {
+        if (labels[ni] !== 0 || !data[ni]) return
+        labels[ni] = nextLabel
+        stack[sp++] = ni
+      }
+
+      if (x > 0) tryPush(index - 1)
+      if (x < width - 1) tryPush(index + 1)
+      if (y > 0) tryPush(index - width)
+      if (y < height - 1) tryPush(index + width)
+    }
+
+    components.push({
+      label: nextLabel,
+      pixelCount,
+      bounds: { minX, minY, maxX, maxY }
+    })
+  }
+
+  components.sort((left, right) => right.pixelCount - left.pixelCount)
+  return { labels, components }
+}
+
+export function collectComponentPixels(
+  labels: Int32Array,
+  width: number,
+  component: MaskComponent
+): Point2D[] {
+  const pixels: Point2D[] = new Array(component.pixelCount)
+  let count = 0
+  const { minX, minY, maxX, maxY } = component.bounds
+  const label = component.label
+
+  for (let y = minY; y <= maxY; y++) {
+    const row = y * width
+    for (let x = minX; x <= maxX; x++) {
+      if (labels[row + x] === label) {
+        pixels[count++] = { x, y }
+      }
+    }
+  }
+
+  if (count !== pixels.length) pixels.length = count
+  return pixels
+}
+
+export function extractLabeledComponentMask(
+  labels: Int32Array,
+  width: number,
+  height: number,
+  label: number
+): Uint8Array {
+  const mask = new Uint8Array(width * height)
+  for (let i = 0; i < labels.length; i++) {
+    if (labels[i] === label) mask[i] = 255
+  }
+  return mask
+}
+
 export function findConnectedComponents(
   data: Uint8Array,
   width: number,
   height: number
 ): MaskRegion[] {
-  const visited = new Uint8Array(data.length)
-  const components: MaskRegion[] = []
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const start = y * width + x
-      if (!data[start] || visited[start]) continue
-
-      const pixels: Point2D[] = []
-      let minX = x
-      let minY = y
-      let maxX = x
-      let maxY = y
-      const stack = [{ x, y }]
-
-      while (stack.length > 0) {
-        const current = stack.pop()!
-        const index = current.y * width + current.x
-        if (visited[index] || !data[index]) continue
-        visited[index] = 1
-        pixels.push(current)
-        minX = Math.min(minX, current.x)
-        minY = Math.min(minY, current.y)
-        maxX = Math.max(maxX, current.x)
-        maxY = Math.max(maxY, current.y)
-
-        if (current.x > 0) stack.push({ x: current.x - 1, y: current.y })
-        if (current.x < width - 1) stack.push({ x: current.x + 1, y: current.y })
-        if (current.y > 0) stack.push({ x: current.x, y: current.y - 1 })
-        if (current.y < height - 1) stack.push({ x: current.x, y: current.y + 1 })
-      }
-
-      components.push({ pixels, bounds: { minX, minY, maxX, maxY } })
-    }
-  }
-
-  return components.sort((left, right) => right.pixels.length - left.pixels.length)
+  const { labels, components } = labelConnectedComponents(data, width, height)
+  return components.map((component) => ({
+    label: component.label,
+    pixelCount: component.pixelCount,
+    bounds: component.bounds,
+    pixels: collectComponentPixels(labels, width, component)
+  }))
 }
 
 export function extractComponentMask(
@@ -71,21 +159,24 @@ export function extractComponentMask(
   return mask
 }
 
-export function findHolePixels(
+/** Find enclosed background components (holes). Background is 4-connected. */
+export function findHoleComponents(
   data: Uint8Array,
   width: number,
-  height: number
-): Point2D[] {
+  height: number,
+  minPixels: number
+): Array<{ pixels: Point2D[]; bounds: MaskRegionBounds }> {
   const reachable = new Uint8Array(data.length)
-  const queue: number[] = []
-  let queueIndex = 0
+  const queue = new Int32Array(data.length)
+  let head = 0
+  let tail = 0
 
   const enqueueBackground = (x: number, y: number): void => {
     if (x < 0 || y < 0 || x >= width || y >= height) return
     const index = y * width + x
     if (reachable[index] || data[index] > 0) return
     reachable[index] = 1
-    queue.push(index)
+    queue[tail++] = index
   }
 
   for (let x = 0; x < width; x++) {
@@ -97,27 +188,75 @@ export function findHolePixels(
     enqueueBackground(width - 1, y)
   }
 
-  while (queueIndex < queue.length) {
-    const current = queue[queueIndex++]
+  while (head < tail) {
+    const current = queue[head++]
     const x = current % width
-    const y = Math.floor(current / width)
+    const y = (current / width) | 0
     enqueueBackground(x - 1, y)
     enqueueBackground(x + 1, y)
     enqueueBackground(x, y - 1)
     enqueueBackground(x, y + 1)
   }
 
-  const holes: Point2D[] = []
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const index = y * width + x
-      if (!data[index] && !reachable[index]) {
-        holes.push({ x, y })
+  const holes: Array<{ pixels: Point2D[]; bounds: MaskRegionBounds }> = []
+  const visited = reachable
+
+  for (let start = 0; start < data.length; start++) {
+    if (data[start] > 0 || visited[start]) continue
+
+    const pixels: Point2D[] = []
+    let minX = start % width
+    let maxX = minX
+    let minY = (start / width) | 0
+    let maxY = minY
+    head = 0
+    tail = 0
+    queue[tail++] = start
+    visited[start] = 1
+
+    while (head < tail) {
+      const index = queue[head++]
+      const x = index % width
+      const y = (index / width) | 0
+      pixels.push({ x, y })
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+
+      const tryVisit = (nx: number, ny: number): void => {
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) return
+        const nIndex = ny * width + nx
+        if (visited[nIndex] || data[nIndex] > 0) return
+        visited[nIndex] = 1
+        queue[tail++] = nIndex
       }
+
+      tryVisit(x - 1, y)
+      tryVisit(x + 1, y)
+      tryVisit(x, y - 1)
+      tryVisit(x, y + 1)
+    }
+
+    if (pixels.length >= minPixels) {
+      holes.push({ pixels, bounds: { minX, minY, maxX, maxY } })
     }
   }
 
   return holes
+}
+
+export function findHolePixels(
+  data: Uint8Array,
+  width: number,
+  height: number
+): Point2D[] {
+  const holes = findHoleComponents(data, width, height, 1)
+  const pixels: Point2D[] = []
+  for (const hole of holes) {
+    for (const pixel of hole.pixels) pixels.push(pixel)
+  }
+  return pixels
 }
 
 const NEIGHBORS = [
@@ -189,7 +328,6 @@ function pointKey(point: Point2D): string {
   return `${point.x},${point.y}`
 }
 
-/** Trace outer boundary on pixel-grid corners (clockwise edge ring). */
 export function traceGridBoundary(
   data: Uint8Array,
   width: number,
@@ -242,10 +380,6 @@ export function traceGridBoundary(
   return ring
 }
 
-/**
- * Step 1 — external contour extraction (OpenCV `findContours` + `RETR_EXTERNAL`).
- * Returns a dense boundary chain; prefers pixel border following, then grid corners.
- */
 export function extractExternalContour(
   data: Uint8Array,
   width: number,

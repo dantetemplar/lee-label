@@ -18,6 +18,7 @@ import DatasetNavBar, {
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
 import ImportAnnotationsModal from './components/ImportAnnotationsModal'
+import ExportAnnotationsModal from './components/ExportAnnotationsModal'
 import LabelPanel from './components/LabelPanel'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
@@ -60,6 +61,7 @@ const App: Component = () => {
     stats: LabelDeleteStats
   } | null>(null)
   const [importModalOpen, setImportModalOpen] = createSignal(false)
+  const [exportModalOpen, setExportModalOpen] = createSignal(false)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
@@ -493,6 +495,12 @@ const App: Component = () => {
     setImportModalOpen(true)
   }
 
+  const openExportModal = async (): Promise<void> => {
+    if (!folderPath()) return
+    await flushAnnotations()
+    setExportModalOpen(true)
+  }
+
   const handleImported = async (): Promise<void> => {
     const [nextLabels, statuses] = await Promise.all([
       window.api.labels.list(),
@@ -541,6 +549,7 @@ const App: Component = () => {
           onOpenFolder={() => void lifecycle.openFolder()}
           onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
           onImportAnnotations={() => void openImportModal()}
+          onExportDataset={() => void openExportModal()}
         />
         <div class="flex min-h-0 flex-1">
           <Show when={folderPath()}>
@@ -657,6 +666,10 @@ const App: Component = () => {
           open={importModalOpen}
           onClose={() => setImportModalOpen(false)}
           onImported={() => handleImported()}
+        />
+        <ExportAnnotationsModal
+          open={exportModalOpen}
+          onClose={() => setExportModalOpen(false)}
         />
       </div>
     </ProjectContext.Provider>

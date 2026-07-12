@@ -12,11 +12,14 @@ import {
 } from 'solid-js'
 import { BsChevronLeft, BsChevronRight } from 'solid-icons/bs'
 import type {
+  YoloEmptyMatchedAction,
   YoloImportFormat,
   YoloImportPreview,
   YoloImportResult,
+  YoloMatchedStatus,
   YoloPreviewLabel,
-  YoloPreviewSample
+  YoloPreviewSample,
+  YoloUnmatchedAction
 } from '../../../shared/import'
 import { SHAPE_OPACITY } from '../../../shared/annotations'
 import { hexToRgba } from '../../../shared/label-color'
@@ -175,6 +178,10 @@ const ImportAnnotationsModal: Component<{
   const [classesPath, setClassesPath] = createSignal<string | null>(null)
   const [classesPathDisplay, setClassesPathDisplay] = createSignal('')
   const [replaceExisting, setReplaceExisting] = createSignal(true)
+  const [matchedStatus, setMatchedStatus] = createSignal<YoloMatchedStatus>('in_progress')
+  const [emptyMatchedAction, setEmptyMatchedAction] =
+    createSignal<YoloEmptyMatchedAction>('in_progress')
+  const [unmatchedAction, setUnmatchedAction] = createSignal<YoloUnmatchedAction>('leave')
   const [busy, setBusy] = createSignal(false)
   const [error, setError] = createSignal<string | null>(null)
   const [preview, setPreview] = createSignal<YoloImportPreview | null>(null)
@@ -191,6 +198,9 @@ const ImportAnnotationsModal: Component<{
     setClassesPath(null)
     setClassesPathDisplay('')
     setReplaceExisting(true)
+    setMatchedStatus('in_progress')
+    setEmptyMatchedAction('in_progress')
+    setUnmatchedAction('leave')
     setBusy(false)
     setError(null)
     setPreview(null)
@@ -245,6 +255,9 @@ const ImportAnnotationsModal: Component<{
     labelsDir: string
     classesPath: string | null
     replaceExisting: boolean
+    matchedStatus: YoloMatchedStatus
+    emptyMatchedAction: YoloEmptyMatchedAction
+    unmatchedAction: YoloUnmatchedAction
   } | null => {
     const dir = labelsDir()
     if (!dir) return null
@@ -252,7 +265,10 @@ const ImportAnnotationsModal: Component<{
       format: format(),
       labelsDir: dir,
       classesPath: classesPath(),
-      replaceExisting: replaceExisting()
+      replaceExisting: replaceExisting(),
+      matchedStatus: matchedStatus(),
+      emptyMatchedAction: emptyMatchedAction(),
+      unmatchedAction: unmatchedAction()
     }
   }
 
@@ -456,6 +472,106 @@ const ImportAnnotationsModal: Component<{
             Replace existing annotations on matched images
           </label>
 
+          <fieldset class="space-y-2">
+            <legend class="text-sm text-base-content/70">Matched images with labels</legend>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-matched-status"
+                class="radio radio-sm"
+                checked={matchedStatus() === 'in_progress'}
+                disabled={busy()}
+                onChange={() => setMatchedStatus('in_progress')}
+              />
+              Mark as in progress
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-matched-status"
+                class="radio radio-sm"
+                checked={matchedStatus() === 'done'}
+                disabled={busy()}
+                onChange={() => setMatchedStatus('done')}
+              />
+              Mark as done
+            </label>
+          </fieldset>
+
+          <fieldset class="space-y-2">
+            <legend class="text-sm text-base-content/70">Matched empty label files</legend>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-empty-matched-action"
+                class="radio radio-sm"
+                checked={emptyMatchedAction() === 'leave'}
+                disabled={busy()}
+                onChange={() => setEmptyMatchedAction('leave')}
+              />
+              Leave unchanged
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-empty-matched-action"
+                class="radio radio-sm"
+                checked={emptyMatchedAction() === 'in_progress'}
+                disabled={busy()}
+                onChange={() => setEmptyMatchedAction('in_progress')}
+              />
+              Mark as in progress
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-empty-matched-action"
+                class="radio radio-sm"
+                checked={emptyMatchedAction() === 'done'}
+                disabled={busy()}
+                onChange={() => setEmptyMatchedAction('done')}
+              />
+              Mark as done
+            </label>
+          </fieldset>
+
+          <fieldset class="space-y-2">
+            <legend class="text-sm text-base-content/70">Unmatched project images</legend>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-unmatched-action"
+                class="radio radio-sm"
+                checked={unmatchedAction() === 'leave'}
+                disabled={busy()}
+                onChange={() => setUnmatchedAction('leave')}
+              />
+              Leave unchanged
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-unmatched-action"
+                class="radio radio-sm"
+                checked={unmatchedAction() === 'done'}
+                disabled={busy()}
+                onChange={() => setUnmatchedAction('done')}
+              />
+              Mark as done
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input
+                type="radio"
+                name="yolo-unmatched-action"
+                class="radio radio-sm"
+                checked={unmatchedAction() === 'skipped'}
+                disabled={busy()}
+                onChange={() => setUnmatchedAction('skipped')}
+              />
+              Mark as skipped
+            </label>
+          </fieldset>
+
           <Show when={error()}>
             <p class="text-sm text-error">{error()}</p>
           </Show>
@@ -493,12 +609,12 @@ const ImportAnnotationsModal: Component<{
                 <div class="text-lg font-semibold">{previewValue().matchedImages}</div>
               </div>
               <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
-                <div class="text-base-content/60 text-xs">Shapes</div>
-                <div class="text-lg font-semibold">{previewValue().totalShapes}</div>
+                <div class="text-base-content/60 text-xs">Unmatched</div>
+                <div class="text-lg font-semibold">{previewValue().unmatchedImages}</div>
               </div>
               <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
-                <div class="text-base-content/60 text-xs">Labels</div>
-                <div class="text-lg font-semibold">{previewValue().labels.length}</div>
+                <div class="text-base-content/60 text-xs">Shapes</div>
+                <div class="text-lg font-semibold">{previewValue().totalShapes}</div>
               </div>
               <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
                 <div class="text-base-content/60 text-xs">New labels</div>
@@ -629,7 +745,11 @@ const ImportAnnotationsModal: Component<{
               <button
                 type="button"
                 class="btn btn-primary"
-                disabled={busy() || previewValue().matchedImages === 0}
+                disabled={
+                  busy() ||
+                  (previewValue().matchedImages === 0 &&
+                    (unmatchedAction() === 'leave' || previewValue().unmatchedImages === 0))
+                }
                 onClick={handleImport}
               >
                 <Show when={busy()} fallback="Import">
@@ -651,6 +771,11 @@ const ImportAnnotationsModal: Component<{
                 Matched {value().matchedImages} image(s), imported {value().importedShapes}{' '}
                 shape(s), created {value().createdLabels} label(s).
               </p>
+              <Show when={value().unmatchedUpdated > 0}>
+                <p class="text-base-content/70 mt-1">
+                  Updated status on {value().unmatchedUpdated} unmatched image(s).
+                </p>
+              </Show>
               <Show when={value().missingImages > 0}>
                 <p class="text-base-content/70 mt-1">
                   {value().missingImages} label file(s) had no matching project image.

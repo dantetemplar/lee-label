@@ -4,9 +4,10 @@ import {
 } from '../../../../shared/segmentation'
 import type { Point2D } from '../../../../shared/geometry'
 import {
-  extractComponentMask,
-  findConnectedComponents,
-  findHolePixels
+  collectComponentPixels,
+  extractLabeledComponentMask,
+  findHoleComponents,
+  labelConnectedComponents
 } from './contour-trace'
 
 export interface MaskTopologyIssue {
@@ -27,43 +28,6 @@ export function binarizeMask(data: Uint8Array): Uint8Array {
     binary[i] = data[i] > 0 ? 255 : 0
   }
   return binary
-}
-
-function groupBackgroundComponents(candidates: Point2D[]): MaskTopologyIssue[] {
-  if (candidates.length === 0) return []
-
-  const candidateSet = new Set(candidates.map((point) => `${point.x},${point.y}`))
-  const visited = new Set<string>()
-  const groups: MaskTopologyIssue[] = []
-
-  for (const seed of candidates) {
-    const seedKey = `${seed.x},${seed.y}`
-    if (!candidateSet.has(seedKey) || visited.has(seedKey)) continue
-
-    const pixels: Point2D[] = []
-    const stack = [seed]
-
-    while (stack.length > 0) {
-      const current = stack.pop()!
-      const key = `${current.x},${current.y}`
-      if (!candidateSet.has(key) || visited.has(key)) continue
-      visited.add(key)
-      pixels.push(current)
-
-      stack.push(
-        { x: current.x - 1, y: current.y },
-        { x: current.x + 1, y: current.y },
-        { x: current.x, y: current.y - 1 },
-        { x: current.x, y: current.y + 1 }
-      )
-    }
-
-    if (pixels.length >= MIN_TOPOLOGY_HOLE_PIXELS) {
-      groups.push({ kind: 'hole', pixels })
-    }
-  }
-
-  return groups
 }
 
 function orientation(a: Point2D, b: Point2D, c: Point2D): number {
@@ -124,24 +88,34 @@ export function analyzeMaskTopology(
   height: number
 ): MaskTopologyAnalysis {
   const binary = binarizeMask(data)
-  const components = findConnectedComponents(binary, width, height)
+  const { labels, components } = labelConnectedComponents(binary, width, height)
   if (components.length === 0) {
     return { valid: false, islands: [], holes: [], largestComponentIndex: -1 }
   }
 
   const largest = components[0]
-  const largestMask = extractComponentMask(binary, width, height, largest)
-  const holePixels = findHolePixels(largestMask, width, height)
+  const largestMask = extractLabeledComponentMask(labels, width, height, largest.label)
+  const holeRegions = findHoleComponents(
+    largestMask,
+    width,
+    height,
+    MIN_TOPOLOGY_HOLE_PIXELS
+  )
 
-  const islands: MaskTopologyIssue[] = components
-    .slice(1)
-    .filter((component) => component.pixels.length >= MIN_TOPOLOGY_ISLAND_PIXELS)
-    .map((component) => ({
-      kind: 'island' as const,
-      pixels: component.pixels
-    }))
+  const islands: MaskTopologyIssue[] = []
+  for (let i = 1; i < components.length; i++) {
+    const component = components[i]
+    if (component.pixelCount < MIN_TOPOLOGY_ISLAND_PIXELS) continue
+    islands.push({
+      kind: 'island',
+      pixels: collectComponentPixels(labels, width, component)
+    })
+  }
 
-  const holes = groupBackgroundComponents(holePixels)
+  const holes: MaskTopologyIssue[] = holeRegions.map((hole) => ({
+    kind: 'hole' as const,
+    pixels: hole.pixels
+  }))
 
   return {
     valid: islands.length === 0 && holes.length === 0,

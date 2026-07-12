@@ -22,6 +22,8 @@ export interface SegmentationWorkerRequest {
   data: ArrayBuffer
   width: number
   height: number
+  offsetX: number
+  offsetY: number
   repairTopology: boolean
   simplification: PolygonSimplificationSettings
 }

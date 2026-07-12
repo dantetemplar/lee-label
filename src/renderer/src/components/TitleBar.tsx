@@ -11,7 +11,7 @@ const menuPanelClass =
 const menuItemClass =
   'flex w-full items-center gap-2.5 px-3.5 py-1.5 text-left text-[13px] leading-none text-base-content/88 hover:bg-base-300 disabled:pointer-events-none disabled:opacity-40'
 
-type OpenMenu = 'file' | 'import' | null
+type OpenMenu = 'file' | 'import' | 'export' | null
 
 const TitleBar: Component<{
   title: () => string
@@ -21,6 +21,7 @@ const TitleBar: Component<{
   onOpenFolder: () => void
   onOpenRecent: (path: string) => void
   onImportAnnotations: () => void
+  onExportDataset: () => void
 }> = (props) => {
   const [maximized, setMaximized] = createSignal(false)
   const [openMenu, setOpenMenu] = createSignal<OpenMenu>(null)
@@ -210,6 +211,38 @@ const TitleBar: Component<{
                 }}
               >
                 Annotations…
+              </button>
+            </div>
+          </Show>
+        </div>
+        <div class="relative">
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
+            classList={{ 'bg-base-300': openMenu() === 'export' }}
+            aria-haspopup="menu"
+            aria-expanded={openMenu() === 'export'}
+            onClick={(event) => toggleMenu('export', event)}
+          >
+            Export
+          </button>
+          <Show when={openMenu() === 'export'}>
+            <div
+              class={`absolute top-full left-0 z-50 min-w-[220px] ${menuPanelClass}`}
+              role="menu"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                class={menuItemClass}
+                disabled={!props.hasOpenProject()}
+                onClick={() => {
+                  closeMenus()
+                  props.onExportDataset()
+                }}
+              >
+                Dataset…
               </button>
             </div>
           </Show>

@@ -24,7 +24,7 @@ export const POLYGON_SIMPLIFICATION_EDIT: PolygonSimplificationSettings = {
 /** Ignore disconnected speckle smaller than this when validating mask topology. */
 export const MIN_TOPOLOGY_ISLAND_PIXELS = 16
 
-/** Ignore enclosed voids smaller than this when validating mask topology. */
-export const MIN_TOPOLOGY_HOLE_PIXELS = 16
+/** Enclosed voids of this many pixels or more are topology holes (1 = any hole). */
+export const MIN_TOPOLOGY_HOLE_PIXELS = 1
 
 export const SETTINGS_KEY_SEGMENTATION_MODE = 'segmentation_mode'

@@ -12,6 +12,12 @@ import type {
 } from '../shared/annotations'
 import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
 import type { YoloImportOptions, YoloImportPreview, YoloImportResult } from '../shared/import'
+import type {
+  YoloExportOptions,
+  YoloExportPreview,
+  YoloExportProgress,
+  YoloExportResult
+} from '../shared/export'
 
 const api = {
   window: {
@@ -31,6 +37,7 @@ const api = {
   },
   files: {
     openFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:open-folder'),
+    saveFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:save-folder'),
     openFile: (
       filters?: { name: string; extensions: string[] }[]
     ): Promise<string | null> => ipcRenderer.invoke('dialog:open-file', filters),
@@ -131,6 +138,20 @@ const api = {
       ipcRenderer.invoke('import:yolo-ultralytics-preview', options),
     yoloUltralytics: (options: YoloImportOptions): Promise<YoloImportResult> =>
       ipcRenderer.invoke('import:yolo-ultralytics', options)
+  },
+  export: {
+    yoloUltralyticsPreview: (options: YoloExportOptions): Promise<YoloExportPreview> =>
+      ipcRenderer.invoke('export:yolo-ultralytics-preview', options),
+    yoloUltralytics: (options: YoloExportOptions): Promise<YoloExportResult> =>
+      ipcRenderer.invoke('export:yolo-ultralytics', options),
+    cancelYoloUltralytics: (): Promise<void> =>
+      ipcRenderer.invoke('export:yolo-ultralytics-cancel'),
+    onYoloUltralyticsProgress: (callback: (progress: YoloExportProgress) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, progress: YoloExportProgress): void =>
+        callback(progress)
+      ipcRenderer.on('export:yolo-ultralytics-progress', handler)
+      return () => ipcRenderer.removeListener('export:yolo-ultralytics-progress', handler)
+    }
   }
 }
 

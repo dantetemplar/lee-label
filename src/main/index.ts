@@ -11,6 +11,7 @@ import { APP_DISPLAY_NAME } from '../shared/app-name'
 import { formatDisplayPath } from '../shared/paths'
 import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
 import { registerImportIpc } from './import-ipc'
+import { registerExportIpc } from './export-ipc'
 import { resolveProjectPath } from './project-fs'
 
 registerImageProtocolSchemes()
@@ -209,6 +210,7 @@ app.whenReady().then(() => {
   registerIpc()
   registerAnnotationsIpc()
   registerImportIpc()
+  registerExportIpc()
   setupImageProtocol()
   createWindow()
 
