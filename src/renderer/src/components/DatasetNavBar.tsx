@@ -1,0 +1,290 @@
+import type { Component, JSX } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
+import {
+  BsCheckLg,
+  BsChevronBarLeft,
+  BsChevronBarRight,
+  BsChevronDoubleLeft,
+  BsChevronDoubleRight,
+  BsChevronLeft,
+  BsChevronRight,
+  BsPlayFill,
+  BsSkipForward
+} from 'solid-icons/bs'
+import type { ImageStatus } from '../../../shared/annotations'
+
+export const DATASET_NAV_STEP = 10
+
+export interface DatasetNavStats {
+  position: { index: number; total: number } | null
+  done: number
+  skipped: number
+  left: number
+  total: number
+  allReviewed: boolean
+}
+
+function statusSegmentClass(status: ImageStatus): string {
+  if (status === 'done') return 'bg-green-600'
+  if (status === 'skipped') return 'bg-neutral'
+  if (status === 'in_progress') return 'bg-primary'
+  return 'bg-transparent'
+}
+
+function statusPointerClass(status: ImageStatus): string {
+  if (status === 'done') return 'bg-green-600'
+  if (status === 'skipped') return 'bg-neutral'
+  if (status === 'in_progress') return 'bg-primary'
+  return 'bg-base-content'
+}
+
+const TransportButton: Component<{
+  title: string
+  label: string
+  disabled?: boolean
+  class?: string
+  onClick: () => void
+  children: JSX.Element
+}> = (props) => (
+  <span class="inline-flex" title={props.title}>
+    <button
+      type="button"
+      class={`btn btn-ghost btn-square h-7 min-h-7 w-6 p-0 disabled:pointer-events-none disabled:bg-transparent disabled:text-base-content/45 disabled:opacity-100! ${props.class ?? 'text-base-content'}`}
+      disabled={props.disabled === true}
+      aria-label={props.label}
+      aria-disabled={props.disabled === true}
+      onClick={() => {
+        if (props.disabled) return
+        props.onClick()
+      }}
+    >
+      {props.children}
+    </button>
+  </span>
+)
+
+const FloatingChip: Component<{ children: JSX.Element; class?: string }> = (props) => (
+  <div
+    class={`pointer-events-auto flex items-center rounded-box border border-base-300 bg-base-100/95 px-1 shadow-md backdrop-blur-sm ${props.class ?? ''}`}
+  >
+    {props.children}
+  </div>
+)
+
+/** Thin seek/progress strip under the title bar. */
+export const DatasetProgressStrip: Component<{
+  stats: () => DatasetNavStats
+  statuses: () => ImageStatus[]
+  onSeek: (index: number) => void
+}> = (props) => {
+  const [dragIndex, setDragIndex] = createSignal<number | null>(null)
+  const position = (): { index: number; total: number } | null => props.stats().position
+  const total = (): number => props.statuses().length
+
+  /** Tick / pointer sit at the center of each image segment. */
+  const tickPercent = (index: number): number => {
+    const n = total()
+    if (n <= 0) return 0
+    return ((index + 0.5) / n) * 100
+  }
+
+  const displayIndex = (): number => {
+    const dragging = dragIndex()
+    if (dragging !== null) return dragging
+    return position()?.index ?? 0
+  }
+
+  const positionPercent = (): number => tickPercent(displayIndex())
+
+  const currentStatus = (): ImageStatus => props.statuses()[displayIndex()] ?? 'todo'
+
+  const indexFromClientX = (track: HTMLElement, clientX: number): number | null => {
+    const n = total()
+    if (n <= 0) return null
+    const rect = track.getBoundingClientRect()
+    if (rect.width <= 0) return null
+    const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1)
+    return Math.min(n - 1, Math.floor(ratio * n))
+  }
+
+  const seekFromClientX = (track: HTMLElement, clientX: number): void => {
+    const index = indexFromClientX(track, clientX)
+    if (index === null) return
+    setDragIndex(index)
+    props.onSeek(index)
+  }
+
+  const endDrag = (event: PointerEvent): void => {
+    const track = event.currentTarget as HTMLElement
+    if (track.hasPointerCapture(event.pointerId)) {
+      track.releasePointerCapture(event.pointerId)
+    }
+    const index = indexFromClientX(track, event.clientX)
+    if (index !== null) props.onSeek(index)
+    setDragIndex(null)
+  }
+
+  return (
+    <div
+      class="relative h-1.5 w-full shrink-0 bg-base-300"
+      role="slider"
+      aria-label="Dataset position"
+      aria-valuemin={0}
+      aria-valuemax={Math.max(total() - 1, 0)}
+      aria-valuenow={displayIndex()}
+      title={total() > 0 ? `${displayIndex() + 1} / ${total()}` : undefined}
+    >
+      <div class="pointer-events-none absolute inset-0 flex" aria-hidden="true">
+        <For each={props.statuses()}>
+          {(status) => <div class={`min-w-0 flex-1 ${statusSegmentClass(status)}`} />}
+        </For>
+      </div>
+      <div class="pointer-events-none absolute inset-0" aria-hidden="true">
+        <For each={props.statuses()}>
+          {(_, index) => (
+            <div
+              class="absolute top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 bg-base-content/40"
+              style={{ left: `${tickPercent(index())}%` }}
+            />
+          )}
+        </For>
+      </div>
+      <div
+        class={`pointer-events-none absolute top-1/2 z-10 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-sm ring-2 ring-base-100 ${statusPointerClass(currentStatus())}`}
+        style={{ left: `${positionPercent()}%` }}
+        aria-hidden="true"
+      />
+      <Show when={total() > 0}>
+        <div
+          class="absolute inset-0 z-20 cursor-grab touch-none active:cursor-grabbing"
+          role="presentation"
+          onPointerDown={(event) => {
+            event.preventDefault()
+            event.currentTarget.setPointerCapture(event.pointerId)
+            seekFromClientX(event.currentTarget, event.clientX)
+          }}
+          onPointerMove={(event) => {
+            if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+            seekFromClientX(event.currentTarget, event.clientX)
+          }}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        />
+      </Show>
+    </div>
+  )
+}
+
+/** Floating transport + Skip/Done over the workspace. */
+const DatasetNavBar: Component<{
+  stats: () => DatasetNavStats
+  onFirst: () => void
+  onStepBack: () => void
+  onPrev: () => void
+  onPlay: () => void
+  onNext: () => void
+  onStepForward: () => void
+  onLast: () => void
+  onSkip: () => void
+  onDone: () => void
+}> = (props) => {
+  const position = (): { index: number; total: number } | null => props.stats().position
+
+  const atStart = (): boolean => {
+    const pos = position()
+    return !pos || pos.index <= 0
+  }
+
+  const atEnd = (): boolean => {
+    const pos = position()
+    return !pos || pos.index >= pos.total - 1
+  }
+
+  return (
+    <nav
+      class="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3"
+      aria-label="Dataset navigation"
+    >
+      <div class="flex max-w-full items-center gap-1.5">
+        <FloatingChip class="gap-0 px-0.5">
+          <TransportButton
+            title="First image"
+            label="First image"
+            disabled={atStart()}
+            onClick={props.onFirst}
+          >
+            <BsChevronBarLeft size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title={`Back ${DATASET_NAV_STEP} images`}
+            label={`Back ${DATASET_NAV_STEP} images`}
+            disabled={atStart()}
+            onClick={props.onStepBack}
+          >
+            <BsChevronDoubleLeft size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title="Previous image ["
+            label="Previous image"
+            disabled={atStart()}
+            onClick={props.onPrev}
+          >
+            <BsChevronLeft size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title="Next unfinished"
+            label="Next unfinished"
+            onClick={props.onPlay}
+          >
+            <BsPlayFill size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title="Next image ]"
+            label="Next image"
+            disabled={atEnd()}
+            onClick={props.onNext}
+          >
+            <BsChevronRight size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title={`Forward ${DATASET_NAV_STEP} images`}
+            label={`Forward ${DATASET_NAV_STEP} images`}
+            disabled={atEnd()}
+            onClick={props.onStepForward}
+          >
+            <BsChevronDoubleRight size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title="Last image"
+            label="Last image"
+            disabled={atEnd()}
+            onClick={props.onLast}
+          >
+            <BsChevronBarRight size={16} aria-hidden="true" />
+          </TransportButton>
+        </FloatingChip>
+
+        <FloatingChip class="gap-0 px-0.5">
+          <TransportButton
+            title="Skip and go to next unfinished (Ctrl+Shift+Enter)"
+            label="Skip"
+            class="text-neutral!"
+            onClick={props.onSkip}
+          >
+            <BsSkipForward size={16} aria-hidden="true" />
+          </TransportButton>
+          <TransportButton
+            title="Mark done and go to next unfinished (Ctrl+Enter)"
+            label="Done"
+            class="text-green-600!"
+            onClick={props.onDone}
+          >
+            <BsCheckLg size={16} aria-hidden="true" />
+          </TransportButton>
+        </FloatingChip>
+      </div>
+    </nav>
+  )
+}
+
+export default DatasetNavBar

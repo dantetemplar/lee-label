@@ -1,5 +1,7 @@
-import type { FileEntry } from '../../../shared/types'
+import type { ImageStatus } from '../../../shared/annotations'
 import { getFileKind } from '../../../shared/file-types'
+import { toRelativePath } from '../../../shared/paths'
+import type { FileEntry } from '../../../shared/types'
 
 const DEFAULT_EXPAND_DEPTH = 2
 const DEFAULT_EXPAND_MAX_FILES = 20
@@ -71,7 +73,7 @@ export function findParentPath(
   return null
 }
 
-function flattenImageFiles(entries: FileEntry[]): FileEntry[] {
+export function flattenImageFiles(entries: FileEntry[]): FileEntry[] {
   const images: FileEntry[] = []
 
   for (const node of entries) {
@@ -101,4 +103,100 @@ export function getAdjacentImagePaths(
     prev: index > 0 ? images[index - 1].path : null,
     next: index + 1 < images.length ? images[index + 1].path : null
   }
+}
+
+export function getImagePosition(
+  entries: FileEntry[],
+  currentPath: string
+): { index: number; total: number } | null {
+  const images = flattenImageFiles(entries)
+  const index = images.findIndex((node) => node.path === currentPath)
+  if (index < 0) return null
+  return { index, total: images.length }
+}
+
+export function isImageUnfinished(
+  relativePath: string,
+  imageStatuses: Record<string, ImageStatus>
+): boolean {
+  const status = imageStatuses[relativePath] ?? 'todo'
+  return status === 'todo' || status === 'in_progress'
+}
+
+export function countImageStatuses(
+  entries: FileEntry[],
+  folderRoot: string,
+  imageStatuses: Record<string, ImageStatus>
+): { total: number; done: number; skipped: number; left: number } {
+  const images = flattenImageFiles(entries)
+  let done = 0
+  let skipped = 0
+  let left = 0
+
+  for (const image of images) {
+    const relativePath = toRelativePath(folderRoot, image.path)
+    const status = imageStatuses[relativePath] ?? 'todo'
+    if (status === 'done') done++
+    else if (status === 'skipped') skipped++
+    else left++
+  }
+
+  return { total: images.length, done, skipped, left }
+}
+
+export function listImageStatusesInOrder(
+  entries: FileEntry[],
+  folderRoot: string,
+  imageStatuses: Record<string, ImageStatus>
+): ImageStatus[] {
+  return flattenImageFiles(entries).map(
+    (image) => imageStatuses[toRelativePath(folderRoot, image.path)] ?? 'todo'
+  )
+}
+
+export function findNextUnfinishedImage(
+  entries: FileEntry[],
+  folderRoot: string,
+  imageStatuses: Record<string, ImageStatus>,
+  fromPath: string
+): string | null {
+  const images = flattenImageFiles(entries)
+  const fromIndex = images.findIndex((node) => node.path === fromPath)
+  if (fromIndex < 0 || images.length === 0) return null
+
+  for (let offset = 1; offset < images.length; offset++) {
+    const index = (fromIndex + offset) % images.length
+    const image = images[index]
+    const relativePath = toRelativePath(folderRoot, image.path)
+    if (isImageUnfinished(relativePath, imageStatuses)) {
+      return image.path
+    }
+  }
+
+  return null
+}
+
+export function getImageAtIndex(entries: FileEntry[], index: number): FileEntry | null {
+  const images = flattenImageFiles(entries)
+  if (index < 0 || index >= images.length) return null
+  return images[index] ?? null
+}
+
+export function getImagePathByOffset(
+  entries: FileEntry[],
+  currentPath: string,
+  offset: number
+): string | null {
+  const images = flattenImageFiles(entries)
+  const index = images.findIndex((node) => node.path === currentPath)
+  if (index < 0) return null
+
+  const nextIndex = Math.min(Math.max(index + offset, 0), images.length - 1)
+  if (nextIndex === index) return null
+  return images[nextIndex]?.path ?? null
+}
+
+export function findLastImageFile(entries: FileEntry[]): FileEntry | null {
+  const images = flattenImageFiles(entries)
+  return images[images.length - 1] ?? null
 }

@@ -11,6 +11,10 @@ import type { FileEntry, RecentProject } from '../../shared/types'
 import type { AnnotationTool } from './components/AnnotationToolbar'
 import BrushSettings from './components/BrushSettings'
 import ConfirmDialog from './components/ConfirmDialog'
+import DatasetNavBar, {
+  DATASET_NAV_STEP,
+  type DatasetNavStats
+} from './components/DatasetNavBar'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
 import LabelPanel from './components/LabelPanel'
@@ -23,7 +27,18 @@ import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
 import { labelIndexFromCode } from './lib/label-shortcuts'
 import { ProjectContext } from './lib/project-context'
 import { SemanticMapStore } from './lib/semantic-map-store'
-import { getAdjacentImagePaths } from './lib/tree-nav'
+import {
+  countImageStatuses,
+  findFirstImageFile,
+  findLastImageFile,
+  findNextUnfinishedImage,
+  findNodeByPath,
+  getAdjacentImagePaths,
+  getImageAtIndex,
+  getImagePathByOffset,
+  getImagePosition,
+  listImageStatusesInOrder
+} from './lib/tree-nav'
 import { useProjectLifecycle } from './lib/useProjectLifecycle'
 import { useTextFileEditor } from './lib/useTextFileEditor'
 
@@ -82,20 +97,25 @@ const App: Component = () => {
     const previousPath = selectedPath()
     const previousFile = selectedFile()
 
-    if (node.path !== previousPath && previousFile && previousPath) {
+    if (node.path === previousPath) return
+
+    if (previousFile && previousPath) {
       textEditor.saveTextSnapshot(previousPath, previousFile, textEditor.textDraft(), textEditor.textSaved())
     }
 
-    if (node.path !== previousPath) {
-      await flushAnnotations()
-    }
-
+    // Update selection immediately so image scrubbing stays live.
     setSelectedPath(node.path)
     setSelectedFile(node)
     setFileInfo({
       name: node.name,
       size: node.size ?? 0
     })
+
+    // Image loads call saveCurrent() before replacing store state.
+    // Non-image files still need an explicit flush.
+    if (getFileKind(node.name) !== 'image') {
+      await flushAnnotations()
+    }
   }
 
   const lifecycle = useProjectLifecycle({
@@ -263,16 +283,87 @@ const App: Component = () => {
     return toRelativePath(root, path)
   }
 
-  const markImageStatus = (status: ImageStatus): void => {
-    const store = getActiveStore(projectSettings().segmentationMode, annotationStore, semanticStore)
-    void store.setImageStatus(status).then(() => {
-      const relativePath = currentImageRelativePath()
-      if (relativePath) handleImageStatusChange(relativePath, status)
-    })
+  const showDatasetNav = (): boolean =>
+    folderPath() !== null && selectedKind() === 'image' && selectedPath() !== null
+
+  const datasetNavStats = (): DatasetNavStats => {
+    const root = folderPath()
+    const path = selectedPath()
+    if (!root || !path || selectedKind() !== 'image') {
+      return { position: null, done: 0, skipped: 0, left: 0, total: 0, allReviewed: false }
+    }
+
+    const counts = countImageStatuses(entries(), root, imageStatuses())
+    return {
+      position: getImagePosition(entries(), path),
+      ...counts,
+      allReviewed: counts.total > 0 && counts.left === 0
+    }
   }
 
-  const handleMarkDone = (): void => markImageStatus('done')
-  const handleMarkSkipped = (): void => markImageStatus('skipped')
+  const goToPath = async (path: string | null): Promise<void> => {
+    if (!path) return
+    const node = findNodeByPath(entries(), path)
+    if (node) await selectFile(node)
+  }
+
+  const goAdjacent = async (direction: 'prev' | 'next'): Promise<void> => {
+    const path = selectedPath()
+    if (!path) return
+    const { prev, next } = getAdjacentImagePaths(entries(), path)
+    await goToPath(direction === 'prev' ? prev : next)
+  }
+
+  const goStep = async (offset: number): Promise<void> => {
+    const path = selectedPath()
+    if (!path) return
+    await goToPath(getImagePathByOffset(entries(), path, offset))
+  }
+
+  const goFirst = async (): Promise<void> => {
+    const node = findFirstImageFile(entries())
+    if (node) await selectFile(node)
+  }
+
+  const goLast = async (): Promise<void> => {
+    const node = findLastImageFile(entries())
+    if (node) await selectFile(node)
+  }
+
+  const goToIndex = (index: number): void => {
+    const node = getImageAtIndex(entries(), index)
+    if (!node || node.path === selectedPath()) return
+    void selectFile(node)
+  }
+
+  const goNextUnfinished = async (): Promise<void> => {
+    const path = selectedPath()
+    const root = folderPath()
+    if (!path || !root) return
+    await goToPath(findNextUnfinishedImage(entries(), root, imageStatuses(), path))
+  }
+
+  const completeAndAdvance = async (status: ImageStatus): Promise<void> => {
+    const path = selectedPath()
+    const root = folderPath()
+    if (!path || !root || selectedKind() !== 'image') return
+
+    await flushAnnotations()
+    const store = getActiveStore(projectSettings().segmentationMode, annotationStore, semanticStore)
+    await store.setImageStatus(status)
+
+    const relativePath = currentImageRelativePath()
+    const updatedStatuses = {
+      ...imageStatuses(),
+      ...(relativePath ? { [relativePath]: status } : {})
+    }
+    if (relativePath) handleImageStatusChange(relativePath, status)
+
+    const nextPath = findNextUnfinishedImage(entries(), root, updatedStatuses, path)
+    if (!nextPath) return
+
+    await goToPath(nextPath)
+  }
 
   createEffect(
     on(
@@ -305,8 +396,31 @@ const App: Component = () => {
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return
-      if (isEditableTarget(event.target)) return
+      if (event.defaultPrevented || isEditableTarget(event.target)) return
+
+      const isImage = selectedKind() === 'image' && selectedPath() !== null
+
+      if (isImage) {
+        if (event.key === '[' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          event.preventDefault()
+          void goAdjacent('prev')
+          return
+        }
+
+        if (event.key === ']' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          event.preventDefault()
+          void goAdjacent('next')
+          return
+        }
+
+        if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault()
+          void completeAndAdvance(event.shiftKey ? 'skipped' : 'done')
+          return
+        }
+      }
+
+      if (event.ctrlKey || event.metaKey || event.altKey) return
 
       if (event.key === 'Escape') {
         if (activeTool() === 'cursor') {
@@ -434,17 +548,9 @@ const App: Component = () => {
                   showShortcuts={() => activeTool() === 'rectangle' || activeTool() === 'mask'}
                   error={labelError}
                 />
-                <div class="flex shrink-0 flex-col gap-1.5 border-t border-base-content/10 p-2">
-                  <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkDone}>
-                    Mark done
-                  </button>
-                  <button type="button" class="btn btn-sm btn-outline w-full" onClick={handleMarkSkipped}>
-                    Skip
-                  </button>
-                </div>
               </aside>
             </Show>
-            <div class="flex min-w-0 flex-1 flex-col bg-base-100">
+            <div class="relative flex min-w-0 flex-1 flex-col bg-base-100">
               <FileViewer
                 kind={selectedKind}
                 fileName={() => selectedFile()?.name ?? null}
@@ -453,11 +559,33 @@ const App: Component = () => {
                 imageLayers={imageLayers}
                 textLoading={() => textEditor.textLoading()}
                 error={loadError}
+                showProgressStrip={showDatasetNav}
+                progressStats={datasetNavStats}
+                progressStatuses={() => {
+                  const root = folderPath()
+                  if (!root) return []
+                  return listImageStatusesInOrder(entries(), root, imageStatuses())
+                }}
+                onProgressSeek={goToIndex}
                 onImageLoad={handleImageLoad}
                 onTextChange={textEditor.setTextDraft}
                 textDraft={textEditor.textDraft}
                 onTextSave={textEditor.saveOpenTextIfDirty}
               />
+              <Show when={showDatasetNav()}>
+                <DatasetNavBar
+                  stats={datasetNavStats}
+                  onFirst={() => void goFirst()}
+                  onStepBack={() => void goStep(-DATASET_NAV_STEP)}
+                  onPrev={() => void goAdjacent('prev')}
+                  onPlay={() => void goNextUnfinished()}
+                  onNext={() => void goAdjacent('next')}
+                  onStepForward={() => void goStep(DATASET_NAV_STEP)}
+                  onLast={() => void goLast()}
+                  onSkip={() => void completeAndAdvance('skipped')}
+                  onDone={() => void completeAndAdvance('done')}
+                />
+              </Show>
             </div>
           </Show>
           <Show when={!folderPath()}>
@@ -469,7 +597,10 @@ const App: Component = () => {
             />
           </Show>
         </div>
-        <StatusBar info={fileInfo} />
+        <StatusBar
+          info={fileInfo}
+          imagePosition={() => (showDatasetNav() ? datasetNavStats().position : null)}
+        />
         <ConfirmDialog
           open={() => labelDeletePrompt() !== null}
           title={() => {

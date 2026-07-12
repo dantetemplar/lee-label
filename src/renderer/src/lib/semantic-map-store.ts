@@ -73,7 +73,10 @@ export class SemanticMapStore extends PersistedImageStore {
     relativePath: string,
     dimensions: { width: number; height: number }
   ): Promise<void> {
+    const generation = this.beginLoadGeneration()
     await this.saveCurrent()
+    if (!this.isLoadGenerationCurrent(generation)) return
+
     this.beginLoad(relativePath, dimensions)
     this.undoStack = []
     this.redoStack = []
@@ -83,6 +86,7 @@ export class SemanticMapStore extends PersistedImageStore {
       this.api.images.getOrCreate(relativePath, dimensions.width, dimensions.height),
       this.api.semanticMasks.get(relativePath)
     ])
+    if (!this.isLoadGenerationCurrent(generation)) return
 
     this.imageStatus[1](imageRecord.status)
 

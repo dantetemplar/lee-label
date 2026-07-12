@@ -15,12 +15,22 @@ export class PersistedImageStore {
   protected saveTimer: ReturnType<typeof setTimeout> | undefined
   protected imageWidth = 0
   protected imageHeight = 0
+  protected loadGeneration = 0
 
   constructor(
     protected readonly api: AppAPI = window.api,
     protected readonly onDirtyChange?: (dirty: boolean) => void,
     protected readonly onStatusChange?: (relativePath: string, status: ImageStatus) => void
   ) {}
+
+  protected beginLoadGeneration(): number {
+    this.loadGeneration += 1
+    return this.loadGeneration
+  }
+
+  protected isLoadGenerationCurrent(generation: number): boolean {
+    return generation === this.loadGeneration
+  }
 
   protected markDirtyAndSchedule(onSave: () => Promise<void>): void {
     if (!this.dirty[0]()) {

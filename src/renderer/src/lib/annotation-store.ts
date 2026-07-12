@@ -115,7 +115,10 @@ export class AnnotationStore extends PersistedImageStore {
     relativePath: string,
     dimensions: { width: number; height: number }
   ): Promise<void> {
+    const generation = this.beginLoadGeneration()
     await this.saveCurrent()
+    if (!this.isLoadGenerationCurrent(generation)) return
+
     this.beginLoad(relativePath, dimensions)
     this.undoStack = []
     this.redoStack = []
@@ -125,6 +128,7 @@ export class AnnotationStore extends PersistedImageStore {
       this.api.images.getOrCreate(relativePath, dimensions.width, dimensions.height),
       this.api.shapes.list(relativePath)
     ])
+    if (!this.isLoadGenerationCurrent(generation)) return
 
     this.imageStatus[1](imageRecord.status)
 
@@ -135,6 +139,7 @@ export class AnnotationStore extends PersistedImageStore {
         continue
       }
       const blob = await this.api.masks.get(shape.id)
+      if (!this.isLoadGenerationCurrent(generation)) return
       if (!blob) continue
       working.push({
         ...shape,
@@ -142,6 +147,7 @@ export class AnnotationStore extends PersistedImageStore {
       })
     }
 
+    if (!this.isLoadGenerationCurrent(generation)) return
     this.shapes[1](working)
     this.selectedShapeId[1](null)
     this.finishLoad()

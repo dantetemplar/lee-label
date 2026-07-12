@@ -8,7 +8,10 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)}MB`
 }
 
-const StatusBar: Component<{ info: () => FileInfo | null }> = (props) => (
+const StatusBar: Component<{
+  info: () => FileInfo | null
+  imagePosition?: () => { index: number; total: number } | null
+}> = (props) => (
   <footer class="flex h-[var(--statusbar-height)] min-h-[var(--statusbar-height)] w-full shrink-0 items-center justify-end border-base-300 bg-base-200 px-3 text-xs text-base-content/60 border-t">
     <Show when={props.info()}>
       {(info) => (
@@ -26,6 +29,16 @@ const StatusBar: Component<{ info: () => FileInfo | null }> = (props) => (
           </Show>
           <span class="h-3.5 w-px bg-base-300" />
           <span class="whitespace-nowrap px-2">{formatSize(info().size)}</span>
+          <Show when={props.imagePosition?.()}>
+            {(position) => (
+              <>
+                <span class="h-3.5 w-px bg-base-300" />
+                <span class="whitespace-nowrap px-2 tabular-nums">
+                  {position().index + 1} / {position().total}
+                </span>
+              </>
+            )}
+          </Show>
         </div>
       )}
     </Show>

@@ -167,9 +167,9 @@ const TreeNode: Component<{
           <span
             class="ml-auto mr-2 h-2 w-2 shrink-0 rounded-full"
             classList={{
-              'bg-amber-500': imageStatus() === 'in_progress',
+              'bg-primary': imageStatus() === 'in_progress',
               'bg-green-500': imageStatus() === 'done',
-              'bg-gray-400': imageStatus() === 'skipped'
+              'bg-neutral': imageStatus() === 'skipped'
             }}
           />
         </Show>

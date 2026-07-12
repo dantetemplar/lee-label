@@ -1,4 +1,4 @@
-import type { Component } from 'solid-js'
+import type { Accessor, Component } from 'solid-js'
 import { For, Show, createSignal, onCleanup, onMount } from 'solid-js'
 import type { ImageLayers } from '../../../shared/image-layers'
 import { useProjectContext } from '../lib/project-context'
@@ -9,8 +9,10 @@ import { toLocalImageUrl } from '../lib/local-image-url'
 import AnnotationOverlay from './AnnotationOverlay'
 import TopologyAlertBanner from './TopologyAlertBanner'
 
+const EMPTY_LAYERS: ImageLayers = { prevPath: null, currentPath: '', nextPath: null }
+
 const ImageViewer: Component<{
-  layers: ImageLayers
+  layers: Accessor<ImageLayers | null>
   onLoad: (dims: { width: number; height: number }) => void
   onError: () => void
 }> = (props) => {
@@ -39,7 +41,7 @@ const ImageViewer: Component<{
 
   const layerCache = createImageLayerCache({
     layerRefs,
-    layers: () => props.layers,
+    layers: () => props.layers() ?? EMPTY_LAYERS,
     onLoad: props.onLoad,
     onError: props.onError,
     fitToViewport: viewport.fitToViewport,
@@ -103,7 +105,7 @@ const ImageViewer: Component<{
   return (
     <div
       ref={viewportRef}
-      class="relative min-h-0 min-w-0 flex-1 overflow-hidden touch-none outline-none focus:outline-none"
+      class="relative h-full min-h-0 min-w-0 flex-1 overflow-hidden touch-none outline-none focus:outline-none"
       classList={{ 'cursor-grabbing': viewport.panning() }}
       style={{ cursor: viewportCursor() }}
       tabindex={0}

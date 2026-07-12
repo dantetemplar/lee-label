@@ -2,7 +2,7 @@
 
 @plugin 'daisyui' {
   themes: cmyk --default;
-  include: button, input, modal, toggle, range, badge, kbd;
+  include: button, input, modal, toggle, range, badge, kbd, progress;
 }
 
 @theme {
