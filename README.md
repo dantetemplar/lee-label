@@ -1,6 +1,6 @@
 # Lee Label
 
-**The no-nonsense, local-first labeling app for images.** 🏷️✨
+**The no-nonsense, local-first image labeling app that feels instant ✨** 
 
 Open a folder. Label. Done. No accounts, no cloud upload, no SaaS — your images stay on your machine.
 
@@ -14,28 +14,41 @@ Built with Electron, SolidJS, and SQLite.
 - **Label palette** — custom colors, hotkeys, quick switching
 - **Cross-platform** — Linux, Windows, and macOS builds
 
-## Setup
+<details>
+  <summary><h2>Development</h2></summary>
+
+**Stack**
+
+| Layer    | Tech                                      |
+| -------- | ----------------------------------------- |
+| Desktop  | Electron + electron-vite                  |
+| UI       | SolidJS, Tailwind CSS, daisyUI            |
+| Storage  | SQLite (`better-sqlite3`)                 |
+
+
+*Required*
+* [Node.js](https://nodejs.org/)
+* [pnpm](https://pnpm.io/)
+
+Install dependencies:
 
 ```bash
 pnpm install
 ```
 
-Requires [Node.js](https://nodejs.org/) and [pnpm](https://pnpm.io/).
-
-## Development
+Run the development server:
 
 ```bash
 pnpm dev
 ```
 
-## Quality checks
-
+### Quality checks
 ```bash
 pnpm format && pnpm lint --fix && pnpm typecheck
 pnpm test
 ```
 
-## Build
+### Build
 
 ```bash
 pnpm build:linux
@@ -45,13 +58,7 @@ pnpm build:mac
 
 Artifacts are produced via `electron-builder` after `electron-vite build`.
 
-## Stack
-
-| Layer    | Tech                                      |
-| -------- | ----------------------------------------- |
-| Desktop  | Electron + electron-vite                  |
-| UI       | SolidJS, Tailwind CSS, daisyUI            |
-| Storage  | SQLite (`better-sqlite3`)                 |
+</details>
 
 ## License
 
