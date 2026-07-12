@@ -9,12 +9,17 @@ import {
   POLYGON_SIMPLIFICATION_EDIT
 } from '../../../shared/segmentation'
 import { hexToRgbNormalized } from '../../../shared/label-color'
-import type { ViewTransform } from '../lib/annotation-coords'
+import type { RectCorner, ViewTransform } from '../lib/annotation-coords'
 import {
   clampToImage,
   hitTestMaskBounds,
   hitTestPolygon,
   hitTestRectangle,
+  hitTestRectangleCorner,
+  normalizeRectFromPoints,
+  oppositeRectCorner,
+  rectangleCornerPoints,
+  rectanglesIntersect,
   snapPointToImagePixel,
   viewportToImage
 } from '../lib/annotation-coords'
@@ -62,6 +67,7 @@ import AnnotationShapeLayer from './AnnotationShapeLayer'
 export type { TopologyAlert }
 
 const MIN_RECT_SIZE = 3
+const CORNER_HIT_SCREEN_PX = 10
 
 function findShapeAtPoint(
   shapes: WorkingShape[],
@@ -73,6 +79,25 @@ function findShapeAtPoint(
     if (shape.type === 'rectangle' && hitTestRectangle(x, y, shape)) return shape
     if (shape.type === 'mask' && hitTestMaskBounds(x, y, shape.bounds)) return shape
     if (shape.type === 'polygon' && hitTestPolygon(x, y, shape.points)) return shape
+  }
+  return null
+}
+
+function cornerCursor(corner: RectCorner): string {
+  return corner === 'ne' || corner === 'sw' ? 'nesw-resize' : 'nwse-resize'
+}
+
+function findRectangleCornerAtPoint(
+  shapes: WorkingShape[],
+  x: number,
+  y: number,
+  hitRadius: number
+): { shape: WorkingShape & { type: 'rectangle' }; corner: RectCorner } | null {
+  for (let index = shapes.length - 1; index >= 0; index--) {
+    const shape = shapes[index]
+    if (shape.type !== 'rectangle') continue
+    const corner = hitTestRectangleCorner(x, y, shape, hitRadius)
+    if (corner) return { shape, corner }
   }
   return null
 }
@@ -102,6 +127,8 @@ const AnnotationOverlay: Component<{
     width: number
     height: number
   } | null>(null)
+  const [draftRectMode, setDraftRectMode] = createSignal<'draw' | 'erase'>('draw')
+  const [pendingRectOrigin, setPendingRectOrigin] = createSignal<Point2D | null>(null)
   const [hoverPoint, setHoverPoint] = createSignal<Point2D | null>(null)
   const [topologyIssues, setTopologyIssues] = createSignal<TopologyIssueMask[]>([])
   const [editingShapeId, setEditingShapeId] = createSignal<string | null>(null)
@@ -109,10 +136,58 @@ const AnnotationOverlay: Component<{
 
   let lastPointerClient: { x: number; y: number } | null = null
 
-  let dragMode: 'none' | 'draw-rect' | 'move-rect' = 'none'
+  let dragMode: 'none' | 'draw-rect' | 'finish-rect' | 'resize-rect' | 'erase-rect' = 'none'
   let dragStart = { x: 0, y: 0 }
-  let moveShapeId: string | null = null
-  let moveOffset = { x: 0, y: 0 }
+  let resizeShapeId: string | null = null
+  let resizeAnchor = { x: 0, y: 0 }
+  let rectPointerId: number | null = null
+
+  const cornerHitRadius = (): number =>
+    Math.max(MIN_RECT_SIZE, CORNER_HIT_SCREEN_PX / props.transform().scale)
+
+  const clearRectDraft = (): void => {
+    setPendingRectOrigin(null)
+    setDraftRect(null)
+    setDraftRectMode('draw')
+  }
+
+  const commitRectangleAt = (rect: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }): boolean => {
+    const labelId = props.activeLabelId()
+    if (!labelId || rect.width < MIN_RECT_SIZE || rect.height < MIN_RECT_SIZE) return false
+    props.store.pushUndo()
+    const shape = props.store.createRectangle(labelId, rect)
+    props.store.setShapes([...props.store.shapes[0](), shape])
+    props.store.setSelectedShapeId(shape.id)
+    clearRectDraft()
+    return true
+  }
+
+  const stopRectPointerCapture = (): void => {
+    if (
+      rectPointerId !== null &&
+      overlayRef &&
+      overlayRef.hasPointerCapture(rectPointerId)
+    ) {
+      overlayRef.releasePointerCapture(rectPointerId)
+    }
+    rectPointerId = null
+  }
+
+  const stopInteraction = (): void => {
+    stopRectPointerCapture()
+    dragMode = 'none'
+    resizeShapeId = null
+  }
+
+  const captureRectPointer = (event: PointerEvent): void => {
+    rectPointerId = event.pointerId
+    overlayRef?.setPointerCapture(event.pointerId)
+  }
 
   let brushEngine: BrushEngine | null = null
   const brushSession = createBrushSessionState()
@@ -728,14 +803,6 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   })
 
-  const stopInteraction = (): void => {
-    dragMode = 'none'
-    moveShapeId = null
-    setDraftRect(null)
-    window.removeEventListener('mousemove', handleMouseMove)
-    window.removeEventListener('mouseup', handleMouseUp)
-  }
-
   const stopBrushDrawing = (): void => {
     if (!brushSession.isDrawing) return
 
@@ -789,58 +856,101 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   }
 
-  const handleMouseMove = (event: MouseEvent): void => {
-    const point = getImagePoint(event)
-    const size = props.imageSize()
-    if (!point || !size) return
-
-    if (dragMode === 'draw-rect') {
-      const width = Math.round(point.x - dragStart.x)
-      const height = Math.round(point.y - dragStart.y)
-      const x = width < 0 ? point.x : dragStart.x
-      const y = height < 0 ? point.y : dragStart.y
-      setDraftRect({
-        x,
-        y,
-        width: Math.abs(width),
-        height: Math.abs(height)
-      })
+  const updateRectDrag = (point: Point2D): void => {
+    if (dragMode === 'draw-rect' || dragMode === 'finish-rect' || dragMode === 'erase-rect') {
+      setDraftRect(normalizeRectFromPoints(dragStart, point))
       return
     }
 
-    if (dragMode === 'move-rect' && moveShapeId) {
-      const shapes = props.store.shapes[0]()
-      const next = shapes.map((shape) => {
-        if (shape.id !== moveShapeId || shape.type !== 'rectangle') return shape
-        const nextX = Math.round(
-          Math.min(Math.max(point.x - moveOffset.x, 0), size.width - shape.width)
-        )
-        const nextY = Math.round(
-          Math.min(Math.max(point.y - moveOffset.y, 0), size.height - shape.height)
-        )
-        return { ...shape, x: nextX, y: nextY }
+    if (dragMode !== 'resize-rect' || !resizeShapeId) return
+    const next = normalizeRectFromPoints(resizeAnchor, point)
+    const shapes = props.store.shapes[0]()
+    props.store.setShapes(
+      shapes.map((shape) => {
+        if (shape.id !== resizeShapeId || shape.type !== 'rectangle') return shape
+        return {
+          ...shape,
+          x: next.x,
+          y: next.y,
+          width: Math.max(next.width, 1),
+          height: Math.max(next.height, 1)
+        }
       })
-      props.store.setShapes(next)
+    )
+  }
+
+  const eraseRectanglesIntersecting = (eraser: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }): void => {
+    if (eraser.width < MIN_RECT_SIZE || eraser.height < MIN_RECT_SIZE) return
+    const shapes = props.store.shapes[0]()
+    const remaining = shapes.filter(
+      (shape) => shape.type !== 'rectangle' || !rectanglesIntersect(eraser, shape)
+    )
+    if (remaining.length === shapes.length) return
+
+    props.store.pushUndo()
+    const selectedId = props.store.selectedShapeId[0]()
+    props.store.setShapes(remaining)
+    if (selectedId && !remaining.some((shape) => shape.id === selectedId)) {
+      props.store.setSelectedShapeId(null)
     }
   }
 
-  const handleMouseUp = (): void => {
+  const finishRectPointer = (point: Point2D | null): void => {
     if (dragMode === 'draw-rect') {
-      const rect = draftRect()
-      const labelId = props.activeLabelId()
-      if (rect && labelId && rect.width >= MIN_RECT_SIZE && rect.height >= MIN_RECT_SIZE) {
-        props.store.pushUndo()
-        const shape = props.store.createRectangle(labelId, rect)
-        props.store.setShapes([...props.store.shapes[0](), shape])
-        props.store.setSelectedShapeId(shape.id)
+      const rect = point ? normalizeRectFromPoints(dragStart, point) : draftRect()
+      if (rect && rect.width >= MIN_RECT_SIZE && rect.height >= MIN_RECT_SIZE) {
+        commitRectangleAt(rect)
+      } else {
+        setDraftRectMode('draw')
+        setPendingRectOrigin(dragStart)
+        setDraftRect({ x: dragStart.x, y: dragStart.y, width: 0, height: 0 })
       }
+      stopInteraction()
+      return
     }
 
-    if (dragMode === 'move-rect') {
+    if (dragMode === 'finish-rect') {
+      const rect = point ? normalizeRectFromPoints(dragStart, point) : draftRect()
+      if (rect) {
+        if (!commitRectangleAt(rect)) {
+          setDraftRect(rect)
+        }
+      }
+      stopInteraction()
+      return
+    }
+
+    if (dragMode === 'erase-rect') {
+      const rect = point ? normalizeRectFromPoints(dragStart, point) : draftRect()
+      if (rect) eraseRectanglesIntersecting(rect)
+      clearRectDraft()
+      stopInteraction()
+      return
+    }
+
+    if (dragMode === 'resize-rect') {
       props.store.markDirty()
+      stopInteraction()
     }
+  }
 
-    stopInteraction()
+  const beginRectangleCornerResize = (
+    event: PointerEvent,
+    shape: WorkingShape & { type: 'rectangle' },
+    corner: RectCorner
+  ): void => {
+    props.store.pushUndo()
+    props.store.setSelectedShapeId(shape.id)
+    project.setActiveLabelId(shape.labelId)
+    dragMode = 'resize-rect'
+    resizeShapeId = shape.id
+    resizeAnchor = rectangleCornerPoints(shape)[oppositeRectCorner(corner)]
+    captureRectPointer(event)
   }
 
   const handleOverlayPointerDown = (event: PointerEvent): void => {
@@ -881,50 +991,142 @@ const AnnotationOverlay: Component<{
       return
     }
 
+    if (event.button !== 0 && event.button !== 2) return
+    if (dragMode !== 'none') return
+
+    const tool = props.activeTool()
+
+    if (
+      tool === 'rectangle' &&
+      props.segmentationMode() === 'instance' &&
+      event.button === 2
+    ) {
+      event.preventDefault()
+      const point = getImagePoint(event)
+      if (!point) return
+      clearRectDraft()
+      dragMode = 'erase-rect'
+      dragStart = point
+      setDraftRectMode('erase')
+      setDraftRect({ x: point.x, y: point.y, width: 0, height: 0 })
+      captureRectPointer(event)
+      return
+    }
+
     if (event.button !== 0) return
 
     event.preventDefault()
     const point = getImagePoint(event)
     if (!point) return
 
-    const tool = props.activeTool()
-
     if (tool === 'cursor') {
+      const selectedId = props.store.selectedShapeId[0]()
+      if (selectedId) {
+        const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
+        if (selected?.type === 'rectangle') {
+          const corner = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
+          if (corner) {
+            beginRectangleCornerResize(event, selected, corner)
+            return
+          }
+        }
+      }
+
       const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
       props.store.setSelectedShapeId(hit?.id ?? null)
       if (hit) project.setActiveLabelId(hit.labelId)
-      if (hit?.type === 'rectangle') {
-        props.store.pushUndo()
-        dragMode = 'move-rect'
-        moveShapeId = hit.id
-        moveOffset = { x: point.x - hit.x, y: point.y - hit.y }
-        window.addEventListener('mousemove', handleMouseMove)
-        window.addEventListener('mouseup', handleMouseUp)
-      }
       return
     }
 
     if (tool === 'rectangle' && props.segmentationMode() === 'instance') {
+      const pendingOrigin = pendingRectOrigin()
+      const cornerHit = findRectangleCornerAtPoint(
+        props.store.shapes[0](),
+        point.x,
+        point.y,
+        cornerHitRadius()
+      )
+
+      if (cornerHit && !pendingOrigin) {
+        beginRectangleCornerResize(event, cornerHit.shape, cornerHit.corner)
+        return
+      }
+
+      if (pendingOrigin) {
+        // Second LMB click: press now, commit on release.
+        dragMode = 'finish-rect'
+        dragStart = pendingOrigin
+        setDraftRectMode('draw')
+        setDraftRect(normalizeRectFromPoints(pendingOrigin, point))
+        captureRectPointer(event)
+        return
+      }
+
       if (!props.activeLabelId()) return
       dragMode = 'draw-rect'
       dragStart = point
+      setDraftRectMode('draw')
       setDraftRect({ x: point.x, y: point.y, width: 0, height: 0 })
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
+      captureRectPointer(event)
     }
   }
 
   const handleOverlayPointerMove = (event: PointerEvent): void => {
+    if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode !== 'none') {
+      const point = getImagePoint(event)
+      if (point) updateRectDrag(point)
+      return
+    }
+
     const tool = props.activeTool()
 
     if (tool === 'cursor') {
       const point = getImagePoint(event)
       if (!point) {
         setHoveredShapeId(null)
+        if (overlayRef) overlayRef.style.cursor = ''
         return
       }
+
+      const selectedId = props.store.selectedShapeId[0]()
+      if (selectedId && overlayRef) {
+        const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
+        if (selected?.type === 'rectangle') {
+          const corner = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
+          if (corner) {
+            overlayRef.style.cursor = cornerCursor(corner)
+            setHoveredShapeId(selected.id)
+            return
+          }
+        }
+      }
+
       const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
       setHoveredShapeId(hit?.id ?? null)
+      if (overlayRef) overlayRef.style.cursor = ''
+      return
+    }
+
+    if (tool === 'rectangle' && props.segmentationMode() === 'instance') {
+      const point = getImagePoint(event)
+      if (!point || !overlayRef) return
+
+      const pendingOrigin = pendingRectOrigin()
+      if (pendingOrigin && dragMode === 'none') {
+        setDraftRect(normalizeRectFromPoints(pendingOrigin, point))
+      }
+
+      if (dragMode !== 'none') return
+      const cornerHit =
+        pendingOrigin == null
+          ? findRectangleCornerAtPoint(
+              props.store.shapes[0](),
+              point.x,
+              point.y,
+              cornerHitRadius()
+            )
+          : null
+      overlayRef.style.cursor = cornerHit ? cornerCursor(cornerHit.corner) : 'crosshair'
       return
     }
 
@@ -954,7 +1156,17 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   }
 
-  const handleOverlayPointerUp = (): void => {
+  const handleOverlayPointerUp = (event: PointerEvent): void => {
+    if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode !== 'none') {
+      const allowedButton =
+        event.type === 'pointercancel' ||
+        event.button === 0 ||
+        (event.button === 2 && dragMode === 'erase-rect')
+      if (!allowedButton) return
+      finishRectPointer(getImagePoint(event))
+      return
+    }
+
     if (props.activeTool() !== 'mask') return
     stopBrushDrawing()
   }
@@ -981,10 +1193,18 @@ const AnnotationOverlay: Component<{
 
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (event.key === 'Escape') {
-      if (dragMode === 'draw-rect' || draftRect()) {
+      if (
+        dragMode === 'draw-rect' ||
+        dragMode === 'finish-rect' ||
+        dragMode === 'erase-rect' ||
+        dragMode === 'resize-rect' ||
+        draftRect() ||
+        pendingRectOrigin()
+      ) {
         event.preventDefault()
         event.stopPropagation()
         stopInteraction()
+        clearRectDraft()
         return
       }
 
@@ -1012,6 +1232,12 @@ const AnnotationOverlay: Component<{
       else store?.undo()
     }
   }
+
+  createEffect(() => {
+    if (props.activeTool() === 'rectangle') return
+    clearRectDraft()
+    if (overlayRef) overlayRef.style.cursor = ''
+  })
 
   createEffect(() => {
     if (props.activeTool() !== 'mask' || props.segmentationMode() !== 'instance') return
@@ -1070,9 +1296,12 @@ const AnnotationOverlay: Component<{
           onPointerDown={handleOverlayPointerDown}
           onPointerMove={handleOverlayPointerMove}
           onPointerUp={handleOverlayPointerUp}
+          onPointerCancel={handleOverlayPointerUp}
           onPointerLeave={handleOverlayPointerLeave}
           onContextMenu={(event) => {
-            if (props.activeTool() === 'mask') event.preventDefault()
+            if (props.activeTool() === 'mask' || props.activeTool() === 'rectangle') {
+              event.preventDefault()
+            }
           }}
         >
           <Show when={props.segmentationMode() === 'instance'}>
@@ -1090,12 +1319,14 @@ const AnnotationOverlay: Component<{
           <AnnotationShapeLayer
             width={size().width}
             height={size().height}
+            scale={props.transform().scale}
             store={props.store}
             labels={props.labels}
             activeLabelId={props.activeLabelId}
             hiddenShapeId={editingShapeId}
             hoveredShapeId={hoveredShapeId}
             draftRect={draftRect}
+            draftRectMode={draftRectMode}
             brushSvgPreview={brushSvgPreview}
           />
         </div>

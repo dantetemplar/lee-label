@@ -2,13 +2,13 @@
 
 @plugin 'daisyui' {
   themes: cmyk --default;
-  include: button, input, modal, toggle, range, badge;
+  include: button, input, modal, toggle, range, badge, kbd;
 }
 
 @theme {
   --titlebar-height: 30px;
   --sidebar-width: 260px;
-  --toolbar-width: 44px;
+  --toolbar-width: 48px;
   --statusbar-height: 22px;
 }
 

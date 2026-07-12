@@ -5,6 +5,31 @@ import { panFromScreenDrag, snapPanToImagePixelGrid } from './annotation-coords'
 export const MAX_SCALE_MULTIPLIER = 16
 export const ZOOM_INTENSITY = 0.0015
 export const FIT_PADDING = 16
+/** Wheel events closer than this inherit the burst's mouse/trackpad classification. */
+export const WHEEL_BURST_GAP_MS = 80
+
+type WheelDeltaEvent = WheelEvent & { wheelDeltaX?: number; wheelDeltaY?: number }
+
+/**
+ * Best-effort mouse-wheel vs trackpad classification.
+ * There is no reliable browser API (WHATWG/W3C still open); Chromium exposes
+ * non-standard wheelDelta* as multiples of ±120 per physical notch.
+ */
+export function classifyMouseWheel(event: WheelEvent): boolean {
+  if (event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) return true
+
+  const e = event as WheelDeltaEvent
+  if (typeof e.wheelDeltaY === 'number' && e.wheelDeltaY !== 0) {
+    return e.wheelDeltaY % 120 === 0
+  }
+  if (typeof e.wheelDeltaX === 'number' && e.wheelDeltaX !== 0) {
+    return e.wheelDeltaX % 120 === 0
+  }
+
+  // Fallback without wheelDelta*: diagonal motion is almost always a trackpad.
+  if (event.deltaX !== 0 && event.deltaY !== 0) return false
+  return Number.isInteger(event.deltaX) && Number.isInteger(event.deltaY)
+}
 
 export interface SidePadding {
   left: number
@@ -142,6 +167,8 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
   let panStartY = 0
   let panOriginX = 0
   let panOriginY = 0
+  let lastWheelTime = -Infinity
+  let burstIsMouseWheel = false
 
   const maxScale = (): number => computeMaxScale(minScale())
 
@@ -218,8 +245,22 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
 
   const handleWheel = (event: WheelEvent): void => {
     event.preventDefault()
-    const nextScale = scale() * Math.exp(-event.deltaY * ZOOM_INTENSITY)
-    zoomAt(event.clientX, event.clientY, nextScale)
+
+    const now = performance.now()
+    if (now - lastWheelTime > WHEEL_BURST_GAP_MS) {
+      burstIsMouseWheel = classifyMouseWheel(event)
+    }
+    lastWheelTime = now
+
+    // Zoom: mouse wheel, Ctrl/Meta+scroll, or touchpad pinch (ctrlKey).
+    // Pan: touchpad two-finger scroll (vertical + horizontal).
+    if (event.ctrlKey || event.metaKey || burstIsMouseWheel) {
+      const nextScale = scale() * Math.exp(-event.deltaY * ZOOM_INTENSITY)
+      zoomAt(event.clientX, event.clientY, nextScale)
+      return
+    }
+
+    setClampedPan(panX() - event.deltaX, panY() - event.deltaY)
   }
 
   const stopPan = (): void => {

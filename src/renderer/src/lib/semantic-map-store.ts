@@ -9,6 +9,8 @@ interface SemanticSnapshot {
 
 export class SemanticMapStore extends PersistedImageStore {
   readonly classMap = createSignal<Uint16Array | null>(null)
+  readonly canUndo = createSignal(false)
+  readonly canRedo = createSignal(false)
 
   private undoStack: SemanticSnapshot[] = []
   private redoStack: SemanticSnapshot[] = []
@@ -27,12 +29,18 @@ export class SemanticMapStore extends PersistedImageStore {
     return { classMap: new Uint16Array(map) }
   }
 
+  private syncHistoryFlags(): void {
+    this.canUndo[1](this.undoStack.length > 0)
+    this.canRedo[1](this.redoStack.length > 0)
+  }
+
   pushUndo(): void {
     const snap = this.snapshot()
     if (!snap) return
     this.undoStack.push(snap)
     if (this.undoStack.length > PERSISTED_UNDO_STACK_LIMIT) this.undoStack.shift()
     this.redoStack = []
+    this.syncHistoryFlags()
   }
 
   undo(): boolean {
@@ -41,6 +49,7 @@ export class SemanticMapStore extends PersistedImageStore {
     const current = this.snapshot()
     if (current) this.redoStack.push(current)
     this.classMap[1](previous.classMap)
+    this.syncHistoryFlags()
     this.markDirty()
     return true
   }
@@ -51,6 +60,7 @@ export class SemanticMapStore extends PersistedImageStore {
     const current = this.snapshot()
     if (current) this.undoStack.push(current)
     this.classMap[1](next.classMap)
+    this.syncHistoryFlags()
     this.markDirty()
     return true
   }
@@ -67,6 +77,7 @@ export class SemanticMapStore extends PersistedImageStore {
     this.beginLoad(relativePath, dimensions)
     this.undoStack = []
     this.redoStack = []
+    this.syncHistoryFlags()
 
     const [imageRecord, semantic] = await Promise.all([
       this.api.images.getOrCreate(relativePath, dimensions.width, dimensions.height),
@@ -89,6 +100,7 @@ export class SemanticMapStore extends PersistedImageStore {
     this.classMap[1](null)
     this.undoStack = []
     this.redoStack = []
+    this.syncHistoryFlags()
   }
 
   async saveCurrent(): Promise<void> {

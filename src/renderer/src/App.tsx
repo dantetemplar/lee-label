@@ -1,28 +1,29 @@
 import type { Component } from 'solid-js'
 import { createEffect, createSignal, on, onCleanup, onMount, Show } from 'solid-js'
-import type { FileEntry, RecentProject } from '../../shared/types'
 import type { ImageStatus, Label, LabelDeleteStats } from '../../shared/annotations'
+import { APP_DISPLAY_NAME } from '../../shared/app-name'
+import { getFileKind, type FileKind } from '../../shared/file-types'
+import type { ImageLayers } from '../../shared/image-layers'
+import { toRelativePath } from '../../shared/paths'
 import type { ProjectSettings } from '../../shared/segmentation'
 import { DEFAULT_SEGMENTATION_MODE } from '../../shared/segmentation'
-import { getFileKind, type FileKind } from '../../shared/file-types'
+import type { FileEntry, RecentProject } from '../../shared/types'
+import type { AnnotationTool } from './components/AnnotationToolbar'
+import BrushSettings from './components/BrushSettings'
+import ConfirmDialog from './components/ConfirmDialog'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
 import LabelPanel from './components/LabelPanel'
-import BrushSettings from './components/BrushSettings'
-import type { AnnotationTool } from './components/AnnotationToolbar'
-import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
 import WelcomeScreen from './components/WelcomeScreen'
-import ConfirmDialog from './components/ConfirmDialog'
-import type { ImageLayers } from '../../shared/image-layers'
-import { getAdjacentImagePaths } from './lib/tree-nav'
-import { APP_DISPLAY_NAME } from '../../shared/app-name'
-import { AnnotationStore } from './lib/annotation-store'
-import { SemanticMapStore } from './lib/semantic-map-store'
-import { toRelativePath } from '../../shared/paths'
 import { getActiveStore } from './lib/annotation-backend'
+import { AnnotationStore } from './lib/annotation-store'
+import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
+import { labelIndexFromCode } from './lib/label-shortcuts'
 import { ProjectContext } from './lib/project-context'
+import { SemanticMapStore } from './lib/semantic-map-store'
+import { getAdjacentImagePaths } from './lib/tree-nav'
 import { useProjectLifecycle } from './lib/useProjectLifecycle'
 import { useTextFileEditor } from './lib/useTextFileEditor'
 
@@ -297,16 +298,54 @@ const App: Component = () => {
   )
 
   createEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      if (!(target instanceof HTMLElement)) return false
+      const tag = target.tagName
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable
+    }
+
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      if (activeTool() === 'cursor') {
-        if (annotationStore.selectedShapeId[0]()) {
-          event.preventDefault()
-          annotationStore.setSelectedShapeId(null)
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return
+      if (isEditableTarget(event.target)) return
+
+      if (event.key === 'Escape') {
+        if (activeTool() === 'cursor') {
+          if (annotationStore.selectedShapeId[0]()) {
+            event.preventDefault()
+            annotationStore.setSelectedShapeId(null)
+          }
+          return
         }
+        event.preventDefault()
+        setActiveTool('cursor')
         return
       }
-      setActiveTool('cursor')
+
+      const tool = activeTool()
+      if (tool === 'rectangle' || tool === 'mask') {
+        const labelIndex = labelIndexFromCode(event.code)
+        if (labelIndex !== null) {
+          const label = labels()[labelIndex]
+          if (label) {
+            event.preventDefault()
+            setActiveLabelId(label.id)
+          }
+          return
+        }
+      }
+
+      if (tool !== 'cursor') return
+
+      if (event.code === 'Digit1' && projectSettings().segmentationMode === 'instance') {
+        event.preventDefault()
+        setActiveTool('rectangle')
+        return
+      }
+
+      if (event.code === 'Digit2') {
+        event.preventDefault()
+        setActiveTool('mask')
+      }
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -392,6 +431,7 @@ const App: Component = () => {
                   onCreate={handleCreateLabel}
                   onUpdate={handleUpdateLabel}
                   onDelete={handleRequestDeleteLabel}
+                  showShortcuts={() => activeTool() === 'rectangle' || activeTool() === 'mask'}
                   error={labelError}
                 />
                 <div class="flex shrink-0 flex-col gap-1.5 border-t border-base-content/10 p-2">

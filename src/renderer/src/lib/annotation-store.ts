@@ -48,6 +48,8 @@ export class AnnotationStore extends PersistedImageStore {
   readonly shapes = createSignal<WorkingShape[]>([])
   readonly selectedShapeId = createSignal<string | null>(null)
   readonly segmentationMode = createSignal<SegmentationMode>('instance')
+  readonly canUndo = createSignal(false)
+  readonly canRedo = createSignal(false)
 
   private undoStack: AnnotationSnapshot[] = []
   private redoStack: AnnotationSnapshot[] = []
@@ -71,10 +73,16 @@ export class AnnotationStore extends PersistedImageStore {
     }
   }
 
+  private syncHistoryFlags(): void {
+    this.canUndo[1](this.undoStack.length > 0)
+    this.canRedo[1](this.redoStack.length > 0)
+  }
+
   pushUndo(): void {
     this.undoStack.push(this.snapshot())
     if (this.undoStack.length > PERSISTED_UNDO_STACK_LIMIT) this.undoStack.shift()
     this.redoStack = []
+    this.syncHistoryFlags()
   }
 
   undo(): boolean {
@@ -83,6 +91,7 @@ export class AnnotationStore extends PersistedImageStore {
     this.redoStack.push(this.snapshot())
     this.shapes[1](cloneShapes(previous.shapes))
     this.selectedShapeId[1](previous.selectedShapeId)
+    this.syncHistoryFlags()
     this.markDirty()
     return true
   }
@@ -93,6 +102,7 @@ export class AnnotationStore extends PersistedImageStore {
     this.undoStack.push(this.snapshot())
     this.shapes[1](cloneShapes(next.shapes))
     this.selectedShapeId[1](next.selectedShapeId)
+    this.syncHistoryFlags()
     this.markDirty()
     return true
   }
@@ -109,6 +119,7 @@ export class AnnotationStore extends PersistedImageStore {
     this.beginLoad(relativePath, dimensions)
     this.undoStack = []
     this.redoStack = []
+    this.syncHistoryFlags()
 
     const [imageRecord, shapeList] = await Promise.all([
       this.api.images.getOrCreate(relativePath, dimensions.width, dimensions.height),
@@ -142,6 +153,7 @@ export class AnnotationStore extends PersistedImageStore {
     this.selectedShapeId[1](null)
     this.undoStack = []
     this.redoStack = []
+    this.syncHistoryFlags()
   }
 
   async saveCurrent(): Promise<void> {

@@ -67,6 +67,8 @@ export function snapPanToImagePixelGrid(
   }
 }
 
+export type RectCorner = 'nw' | 'ne' | 'sw' | 'se'
+
 export function hitTestRectangle(
   x: number,
   y: number,
@@ -78,6 +80,79 @@ export function hitTestRectangle(
     y >= rect.y &&
     y <= rect.y + rect.height
   )
+}
+
+export function rectangleCornerPoints(rect: {
+  x: number
+  y: number
+  width: number
+  height: number
+}): Record<RectCorner, { x: number; y: number }> {
+  return {
+    nw: { x: rect.x, y: rect.y },
+    ne: { x: rect.x + rect.width, y: rect.y },
+    sw: { x: rect.x, y: rect.y + rect.height },
+    se: { x: rect.x + rect.width, y: rect.y + rect.height }
+  }
+}
+
+export function oppositeRectCorner(corner: RectCorner): RectCorner {
+  switch (corner) {
+    case 'nw':
+      return 'se'
+    case 'ne':
+      return 'sw'
+    case 'sw':
+      return 'ne'
+    case 'se':
+      return 'nw'
+  }
+}
+
+export function normalizeRectFromPoints(
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+): { x: number; y: number; width: number; height: number } {
+  const x = Math.min(a.x, b.x)
+  const y = Math.min(a.y, b.y)
+  return {
+    x,
+    y,
+    width: Math.abs(b.x - a.x),
+    height: Math.abs(b.y - a.y)
+  }
+}
+
+export function rectanglesIntersect(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number }
+): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  )
+}
+
+export function hitTestRectangleCorner(
+  x: number,
+  y: number,
+  rect: { x: number; y: number; width: number; height: number },
+  hitRadius: number
+): RectCorner | null {
+  const corners = rectangleCornerPoints(rect)
+  let best: RectCorner | null = null
+  let bestDist = hitRadius
+  for (const corner of Object.keys(corners) as RectCorner[]) {
+    const point = corners[corner]
+    const dist = Math.hypot(point.x - x, point.y - y)
+    if (dist <= bestDist) {
+      best = corner
+      bestDist = dist
+    }
+  }
+  return best
 }
 
 export function hitTestMaskBounds(

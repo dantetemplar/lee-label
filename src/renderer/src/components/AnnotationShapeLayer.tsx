@@ -8,6 +8,11 @@ import { hexToRgba } from '../../../shared/label-color'
 import type { Component } from 'solid-js'
 import { For, Show, createMemo } from 'solid-js'
 import type { AnnotationStore } from '../lib/annotation-store'
+import {
+  rectangleCornerPoints,
+  rectanglesIntersect,
+  type RectCorner
+} from '../lib/annotation-coords'
 
 function polygonPointsToSvg(points: { x: number; y: number }[]): string {
   return points.map((point) => `${point.x},${point.y}`).join(' ')
@@ -19,15 +24,21 @@ function shapeFillOpacity(selected: boolean, hovered: boolean): number {
   return SHAPE_OPACITY
 }
 
+const CORNER_KEYS: RectCorner[] = ['nw', 'ne', 'sw', 'se']
+const CORNER_SCREEN_RADIUS = 4
+const ERASER_MARK_COLOR = '#ef4444'
+
 const AnnotationShapeLayer: Component<{
   width: number
   height: number
+  scale: number
   store: AnnotationStore
   labels: () => Label[]
   activeLabelId: () => string | null
   hiddenShapeId: () => string | null
   hoveredShapeId: () => string | null
   draftRect: () => { x: number; y: number; width: number; height: number } | null
+  draftRectMode: () => 'draw' | 'erase'
   brushSvgPreview: () => { pixels: Array<{ x: number; y: number }>; opacity: number } | null
 }> = (props) => {
   const labelMap = createMemo(() => new Map(props.labels().map((label) => [label.id, label])))
@@ -47,6 +58,18 @@ const AnnotationShapeLayer: Component<{
           shape.type === 'polygon' && shape.id !== props.hiddenShapeId()
       )
   )
+  const eraserMarkedIds = createMemo(() => {
+    const draft = props.draftRect()
+    if (!draft || props.draftRectMode() !== 'erase') return new Set<string>()
+    if (draft.width <= 0 || draft.height <= 0) return new Set<string>()
+    const marked = new Set<string>()
+    for (const rect of rectangles()) {
+      if (rectanglesIntersect(draft, rect)) marked.add(rect.id)
+    }
+    return marked
+  })
+  const cornerRadius = (): number => Math.max(2 / props.scale, CORNER_SCREEN_RADIUS / props.scale)
+  const cornerStroke = (): number => 1.25 / props.scale
 
   return (
     <svg
@@ -60,19 +83,37 @@ const AnnotationShapeLayer: Component<{
           const label = (): Label | undefined => labelMap().get(rect.labelId)
           const selected = (): boolean => props.store.selectedShapeId[0]() === rect.id
           const hovered = (): boolean => props.hoveredShapeId() === rect.id
+          const marked = (): boolean => eraserMarkedIds().has(rect.id)
+          const color = (): string => (marked() ? ERASER_MARK_COLOR : (label()?.color ?? '#ffffff'))
+          const corners = (): Record<RectCorner, { x: number; y: number }> =>
+            rectangleCornerPoints(rect)
           return (
-            <rect
-              x={rect.x}
-              y={rect.y}
-              width={rect.width}
-              height={rect.height}
-              fill={hexToRgba(
-                label()?.color ?? '#ffffff',
-                shapeFillOpacity(selected(), hovered())
-              )}
-              stroke={label()?.color ?? '#ffffff'}
-              stroke-width={selected() ? 2.5 : 1.5}
-            />
+            <g>
+              <rect
+                x={rect.x}
+                y={rect.y}
+                width={rect.width}
+                height={rect.height}
+                fill={hexToRgba(
+                  color(),
+                  marked() ? SELECTED_SHAPE_OPACITY : shapeFillOpacity(selected(), hovered())
+                )}
+                stroke={color()}
+                stroke-width={selected() || marked() ? 2.5 : 1.5}
+              />
+              <For each={CORNER_KEYS}>
+                {(key) => (
+                  <circle
+                    cx={corners()[key].x}
+                    cy={corners()[key].y}
+                    r={cornerRadius()}
+                    fill="#ffffff"
+                    stroke={color()}
+                    stroke-width={cornerStroke()}
+                  />
+                )}
+              </For>
+            </g>
           )
         }}
       </For>
@@ -95,18 +136,38 @@ const AnnotationShapeLayer: Component<{
         }}
       </For>
       <Show when={props.draftRect()}>
-        {(rect) => (
-          <rect
-            x={rect().x}
-            y={rect().y}
-            width={rect().width}
-            height={rect().height}
-            fill={hexToRgba(activeLabelColor(), SHAPE_OPACITY)}
-            stroke={activeLabelColor()}
-            stroke-width={1.5}
-            stroke-dasharray="4 3"
-          />
-        )}
+        {(rect) => {
+          const corners = (): Record<RectCorner, { x: number; y: number }> =>
+            rectangleCornerPoints(rect())
+          const isErase = (): boolean => props.draftRectMode() === 'erase'
+          const color = (): string => (isErase() ? '#ffffff' : activeLabelColor())
+          return (
+            <g>
+              <rect
+                x={rect().x}
+                y={rect().y}
+                width={rect().width}
+                height={rect().height}
+                fill={hexToRgba(color(), isErase() ? 0.35 : SHAPE_OPACITY)}
+                stroke={color()}
+                stroke-width={1.5}
+                stroke-dasharray={isErase() ? '5 4' : '4 3'}
+              />
+              <For each={CORNER_KEYS}>
+                {(key) => (
+                  <circle
+                    cx={corners()[key].x}
+                    cy={corners()[key].y}
+                    r={cornerRadius()}
+                    fill="#ffffff"
+                    stroke={color()}
+                    stroke-width={cornerStroke()}
+                  />
+                )}
+              </For>
+            </g>
+          )
+        }}
       </Show>
       <Show when={props.brushSvgPreview()}>
         {(preview) => (

@@ -115,6 +115,30 @@ function registerIpc(): void {
   })
 }
 
+function attachRendererConsole(webContents: BrowserWindow['webContents']): void {
+  webContents.on('console-message', ({ level, message, lineNumber, sourceId }) => {
+    const location = sourceId ? ` (${sourceId}:${lineNumber})` : ''
+    const line = `[renderer:${level}] ${message}${location}`
+    if (level === 'error') {
+      console.error(line)
+      return
+    }
+    if (level === 'warning') {
+      console.warn(line)
+      return
+    }
+    console.log(line)
+  })
+
+  webContents.on('render-process-gone', (_event, details) => {
+    console.error('[renderer] process gone:', details.reason, details)
+  })
+
+  webContents.on('unresponsive', () => {
+    console.error('[renderer] window became unresponsive')
+  })
+}
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1280,
@@ -134,6 +158,10 @@ function createWindow(): void {
 
   if (!appIcon.isEmpty()) {
     mainWindow.setIcon(appIcon)
+  }
+
+  if (is.dev) {
+    attachRendererConsole(mainWindow.webContents)
   }
 
   mainWindow.on('ready-to-show', () => {

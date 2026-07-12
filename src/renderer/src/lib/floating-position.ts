@@ -47,16 +47,17 @@ export function bindFloatingPosition(
 
   floating.style.position = strategy
 
-  return autoUpdate(reference, floating, () => {
+  const update = (): void => {
     void computePosition(reference, floating, {
       placement,
       strategy,
       middleware: [offset(offsetValue), flip(), shift({ padding })]
     }).then(({ x, y }) => {
-      Object.assign(floating.style, {
-        left: `${x}px`,
-        top: `${y}px`
-      })
+      floating.style.left = `${Math.round(x)}px`
+      floating.style.top = `${Math.round(y)}px`
     })
-  })
+  }
+
+  update()
+  return autoUpdate(reference, floating, update)
 }

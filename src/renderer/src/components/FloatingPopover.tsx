@@ -20,47 +20,56 @@ const FloatingPopover: Component<{
   const [floatingEl, setFloatingEl] = createSignal<HTMLDivElement | undefined>()
 
   createEffect(() => {
-    if (!props.open()) return
-
+    const isOpen = props.open()
     const floating = floatingEl()
-    const anchor = props.anchor?.()
-    const reference = props.reference?.()
+    const reference = props.reference ? props.reference() : undefined
+    const anchor = props.anchor ? props.anchor() : undefined
+
+    if (!isOpen || !floating) return
+
     const positionReference =
       anchor !== undefined ? createVirtualReference(anchor.x, anchor.y) : reference
-    if (!positionReference || !floating) return
+    if (!positionReference) return
+
+    const rect = positionReference.getBoundingClientRect()
+    floating.style.position = 'fixed'
+    floating.style.left = `${Math.round(rect.left)}px`
+    floating.style.top = `${Math.round(rect.bottom + 4)}px`
 
     const cleanupPosition = bindFloatingPosition(positionReference, floating, {
       placement: props.placement ?? 'bottom-start',
       offset: 4
     })
 
-    const isInsidePopover = (target: Node): boolean => {
-      const currentFloating = floatingEl()
-      const currentReference = props.reference?.()
-      return (
-        (currentFloating?.contains(target) ?? false) ||
-        (currentReference?.contains(target) ?? false)
-      )
+    const isInside = (target: EventTarget | null): boolean => {
+      if (!(target instanceof Node)) return false
+      if (floating.contains(target)) return true
+      const currentReference = props.reference ? props.reference() : undefined
+      return currentReference?.contains(target) ?? false
     }
 
-    const handleClick = (event: MouseEvent): void => {
-      if (isInsidePopover(event.target as Node)) return
+    const handlePointerDown = (event: PointerEvent): void => {
+      if (event.button > 0) return
+      if (isInside(event.target)) return
       props.onClose()
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       event.preventDefault()
-      event.stopPropagation()
+      event.stopImmediatePropagation()
       props.onClose()
     }
 
-    document.addEventListener('click', handleClick)
+    const timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', handlePointerDown, true)
+    }, 0)
     document.addEventListener('keydown', handleKeyDown, true)
 
     onCleanup(() => {
+      window.clearTimeout(timer)
       cleanupPosition()
-      document.removeEventListener('click', handleClick)
+      document.removeEventListener('pointerdown', handlePointerDown, true)
       document.removeEventListener('keydown', handleKeyDown, true)
     })
   })
@@ -72,7 +81,6 @@ const FloatingPopover: Component<{
           ref={setFloatingEl}
           class={`app z-50 rounded-lg border border-base-content/10 bg-base-100 shadow-lg ${props.fitContent ? 'w-fit' : 'min-w-[180px]'} ${props.panelClass ?? 'p-1'}`}
           role="menu"
-          onMouseDown={(event) => event.stopPropagation()}
         >
           {props.children}
         </div>
