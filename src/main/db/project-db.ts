@@ -24,7 +24,7 @@ import {
 import { ImagesRepository } from './images'
 import { LabelsRepository } from './labels'
 import { runMigrations } from './migrations'
-import { getDbPath } from './paths'
+import { ensureDbDir } from './paths'
 import { SemanticMasksRepository } from './semantic-masks'
 import { ShapesRepository } from './shapes'
 import type { DbContext } from './types'
@@ -46,7 +46,7 @@ export class ProjectDatabase implements DbContext {
 
   open(rootPath: string): void {
     this.close()
-    const dbPath = getDbPath(rootPath)
+    const dbPath = ensureDbDir(rootPath)
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('foreign_keys = ON')

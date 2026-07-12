@@ -33,6 +33,7 @@ async function readDirTree(dirPath: string): Promise<FileEntry[]> {
   })
 
   for (const entry of sorted) {
+    if (entry.name === '.lee-label') continue
     const fullPath = join(dirPath, entry.name)
     if (entry.isDirectory()) {
       const children = await readDirTree(fullPath)

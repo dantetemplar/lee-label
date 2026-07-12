@@ -1,11 +1,18 @@
 import Database from 'better-sqlite3'
-import { existsSync } from 'fs'
-import { join } from 'path'
+import { existsSync, mkdirSync } from 'fs'
+import { dirname, join } from 'path'
 
+const DB_DIR = '.lee-label'
 const DB_FILENAME = 'lee-label.sqlite'
 
 export function getDbPath(projectRoot: string): string {
-  return join(projectRoot, DB_FILENAME)
+  return join(projectRoot, DB_DIR, DB_FILENAME)
+}
+
+export function ensureDbDir(projectRoot: string): string {
+  const dbPath = getDbPath(projectRoot)
+  mkdirSync(dirname(dbPath), { recursive: true })
+  return dbPath
 }
 
 export function readStoredProjectName(rootPath: string): string | null {
