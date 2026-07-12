@@ -1,11 +1,12 @@
 {
   "name": "lee-label",
   "version": "1.0.0",
-  "description": "Lee Label — image and file labeling desktop app",
+  "description": "Lee Label — The no-nonsense, local-first labeling app for images.",
   "packageManager": "pnpm@11.1.3",
   "main": "./out/main/index.js",
-  "author": "Lee Label",
-  "homepage": "https://github.com/lee-label/lee-label",
+  "author": "Ruslan Belkov",
+  "license": "MIT",
+  "homepage": "https://github.com/dantetemplar/lee-label",
   "desktopName": "lee-label.desktop",
   "scripts": {
     "format": "prettier --write . -l",
