@@ -14,6 +14,7 @@ import type {
   UpdateLabelInput
 } from '../shared/annotations'
 import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
+import type { YoloImportOptions, YoloImportPreview, YoloImportResult } from '../shared/import'
 
 export interface AppAPI {
   window: {
@@ -23,8 +24,12 @@ export interface AppAPI {
     isMaximized: () => Promise<boolean>
     onMaximizedChange: (callback: (maximized: boolean) => void) => () => void
   }
+  shell: {
+    openExternal: (url: string) => Promise<void>
+  }
   files: {
     openFolder: () => Promise<string | null>
+    openFile: (filters?: { name: string; extensions: string[] }[]) => Promise<string | null>
     readDirectoryTree: (path: string) => Promise<import('../shared/types').FileEntry[]>
     readTextFile: (path: string) => Promise<string>
     writeTextFile: (path: string, content: string) => Promise<number>
@@ -83,6 +88,10 @@ export interface AppAPI {
       height: number,
       classMap: ArrayBuffer
     ) => Promise<SemanticMaskBlob>
+  }
+  import: {
+    yoloUltralyticsPreview: (options: YoloImportOptions) => Promise<YoloImportPreview>
+    yoloUltralytics: (options: YoloImportOptions) => Promise<YoloImportResult>
   }
 }
 

@@ -105,7 +105,7 @@ const ProjectSettingsModal: Component<{
           </label>
           <div class="block text-sm text-base-content/70">
             Path
-            <div class="field-readonly mt-2">{displayPath()}</div>
+            <div class="field-readonly mt-2 cursor-default">{displayPath()}</div>
           </div>
 
           <fieldset class="space-y-2">

@@ -11,6 +11,7 @@ import type {
   UpdateLabelInput
 } from '../shared/annotations'
 import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
+import type { YoloImportOptions, YoloImportPreview, YoloImportResult } from '../shared/import'
 
 const api = {
   window: {
@@ -25,8 +26,14 @@ const api = {
       return () => ipcRenderer.removeListener('window:maximized-changed', handler)
     }
   },
+  shell: {
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:open-external', url)
+  },
   files: {
     openFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:open-folder'),
+    openFile: (
+      filters?: { name: string; extensions: string[] }[]
+    ): Promise<string | null> => ipcRenderer.invoke('dialog:open-file', filters),
     readDirectoryTree: (path: string): Promise<FileEntry[]> =>
       ipcRenderer.invoke('fs:read-directory-tree', path),
     readTextFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read-text-file', path),
@@ -118,6 +125,12 @@ const api = {
       classMap: ArrayBuffer
     ): Promise<SemanticMaskBlob> =>
       ipcRenderer.invoke('semantic-masks:save', relativePath, width, height, classMap)
+  },
+  import: {
+    yoloUltralyticsPreview: (options: YoloImportOptions): Promise<YoloImportPreview> =>
+      ipcRenderer.invoke('import:yolo-ultralytics-preview', options),
+    yoloUltralytics: (options: YoloImportOptions): Promise<YoloImportResult> =>
+      ipcRenderer.invoke('import:yolo-ultralytics', options)
   }
 }
 

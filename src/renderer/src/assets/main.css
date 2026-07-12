@@ -23,8 +23,8 @@ body {
 }
 
 .app :is(.btn, button) {
-  user-select: text;
-  -webkit-user-select: text;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* Subtle focus — no heavy DaisyUI rings on click; light hint for keyboard nav */
@@ -81,7 +81,7 @@ body {
 }
 
 .app .field-readonly {
-  @apply rounded-lg border border-base-content/6 bg-base-200/80 px-3 py-2 text-sm text-base-content/50 cursor-default select-text;
+  @apply rounded-lg border border-base-content/6 bg-base-200/80 px-3 py-2 text-sm text-base-content/50 select-text;
 }
 
 .app input[type='range']:focus,

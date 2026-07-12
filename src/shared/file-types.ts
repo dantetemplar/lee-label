@@ -1,6 +1,6 @@
 export type FileKind = 'image' | 'text' | 'unsupported'
 
-const IMAGE_EXTENSIONS = new Set([
+export const IMAGE_EXTENSIONS = new Set([
   '.png',
   '.jpg',
   '.jpeg',

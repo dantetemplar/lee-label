@@ -10,6 +10,7 @@ import { addRecentProject, getRecentProjects, isExistingDirectory, removeRecentP
 import { APP_DISPLAY_NAME } from '../shared/app-name'
 import { formatDisplayPath } from '../shared/paths'
 import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
+import { registerImportIpc } from './import-ipc'
 import { resolveProjectPath } from './project-fs'
 
 registerImageProtocolSchemes()
@@ -69,6 +70,13 @@ function registerIpc(): void {
 
   ipcMain.handle('window:is-maximized', (event) => {
     return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false
+  })
+
+  ipcMain.handle('shell:open-external', async (_, url: string) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      throw new Error('Only http(s) URLs can be opened')
+    }
+    await shell.openExternal(url)
   })
 
   ipcMain.handle('dialog:open-folder', async (event) => {
@@ -200,6 +208,7 @@ app.whenReady().then(() => {
 
   registerIpc()
   registerAnnotationsIpc()
+  registerImportIpc()
   setupImageProtocol()
   createWindow()
 

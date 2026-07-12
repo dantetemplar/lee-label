@@ -11,6 +11,8 @@ const menuPanelClass =
 const menuItemClass =
   'flex w-full items-center gap-2.5 px-3.5 py-1.5 text-left text-[13px] leading-none text-base-content/88 hover:bg-base-300 disabled:pointer-events-none disabled:opacity-40'
 
+type OpenMenu = 'file' | 'import' | null
+
 const TitleBar: Component<{
   title: () => string
   hasOpenProject: () => boolean
@@ -18,49 +20,42 @@ const TitleBar: Component<{
   onGoToWelcomeScreen: () => void
   onOpenFolder: () => void
   onOpenRecent: (path: string) => void
+  onImportAnnotations: () => void
 }> = (props) => {
   const [maximized, setMaximized] = createSignal(false)
-  const [fileMenuOpen, setFileMenuOpen] = createSignal(false)
+  const [openMenu, setOpenMenu] = createSignal<OpenMenu>(null)
   const [recentSubmenuOpen, setRecentSubmenuOpen] = createSignal(false)
-  const [fileMenuRoot, setFileMenuRoot] = createSignal<HTMLDivElement>()
+  const [menuBarRoot, setMenuBarRoot] = createSignal<HTMLDivElement>()
 
-  const closeFileMenu = (): void => {
-    setFileMenuOpen(false)
+  const closeMenus = (): void => {
+    setOpenMenu(null)
     setRecentSubmenuOpen(false)
   }
 
-  const toggleFileMenu = (event: MouseEvent): void => {
+  const toggleMenu = (menu: Exclude<OpenMenu, null>, event: MouseEvent): void => {
     event.stopPropagation()
-    if (fileMenuOpen()) {
-      closeFileMenu()
+    if (openMenu() === menu) {
+      closeMenus()
       return
     }
     setRecentSubmenuOpen(false)
-    setFileMenuOpen(true)
-  }
-
-  const openRecentSubmenu = (): void => {
-    setRecentSubmenuOpen(true)
-  }
-
-  const closeRecentSubmenu = (): void => {
-    setRecentSubmenuOpen(false)
+    setOpenMenu(menu)
   }
 
   createEffect(() => {
-    if (!fileMenuOpen()) return
+    if (!openMenu()) return
 
     const handleClick = (event: MouseEvent): void => {
-      const root = fileMenuRoot()
+      const root = menuBarRoot()
       if (root?.contains(event.target as Node)) return
-      closeFileMenu()
+      closeMenus()
     }
 
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return
       event.preventDefault()
       event.stopPropagation()
-      closeFileMenu()
+      closeMenus()
     }
 
     document.addEventListener('click', handleClick)
@@ -80,20 +75,20 @@ const TitleBar: Component<{
 
   return (
     <header class="flex h-[var(--titlebar-height)] min-h-[var(--titlebar-height)] items-center border-base-300 bg-base-200 text-base-content border-b [-webkit-app-region:drag]">
-      <div class="flex items-center gap-1 pl-2 [-webkit-app-region:no-drag]">
+      <div class="flex items-center gap-1 pl-2 [-webkit-app-region:no-drag]" ref={setMenuBarRoot}>
         <AppLogo size={16} class="mx-1 shrink-0" />
-        <div class="relative" ref={setFileMenuRoot}>
+        <div class="relative">
           <button
             type="button"
             class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
-            classList={{ 'bg-base-300': fileMenuOpen() }}
+            classList={{ 'bg-base-300': openMenu() === 'file' }}
             aria-haspopup="menu"
-            aria-expanded={fileMenuOpen()}
-            onClick={toggleFileMenu}
+            aria-expanded={openMenu() === 'file'}
+            onClick={(event) => toggleMenu('file', event)}
           >
             File
           </button>
-          <Show when={fileMenuOpen()}>
+          <Show when={openMenu() === 'file'}>
             <div
               class={`absolute top-full left-0 z-50 min-w-[220px] ${menuPanelClass}`}
               role="menu"
@@ -105,7 +100,7 @@ const TitleBar: Component<{
                 class={menuItemClass}
                 disabled={!props.hasOpenProject()}
                 onClick={() => {
-                  closeFileMenu()
+                  closeMenus()
                   props.onGoToWelcomeScreen()
                 }}
               >
@@ -116,7 +111,7 @@ const TitleBar: Component<{
                 role="menuitem"
                 class={menuItemClass}
                 onClick={() => {
-                  closeFileMenu()
+                  closeMenus()
                   props.onOpenFolder()
                 }}
               >
@@ -124,8 +119,8 @@ const TitleBar: Component<{
               </button>
               <div
                 class="relative"
-                onMouseEnter={openRecentSubmenu}
-                onMouseLeave={closeRecentSubmenu}
+                onMouseEnter={() => setRecentSubmenuOpen(true)}
+                onMouseLeave={() => setRecentSubmenuOpen(false)}
               >
                 <button
                   type="button"
@@ -160,7 +155,7 @@ const TitleBar: Component<{
                             class={menuItemClass}
                             title={getRecentProjectFullLabel(project)}
                             onClick={() => {
-                              closeFileMenu()
+                              closeMenus()
                               props.onOpenRecent(project.path)
                             }}
                           >
@@ -178,7 +173,7 @@ const TitleBar: Component<{
                 role="menuitem"
                 class={menuItemClass}
                 onClick={() => {
-                  closeFileMenu()
+                  closeMenus()
                   window.api.window.close()
                 }}
               >
@@ -187,15 +182,48 @@ const TitleBar: Component<{
             </div>
           </Show>
         </div>
-        <span class="cursor-default px-2.5 text-xs leading-[var(--titlebar-height)] opacity-55">
-          Edit
-        </span>
-        <span class="cursor-default px-2.5 text-xs leading-[var(--titlebar-height)] opacity-55">
-          View
-        </span>
-        <span class="cursor-default px-2.5 text-xs leading-[var(--titlebar-height)] opacity-55">
+        <div class="relative">
+          <button
+            type="button"
+            class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
+            classList={{ 'bg-base-300': openMenu() === 'import' }}
+            aria-haspopup="menu"
+            aria-expanded={openMenu() === 'import'}
+            onClick={(event) => toggleMenu('import', event)}
+          >
+            Import
+          </button>
+          <Show when={openMenu() === 'import'}>
+            <div
+              class={`absolute top-full left-0 z-50 min-w-[220px] ${menuPanelClass}`}
+              role="menu"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                class={menuItemClass}
+                disabled={!props.hasOpenProject()}
+                onClick={() => {
+                  closeMenus()
+                  props.onImportAnnotations()
+                }}
+              >
+                Annotations…
+              </button>
+            </div>
+          </Show>
+        </div>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
+          onClick={() => {
+            closeMenus()
+            void window.api.shell.openExternal('https://github.com/dantetemplar/lee-label.git')
+          }}
+        >
           Help
-        </span>
+        </button>
       </div>
       <div class="flex min-w-0 flex-1 items-center justify-center px-20 text-xs text-base-content/60">
         <span class="truncate">{props.title()}</span>

@@ -17,6 +17,7 @@ import DatasetNavBar, {
 } from './components/DatasetNavBar'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
+import ImportAnnotationsModal from './components/ImportAnnotationsModal'
 import LabelPanel from './components/LabelPanel'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
@@ -58,6 +59,7 @@ const App: Component = () => {
     label: Label
     stats: LabelDeleteStats
   } | null>(null)
+  const [importModalOpen, setImportModalOpen] = createSignal(false)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
@@ -485,6 +487,34 @@ const App: Component = () => {
     setRecentProjects(recent)
   }
 
+  const openImportModal = async (): Promise<void> => {
+    if (!folderPath()) return
+    await flushAnnotations()
+    setImportModalOpen(true)
+  }
+
+  const handleImported = async (): Promise<void> => {
+    const [nextLabels, statuses] = await Promise.all([
+      window.api.labels.list(),
+      window.api.images.listStatuses()
+    ])
+    setLabels(nextLabels)
+    setImageStatuses(statuses)
+    if (!activeLabelId() && nextLabels[0]) {
+      setActiveLabelId(nextLabels[0].id)
+    }
+
+    const relativePath = annotationStore.currentRelativePath[0]()
+    const dims = annotationStore.getImageDimensions()
+    if (relativePath && dims.width > 0 && dims.height > 0) {
+      if (projectSettings().segmentationMode === 'semantic') {
+        await semanticStore.loadForImage(relativePath, dims)
+      } else {
+        await annotationStore.loadForImage(relativePath, dims)
+      }
+    }
+  }
+
   const projectContextValue = {
     annotationStore,
     semanticStore,
@@ -510,6 +540,7 @@ const App: Component = () => {
           onGoToWelcomeScreen={() => void lifecycle.goToWelcomeScreen()}
           onOpenFolder={() => void lifecycle.openFolder()}
           onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
+          onImportAnnotations={() => void openImportModal()}
         />
         <div class="flex min-h-0 flex-1">
           <Show when={folderPath()}>
@@ -621,6 +652,11 @@ const App: Component = () => {
           destructive
           onCancel={handleCancelDeleteLabel}
           onConfirm={() => void handleConfirmDeleteLabel()}
+        />
+        <ImportAnnotationsModal
+          open={importModalOpen}
+          onClose={() => setImportModalOpen(false)}
+          onImported={() => handleImported()}
         />
       </div>
     </ProjectContext.Provider>
