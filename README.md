@@ -8,11 +8,10 @@ Built with Electron, SolidJS, and SQLite.
 
 ## Features
 
-- **Local projects** — open any folder; metadata lives beside your files
-- **Image annotation** — rectangles and brushes with keyboard-driven labels
-- **File browser** — tree navigation, image/text preview, per-image status
-- **Label palette** — custom colors, hotkeys, quick switching
-- **Cross-platform** — Linux, Windows, and macOS builds
+- **Local-first** — open any folder and start labeling; metadata lives beside your files
+- **Cross-platform** — Linux, Windows, and macOS builds are available
+- **Instant** — fast image and mask rendering with preloading and WebGL shaders
+- **Tailored UX** — you will feel the flow, thanks to well-thought-out processes and hotkeys
 
 <details>
   <summary><h2>Development</h2></summary>
