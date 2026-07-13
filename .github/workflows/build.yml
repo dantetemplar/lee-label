@@ -46,7 +46,11 @@ jobs:
 
           if [ "$EVENT_NAME" = "release" ]; then
             echo "ref=$TAG_NAME" >> "$GITHUB_OUTPUT"
-            echo 'matrix={"include":[{"platform":"linux","os":"ubuntu-latest","command":"--linux AppImage deb --publish never"},{"platform":"win","os":"windows-latest","command":"--win --publish never"},{"platform":"mac","os":"macos-latest","command":"--mac --x64 --arm64 --publish never"}]}' >> "$GITHUB_OUTPUT"
+            {
+              echo 'matrix<<EOF'
+              echo '{"include":[{"platform":"linux","os":"ubuntu-latest","command":"--linux AppImage deb --publish never"},{"platform":"win","os":"windows-latest","command":"--win --publish never"},{"platform":"mac","os":"macos-latest","command":"--mac --x64 --arm64 --publish never"}]}'
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -68,8 +72,12 @@ jobs:
             exit 1
           fi
 
-          matrix=$(printf '%s\n' "${entries[@]}" | jq -s '{include: .}')
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          matrix=$(printf '%s\n' "${entries[@]}" | jq -c -s '{include: .}')
+          {
+            echo 'matrix<<EOF'
+            echo "$matrix"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
