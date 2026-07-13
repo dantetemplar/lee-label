@@ -4,10 +4,6 @@ import type { Component, JSX } from 'solid-js'
 import { Show, createEffect, createSignal } from 'solid-js'
 import { clearStickyHover } from '../lib/clear-sticky-hover'
 
-const log = (...args: unknown[]): void => {
-  console.debug('[AppPopover]', ...args)
-}
-
 const AppPopover: Component<{
   open: () => boolean
   onClose: () => void
@@ -56,7 +52,9 @@ const AppPopover: Component<{
 
   createEffect(() => {
     if (!props.open()) return
+    props.anchor?.()
     syncAnchor()
+
     const reference = props.reference?.()
     if (!reference || props.anchor?.()) return
 
@@ -72,15 +70,8 @@ const AppPopover: Component<{
     }
   })
 
-  createEffect(() => {
-    props.anchor?.()
-    if (props.open()) syncAnchor()
-  })
-
   const handleOpenChange = (open: boolean): void => {
-    log('onOpenChange', open)
     if (open) return
-    log('→ onClose()')
     props.onClose()
     clearStickyHover()
   }
@@ -102,10 +93,7 @@ const AppPopover: Component<{
       trapFocus={false}
       restoreFocus={false}
       onOutsidePointer={(event) => {
-        if (isReferenceTarget(event.target)) {
-          log('onOutsidePointer ignored (reference)')
-          event.preventDefault()
-        }
+        if (isReferenceTarget(event.target)) event.preventDefault()
       }}
     >
       <Show when={props.open()}>

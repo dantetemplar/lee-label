@@ -1,11 +1,7 @@
 import type { Component, JSX } from 'solid-js'
-import { createEffect, createUniqueId } from 'solid-js'
+import { createUniqueId } from 'solid-js'
 import { BsExclamationCircleFill } from 'solid-icons/bs'
 import FloatingModal from './FloatingModal'
-
-const log = (...args: unknown[]): void => {
-  console.debug('[ConfirmDialog]', ...args)
-}
 
 const ConfirmDialog: Component<{
   open: () => boolean
@@ -20,25 +16,11 @@ const ConfirmDialog: Component<{
   const messageId = createUniqueId()
   let confirmBtn: HTMLButtonElement | undefined
 
-  createEffect(() => {
-    if (!props.open()) return
-    queueMicrotask(() => {
-      confirmBtn?.focus({ preventScroll: true })
-      log('initial focus → OK', document.activeElement === confirmBtn)
-    })
-  })
-
   return (
     <FloatingModal
       open={props.open}
-      onClose={() => {
-        log('onClose → onCancel')
-        props.onCancel()
-      }}
-      onSubmit={() => {
-        log('onSubmit → onConfirm')
-        props.onConfirm()
-      }}
+      onClose={props.onCancel}
+      onSubmit={props.onConfirm}
       role="alertdialog"
       labelledBy={titleId}
       describedBy={messageId}
@@ -57,24 +39,14 @@ const ConfirmDialog: Component<{
         </div>
       </div>
       <div class="mt-6 flex justify-end gap-2">
-        <button
-          type="button"
-          class="btn btn-ghost"
-          onClick={() => {
-            log('Cancel click')
-            props.onCancel()
-          }}
-        >
+        <button type="button" class="btn btn-ghost" onClick={props.onCancel}>
           Cancel
         </button>
         <button
           type="button"
           ref={confirmBtn}
           class={`btn ${props.destructive ? 'btn-error' : 'btn-primary'}`}
-          onClick={() => {
-            log('OK click')
-            props.onConfirm()
-          }}
+          onClick={props.onConfirm}
         >
           {props.confirmLabel ?? 'OK'}
         </button>

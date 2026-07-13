@@ -44,8 +44,7 @@ const LabelPanel: Component<{
   const toggleColorPicker = (labelId: string, trigger: HTMLElement): void => {
     setColorPicker((current) => {
       if (current?.labelId === labelId) return null
-      const rect = trigger.getBoundingClientRect()
-      return { labelId, trigger, rect }
+      return { labelId, trigger }
     })
   }
 

@@ -14,8 +14,6 @@ import FloatingPopover from './FloatingPopover'
 export type PickerSession = {
   labelId: string
   trigger: HTMLElement
-  /** Viewport rect captured in the click handler (stable if the trigger remounts). */
-  rect: DOMRect
 }
 
 const LabelColorPicker: Component<{

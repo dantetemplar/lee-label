@@ -241,16 +241,12 @@ const ProjectSettingsModal: Component<{
     setModeChangePrompt(null)
   }
 
-  const handleSave = (): void => {
-    applySave()
-  }
-
   return (
     <FloatingModal
       open={props.open}
       onClose={props.onClose}
       onSubmit={() => {
-        if (canSave()) handleSave()
+        if (canSave()) applySave()
       }}
       labelledBy="project-settings-title"
       panelClass="max-w-2xl p-8"
@@ -401,7 +397,7 @@ const ProjectSettingsModal: Component<{
           class="btn btn-primary"
           classList={{ 'btn-disabled': !canSave() }}
           disabled={!canSave()}
-          onClick={handleSave}
+          onClick={applySave}
         >
           Save
         </button>
