@@ -57,6 +57,20 @@ pnpm build:mac
 
 Artifacts are produced via `electron-builder` after `electron-vite build`.
 
+### CI/CD
+
+The [Build](.github/workflows/build.yml) workflow builds installers on GitHub Actions.
+
+**Manual build** — Actions → Build → Run workflow:
+
+- **ref** — branch or tag to build (e.g. `main`, `v1.0.0`)
+- Toggle **Linux**, **Windows**, and/or **macOS**
+- Download artifacts from the completed run
+
+**Release build** — publish a GitHub Release from a tag; the workflow builds all platforms and attaches installers automatically.
+
+Linux CI builds AppImage and deb only (snap remains available via local `pnpm build:linux`).
+
 </details>
 
 ## License

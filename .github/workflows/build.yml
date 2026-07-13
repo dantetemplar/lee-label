@@ -1,0 +1,137 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or tag to build (e.g. main, v1.0.0)
+        type: string
+        default: main
+        required: true
+      build_linux:
+        description: Build Linux (AppImage + deb)
+        type: boolean
+        default: true
+      build_windows:
+        description: Build Windows (NSIS)
+        type: boolean
+        default: true
+      build_macos:
+        description: Build macOS (dmg + zip, x64 + arm64)
+        type: boolean
+        default: true
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      ref: ${{ steps.set-matrix.outputs.ref }}
+    steps:
+      - id: set-matrix
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_REF: ${{ inputs.ref }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          BUILD_LINUX: ${{ inputs.build_linux }}
+          BUILD_WINDOWS: ${{ inputs.build_windows }}
+          BUILD_MACOS: ${{ inputs.build_macos }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "release" ]; then
+            echo "ref=$TAG_NAME" >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"platform":"linux","os":"ubuntu-latest","command":"--linux AppImage deb --publish never"},{"platform":"win","os":"windows-latest","command":"--win --publish never"},{"platform":"mac","os":"macos-latest","command":"--mac --x64 --arm64 --publish never"}]}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
+
+          entries=()
+          if [ "$BUILD_LINUX" = "true" ]; then
+            entries+=('{"platform":"linux","os":"ubuntu-latest","command":"--linux AppImage deb --publish never"}')
+          fi
+          if [ "$BUILD_WINDOWS" = "true" ]; then
+            entries+=('{"platform":"win","os":"windows-latest","command":"--win --publish never"}')
+          fi
+          if [ "$BUILD_MACOS" = "true" ]; then
+            entries+=('{"platform":"mac","os":"macos-latest","command":"--mac --x64 --arm64 --publish never"}')
+          fi
+
+          if [ "${#entries[@]}" -eq 0 ]; then
+            echo "At least one platform must be selected."
+            exit 1
+          fi
+
+          matrix=$(printf '%s\n' "${entries[@]}" | jq -s '{include: .}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck and test
+        run: pnpm run typecheck && pnpm test
+
+      - name: Build app
+        run: pnpm run build
+
+      - name: Package
+        run: pnpm exec electron-builder ${{ matrix.command }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lee-label-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-*.yml
+          if-no-files-found: error
+
+  upload-release:
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/dist/*
