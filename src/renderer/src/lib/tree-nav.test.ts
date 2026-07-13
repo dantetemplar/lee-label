@@ -9,7 +9,8 @@ import {
   getImageAtIndex,
   getImagePathByOffset,
   getImagePosition,
-  isImageUnfinished
+  isImageUnfinished,
+  searchWorkspaceFiles
 } from './tree-nav'
 
 const root = '/project'
@@ -40,6 +41,28 @@ describe('tree-nav dataset helpers', () => {
   it('returns image position in flattened order', () => {
     expect(getImagePosition(entries, `${root}/b.jpg`)).toEqual({ index: 1, total: 4 })
     expect(getImagePosition(entries, `${root}/missing.jpg`)).toBeNull()
+  })
+
+  it('searches workspace files by name and relative path', () => {
+    const nestedEntries: FileEntry[] = [
+      folder('batch', [
+        { type: 'file', name: 'a.jpg', path: `${root}/batch/a.jpg`, size: 1 },
+        { type: 'file', name: 'b.jpg', path: `${root}/batch/b.jpg`, size: 1 }
+      ]),
+      { type: 'file', name: 'notes.txt', path: `${root}/docs/notes.txt`, size: 1 },
+      { type: 'file', name: 'batch-summary.md', path: `${root}/batch-summary.md`, size: 1 }
+    ]
+
+    expect(searchWorkspaceFiles(nestedEntries, root, 'b.jpg').map((node) => node.name)).toEqual([
+      'b.jpg'
+    ])
+    expect(searchWorkspaceFiles(nestedEntries, root, 'batch/').map((node) => node.name)).toEqual([
+      'a.jpg',
+      'b.jpg'
+    ])
+    expect(searchWorkspaceFiles(nestedEntries, root, 'notes').map((node) => node.name)).toEqual([
+      'notes.txt'
+    ])
   })
 
   it('counts statuses with missing entries treated as todo', () => {

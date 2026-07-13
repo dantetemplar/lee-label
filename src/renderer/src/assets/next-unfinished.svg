@@ -1,0 +1,40 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="46"
+  height="24"
+  viewBox="0 0 46 24"
+  fill="none"
+  role="img"
+  aria-label="Next unfinished"
+>
+  <defs>
+    <filter id="soft-glow" x="-15%" y="-25%" width="130%" height="150%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="0.28" result="blur"/>
+      <feFlood flood-color="#5D99F8" flood-opacity="0.32" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Filled Play symbol -->
+  <path
+    d="M3.5 2.5 18.5 12 3.5 21.5Z"
+    fill="#5D99F8"
+    filter="url(#soft-glow)"
+  />
+
+  <!-- Clock -->
+  <g
+    stroke="#5D99F8"
+    stroke-width="2.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#soft-glow)"
+  >
+    <circle cx="34.1" cy="12" r="9.9"/>
+    <path d="M34.1 5.7V12.1L38.4 15.7"/>
+  </g>
+</svg>

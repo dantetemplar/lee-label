@@ -200,3 +200,38 @@ export function findLastImageFile(entries: FileEntry[]): FileEntry | null {
   const images = flattenImageFiles(entries)
   return images[images.length - 1] ?? null
 }
+
+export function flattenWorkspaceFiles(entries: FileEntry[]): FileEntry[] {
+  const files: FileEntry[] = []
+
+  for (const node of entries) {
+    if (node.type === 'file') {
+      if (getFileKind(node.name) !== 'unsupported') files.push(node)
+    } else if (node.children) {
+      files.push(...flattenWorkspaceFiles(node.children))
+    }
+  }
+
+  return files
+}
+
+export function searchWorkspaceFiles(
+  entries: FileEntry[],
+  projectRoot: string,
+  query: string,
+  limit = 50
+): FileEntry[] {
+  const trimmed = query.trim().toLowerCase()
+  if (!trimmed) return []
+
+  const results: FileEntry[] = []
+  for (const file of flattenWorkspaceFiles(entries)) {
+    const relative = toRelativePath(projectRoot, file.path).toLowerCase()
+    if (file.name.toLowerCase().includes(trimmed) || relative.includes(trimmed)) {
+      results.push(file)
+      if (results.length >= limit) break
+    }
+  }
+
+  return results
+}

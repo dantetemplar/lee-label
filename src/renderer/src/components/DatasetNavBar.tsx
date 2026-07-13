@@ -1,19 +1,27 @@
 import type { Component, JSX } from 'solid-js'
 import { createSignal, For, Show } from 'solid-js'
 import {
-  BsCheckLg,
+  BsBan,
+  BsBanFill,
+  BsCheckCircle,
+  BsCheckCircleFill,
   BsChevronBarLeft,
   BsChevronBarRight,
   BsChevronDoubleLeft,
   BsChevronDoubleRight,
   BsChevronLeft,
   BsChevronRight,
-  BsPlayFill,
-  BsSkipForward
+  BsCircle,
+  BsClock,
+  BsClockFill
 } from 'solid-icons/bs'
 import type { ImageStatus } from '../../../shared/annotations'
+import type { FileEntry } from '../../../shared/types'
+import { NextUnfinishedIcon } from '../lib/dataset-nav-icons'
+import FileSearchPopover from './FileSearchPopover'
 
 export const DATASET_NAV_STEP = 10
+const NAV_ICON_SIZE = 18
 
 export interface DatasetNavStats {
   position: { index: number; total: number } | null
@@ -42,16 +50,20 @@ const TransportButton: Component<{
   title: string
   label: string
   disabled?: boolean
+  active?: boolean
+  wide?: boolean
   class?: string
+  activeClass?: string
   onClick: () => void
   children: JSX.Element
 }> = (props) => (
   <span class="inline-flex" title={props.title}>
     <button
       type="button"
-      class={`btn btn-ghost btn-square h-7 min-h-7 w-6 p-0 disabled:pointer-events-none disabled:bg-transparent disabled:text-base-content/45 disabled:opacity-100! ${props.class ?? 'text-base-content'}`}
+      class={`btn btn-ghost flex h-7 min-h-7 items-center justify-center p-0 disabled:pointer-events-none disabled:bg-transparent disabled:text-base-content/45 disabled:opacity-100! ${props.wide ? 'w-auto min-w-7 px-1' : 'btn-square w-7 min-w-7'} ${props.active ? (props.activeClass ?? 'bg-base-300') : ''} ${props.class ?? 'text-base-content'}`}
       disabled={props.disabled === true}
       aria-label={props.label}
+      aria-pressed={props.active === true}
       aria-disabled={props.disabled === true}
       onClick={() => {
         if (props.disabled) return
@@ -60,6 +72,15 @@ const TransportButton: Component<{
     >
       {props.children}
     </button>
+  </span>
+)
+
+const StatusIconSlot: Component<{ children: JSX.Element }> = (props) => (
+  <span
+    class="inline-flex shrink-0 items-center justify-center"
+    style={{ width: `${NAV_ICON_SIZE}px`, height: `${NAV_ICON_SIZE}px` }}
+  >
+    {props.children}
   </span>
 )
 
@@ -178,6 +199,10 @@ export const DatasetProgressStrip: Component<{
 /** Floating transport + Skip/Done over the workspace. */
 const DatasetNavBar: Component<{
   stats: () => DatasetNavStats
+  currentStatus: () => ImageStatus
+  entries: () => FileEntry[]
+  projectRoot: () => string | null
+  onSelectFile: (node: FileEntry) => void
   onFirst: () => void
   onStepBack: () => void
   onPrev: () => void
@@ -185,10 +210,13 @@ const DatasetNavBar: Component<{
   onNext: () => void
   onStepForward: () => void
   onLast: () => void
+  onClear: () => void
+  onInProgress: () => void
   onSkip: () => void
   onDone: () => void
 }> = (props) => {
   const position = (): { index: number; total: number } | null => props.stats().position
+  const status = (): ImageStatus => props.currentStatus()
 
   const atStart = (): boolean => {
     const pos = position()
@@ -206,6 +234,13 @@ const DatasetNavBar: Component<{
       aria-label="Dataset navigation"
     >
       <div class="flex max-w-full items-center gap-1.5">
+        <FileSearchPopover
+          entries={props.entries}
+          projectRoot={props.projectRoot}
+          iconSize={NAV_ICON_SIZE}
+          onSelectFile={props.onSelectFile}
+        />
+
         <FloatingChip class="gap-0 px-0.5">
           <TransportButton
             title="First image"
@@ -213,7 +248,7 @@ const DatasetNavBar: Component<{
             disabled={atStart()}
             onClick={props.onFirst}
           >
-            <BsChevronBarLeft size={16} aria-hidden="true" />
+            <BsChevronBarLeft size={NAV_ICON_SIZE} aria-hidden="true" />
           </TransportButton>
           <TransportButton
             title={`Back ${DATASET_NAV_STEP} images`}
@@ -221,7 +256,7 @@ const DatasetNavBar: Component<{
             disabled={atStart()}
             onClick={props.onStepBack}
           >
-            <BsChevronDoubleLeft size={16} aria-hidden="true" />
+            <BsChevronDoubleLeft size={NAV_ICON_SIZE} aria-hidden="true" />
           </TransportButton>
           <TransportButton
             title="Previous image ["
@@ -229,14 +264,15 @@ const DatasetNavBar: Component<{
             disabled={atStart()}
             onClick={props.onPrev}
           >
-            <BsChevronLeft size={16} aria-hidden="true" />
+            <BsChevronLeft size={NAV_ICON_SIZE} aria-hidden="true" />
           </TransportButton>
           <TransportButton
             title="Next unfinished"
             label="Next unfinished"
+            wide
             onClick={props.onPlay}
           >
-            <BsPlayFill size={16} aria-hidden="true" />
+            <NextUnfinishedIcon class="w-auto" style={{ height: `${NAV_ICON_SIZE}px` }} aria-hidden="true" />
           </TransportButton>
           <TransportButton
             title="Next image ]"
@@ -244,7 +280,7 @@ const DatasetNavBar: Component<{
             disabled={atEnd()}
             onClick={props.onNext}
           >
-            <BsChevronRight size={16} aria-hidden="true" />
+            <BsChevronRight size={NAV_ICON_SIZE} aria-hidden="true" />
           </TransportButton>
           <TransportButton
             title={`Forward ${DATASET_NAV_STEP} images`}
@@ -252,7 +288,7 @@ const DatasetNavBar: Component<{
             disabled={atEnd()}
             onClick={props.onStepForward}
           >
-            <BsChevronDoubleRight size={16} aria-hidden="true" />
+            <BsChevronDoubleRight size={NAV_ICON_SIZE} aria-hidden="true" />
           </TransportButton>
           <TransportButton
             title="Last image"
@@ -260,26 +296,67 @@ const DatasetNavBar: Component<{
             disabled={atEnd()}
             onClick={props.onLast}
           >
-            <BsChevronBarRight size={16} aria-hidden="true" />
+            <BsChevronBarRight size={NAV_ICON_SIZE} aria-hidden="true" />
           </TransportButton>
         </FloatingChip>
 
         <FloatingChip class="gap-0 px-0.5">
           <TransportButton
+            title="Clear status"
+            label="Clear status"
+            active={status() === 'todo'}
+            class="text-base-content!"
+            activeClass="bg-base-content/10 ring-1 ring-inset ring-base-content/30"
+            onClick={props.onClear}
+          >
+            <StatusIconSlot>
+              <BsCircle size={NAV_ICON_SIZE} aria-hidden="true" />
+            </StatusIconSlot>
+          </TransportButton>
+          <TransportButton
+            title="Mark in progress"
+            label="In progress"
+            active={status() === 'in_progress'}
+            class="text-primary!"
+            activeClass="bg-primary/15 ring-1 ring-inset ring-primary/40"
+            onClick={props.onInProgress}
+          >
+            <StatusIconSlot>
+              <Show
+                when={status() === 'in_progress'}
+                fallback={<BsClock size={NAV_ICON_SIZE} aria-hidden="true" />}
+              >
+                <BsClockFill size={NAV_ICON_SIZE} aria-hidden="true" />
+              </Show>
+            </StatusIconSlot>
+          </TransportButton>
+          <TransportButton
             title="Skip and go to next unfinished (Ctrl+Shift+Enter)"
             label="Skip"
+            active={status() === 'skipped'}
             class="text-neutral!"
+            activeClass="bg-neutral/15 ring-1 ring-inset ring-neutral/40"
             onClick={props.onSkip}
           >
-            <BsSkipForward size={16} aria-hidden="true" />
+            <StatusIconSlot>
+              <Show when={status() === 'skipped'} fallback={<BsBan size={NAV_ICON_SIZE} aria-hidden="true" />}>
+                <BsBanFill size={NAV_ICON_SIZE} aria-hidden="true" />
+              </Show>
+            </StatusIconSlot>
           </TransportButton>
           <TransportButton
             title="Mark done and go to next unfinished (Ctrl+Enter)"
             label="Done"
-            class="text-green-600!"
+            active={status() === 'done'}
+            class="text-green-500!"
+            activeClass="bg-green-500/15 ring-1 ring-inset ring-green-500/40"
             onClick={props.onDone}
           >
-            <BsCheckLg size={16} aria-hidden="true" />
+            <StatusIconSlot>
+              <Show when={status() === 'done'} fallback={<BsCheckCircle size={NAV_ICON_SIZE} aria-hidden="true" />}>
+                <BsCheckCircleFill size={NAV_ICON_SIZE} aria-hidden="true" />
+              </Show>
+            </StatusIconSlot>
           </TransportButton>
         </FloatingChip>
       </div>

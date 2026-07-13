@@ -318,6 +318,12 @@ const App: Component = () => {
     return toRelativePath(root, path)
   }
 
+  const currentImageStatus = (): ImageStatus => {
+    const relativePath = currentImageRelativePath()
+    if (!relativePath) return 'todo'
+    return imageStatuses()[relativePath] ?? 'todo'
+  }
+
   const showDatasetNav = (): boolean =>
     folderPath() !== null && selectedKind() === 'image' && selectedPath() !== null
 
@@ -378,7 +384,7 @@ const App: Component = () => {
     await goToPath(findNextUnfinishedImage(entries(), root, imageStatuses(), path))
   }
 
-  const completeAndAdvance = async (status: ImageStatus): Promise<void> => {
+  const setCurrentImageStatus = async (status: ImageStatus): Promise<void> => {
     const path = selectedPath()
     const root = folderPath()
     if (!path || !root || selectedKind() !== 'image') return
@@ -388,11 +394,21 @@ const App: Component = () => {
     await store.setImageStatus(status)
 
     const relativePath = currentImageRelativePath()
+    if (relativePath) handleImageStatusChange(relativePath, status)
+  }
+
+  const completeAndAdvance = async (status: ImageStatus): Promise<void> => {
+    const path = selectedPath()
+    const root = folderPath()
+    if (!path || !root || selectedKind() !== 'image') return
+
+    await setCurrentImageStatus(status)
+
+    const relativePath = currentImageRelativePath()
     const updatedStatuses = {
       ...imageStatuses(),
       ...(relativePath ? { [relativePath]: status } : {})
     }
-    if (relativePath) handleImageStatusChange(relativePath, status)
 
     const nextPath = findNextUnfinishedImage(entries(), root, updatedStatuses, path)
     if (!nextPath) return
@@ -843,6 +859,10 @@ const App: Component = () => {
               <Show when={showDatasetNav()}>
                 <DatasetNavBar
                   stats={datasetNavStats}
+                  currentStatus={currentImageStatus}
+                  entries={entries}
+                  projectRoot={folderPath}
+                  onSelectFile={(node) => void selectFile(node)}
                   onFirst={() => void goFirst()}
                   onStepBack={() => void goStep(-DATASET_NAV_STEP)}
                   onPrev={() => void goAdjacent('prev')}
@@ -850,6 +870,8 @@ const App: Component = () => {
                   onNext={() => void goAdjacent('next')}
                   onStepForward={() => void goStep(DATASET_NAV_STEP)}
                   onLast={() => void goLast()}
+                  onClear={() => void setCurrentImageStatus('todo')}
+                  onInProgress={() => void setCurrentImageStatus('in_progress')}
                   onSkip={() => void completeAndAdvance('skipped')}
                   onDone={() => void completeAndAdvance('done')}
                 />
