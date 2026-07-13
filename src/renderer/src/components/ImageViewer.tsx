@@ -48,6 +48,11 @@ const ImageViewer: Component<{
     setImageSize
   })
 
+  onMount(() => {
+    project.registerFocusShapeBounds((bounds) => viewport.focusBounds(bounds))
+    onCleanup(() => project.registerFocusShapeBounds(null))
+  })
+
   onCleanup(() => {
     viewport.stopPan()
   })

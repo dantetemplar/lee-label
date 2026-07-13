@@ -11,6 +11,9 @@ const menuPanelClass =
 const menuItemClass =
   'flex w-full items-center gap-2.5 px-3.5 py-1.5 text-left text-[13px] leading-none text-base-content/88 hover:bg-base-300 disabled:pointer-events-none disabled:opacity-40'
 
+const menuTriggerClass =
+  'btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)] hover:bg-base-300 focus:bg-transparent focus-visible:bg-base-300'
+
 type OpenMenu = 'file' | 'import' | 'export' | null
 
 const TitleBar: Component<{
@@ -20,6 +23,7 @@ const TitleBar: Component<{
   onGoToWelcomeScreen: () => void
   onOpenFolder: () => void
   onOpenRecent: (path: string) => void
+  onProjectSettings: () => void
   onImportAnnotations: () => void
   onExportDataset: () => void
 }> = (props) => {
@@ -28,9 +32,24 @@ const TitleBar: Component<{
   const [recentSubmenuOpen, setRecentSubmenuOpen] = createSignal(false)
   const [menuBarRoot, setMenuBarRoot] = createSignal<HTMLDivElement>()
 
+  const clearMenuChrome = (): void => {
+    const root = menuBarRoot()
+    const active = document.activeElement
+    if (root && active instanceof HTMLElement && root.contains(active)) {
+      active.blur()
+    }
+    // Dropdown overlays can swallow mouseleave; drop sticky :hover paint.
+    if (!root) return
+    root.style.pointerEvents = 'none'
+    requestAnimationFrame(() => {
+      root.style.pointerEvents = ''
+    })
+  }
+
   const closeMenus = (): void => {
     setOpenMenu(null)
     setRecentSubmenuOpen(false)
+    clearMenuChrome()
   }
 
   const toggleMenu = (menu: Exclude<OpenMenu, null>, event: MouseEvent): void => {
@@ -81,8 +100,8 @@ const TitleBar: Component<{
         <div class="relative">
           <button
             type="button"
-            class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
-            classList={{ 'bg-base-300': openMenu() === 'file' }}
+            class={menuTriggerClass}
+            classList={{ 'bg-base-300!': openMenu() === 'file' }}
             aria-haspopup="menu"
             aria-expanded={openMenu() === 'file'}
             onClick={(event) => toggleMenu('file', event)}
@@ -183,11 +202,23 @@ const TitleBar: Component<{
             </div>
           </Show>
         </div>
+        <button
+          type="button"
+          class={menuTriggerClass}
+          disabled={!props.hasOpenProject()}
+          onClick={(event) => {
+            closeMenus()
+            event.currentTarget.blur()
+            props.onProjectSettings()
+          }}
+        >
+          Project settings
+        </button>
         <div class="relative">
           <button
             type="button"
-            class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
-            classList={{ 'bg-base-300': openMenu() === 'import' }}
+            class={menuTriggerClass}
+            classList={{ 'bg-base-300!': openMenu() === 'import' }}
             aria-haspopup="menu"
             aria-expanded={openMenu() === 'import'}
             onClick={(event) => toggleMenu('import', event)}
@@ -218,8 +249,8 @@ const TitleBar: Component<{
         <div class="relative">
           <button
             type="button"
-            class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
-            classList={{ 'bg-base-300': openMenu() === 'export' }}
+            class={menuTriggerClass}
+            classList={{ 'bg-base-300!': openMenu() === 'export' }}
             aria-haspopup="menu"
             aria-expanded={openMenu() === 'export'}
             onClick={(event) => toggleMenu('export', event)}
@@ -249,9 +280,10 @@ const TitleBar: Component<{
         </div>
         <button
           type="button"
-          class="btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)]"
-          onClick={() => {
+          class={menuTriggerClass}
+          onClick={(event) => {
             closeMenus()
+            event.currentTarget.blur()
             void window.api.shell.openExternal('https://github.com/dantetemplar/lee-label.git')
           }}
         >

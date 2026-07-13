@@ -38,7 +38,7 @@ const AnnotationToolbar: Component<{
   const project = useProjectContext()
   const activeStore = () =>
     getActiveStore(props.segmentationMode(), project.annotationStore, project.semanticStore)
-  const hasSelection = (): boolean => project.annotationStore.selectedShapeId[0]() !== null
+  const hasSelection = (): boolean => project.annotationStore.hasSelection()
   const canUndo = (): boolean => activeStore().canUndo[0]()
   const canRedo = (): boolean => activeStore().canRedo[0]()
   const pressedKeys = (): ReadonlySet<string> => project.pressedKeys()
@@ -162,7 +162,7 @@ const AnnotationToolbar: Component<{
           aria-keyshortcuts="Delete"
           disabled={!hasSelection()}
           onClick={(event) => {
-            project.annotationStore.deleteSelected()
+            project.requestDeleteShapes()
             event.currentTarget.blur()
           }}
         >

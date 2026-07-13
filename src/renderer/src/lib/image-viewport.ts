@@ -1,5 +1,5 @@
 import { createSignal, type Accessor } from 'solid-js'
-import type { ViewTransform } from './annotation-coords'
+import type { ImageBounds, ViewTransform } from './annotation-coords'
 import { panFromScreenDrag, snapPanToImagePixelGrid } from './annotation-coords'
 
 export const MAX_SCALE_MULTIPLIER = 16
@@ -136,6 +136,8 @@ export interface ImageViewportOptions {
   isAnnotationMode: Accessor<boolean>
 }
 
+const FOCUS_BOUNDS_PADDING = 48
+
 export interface ImageViewportController {
   scale: Accessor<number>
   panX: Accessor<number>
@@ -148,6 +150,7 @@ export interface ImageViewportController {
   applyView: (view: ViewState) => void
   setClampedPan: (nextPanX: number, nextPanY: number) => void
   fitToViewport: (size: { width: number; height: number }) => void
+  focusBounds: (bounds: ImageBounds, padding?: number) => void
   zoomAt: (pointerX: number, pointerY: number, deltaScale: number) => void
   handleWheel: (event: WheelEvent) => void
   handleMouseDown: (event: MouseEvent) => void
@@ -226,6 +229,31 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
     if (!viewport) return
 
     applyView(computeFit(viewport.clientWidth, viewport.clientHeight, size.width, size.height))
+  }
+
+  const focusBounds = (bounds: ImageBounds, padding = FOCUS_BOUNDS_PADDING): void => {
+    const viewport = options.viewportRef()
+    const size = options.imageSize()
+    if (!viewport || !size) return
+    if (bounds.width <= 0 || bounds.height <= 0) return
+
+    const viewportWidth = viewport.clientWidth
+    const viewportHeight = viewport.clientHeight
+    const innerWidth = Math.max(1, viewportWidth - padding * 2)
+    const innerHeight = Math.max(1, viewportHeight - padding * 2)
+    const targetScale = Math.min(
+      innerWidth / bounds.width,
+      innerHeight / bounds.height,
+      maxScale()
+    )
+    const nextScale = Math.max(minScale(), targetScale)
+    const centerX = bounds.x + bounds.width / 2
+    const centerY = bounds.y + bounds.height / 2
+    const nextPanX = viewportWidth / 2 - centerX * nextScale
+    const nextPanY = viewportHeight / 2 - centerY * nextScale
+
+    setScale(nextScale)
+    setClampedPan(nextPanX, nextPanY, nextScale)
   }
 
   const zoomAt = (clientX: number, clientY: number, nextScale: number): void => {
@@ -312,6 +340,7 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
     applyView,
     setClampedPan,
     fitToViewport,
+    focusBounds,
     zoomAt,
     handleWheel,
     handleMouseDown,

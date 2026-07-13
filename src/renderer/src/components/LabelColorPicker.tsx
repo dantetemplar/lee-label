@@ -173,10 +173,10 @@ const LabelColorPicker: Component<{
                 spellcheck={false}
                 value={hexDraft()}
                 onInput={(event) => setHexDraft(event.currentTarget.value)}
-                onKeyDown={(event) => {
+                on:keydown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault()
-                    void handleHexSubmit()
+                    void handleHexSubmit().then(() => event.currentTarget.blur())
                   }
                   if (event.key === 'Escape') {
                     event.preventDefault()

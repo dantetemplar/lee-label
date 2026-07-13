@@ -2,8 +2,11 @@ import { createContext, useContext } from 'solid-js'
 import type { Label } from '../../../shared/annotations'
 import type { ProjectSettings } from '../../../shared/segmentation'
 import type { AnnotationTool } from '../components/AnnotationToolbar'
+import type { ImageBounds } from './annotation-coords'
 import type { AnnotationStore } from './annotation-store'
 import type { SemanticMapStore } from './semantic-map-store'
+
+export type CursorSidebarTab = 'objects' | 'labels' | 'files'
 
 export interface ProjectContextValue {
   annotationStore: AnnotationStore
@@ -20,6 +23,11 @@ export interface ProjectContextValue {
   setBrushSize: (size: number) => void
   shrinkBrushAtMaxZoom: () => boolean
   setShrinkBrushAtMaxZoom: (value: boolean) => void
+  cursorSidebarTab: () => CursorSidebarTab
+  setCursorSidebarTab: (tab: CursorSidebarTab) => void
+  focusShapeBounds: (bounds: ImageBounds) => void
+  registerFocusShapeBounds: (handler: ((bounds: ImageBounds) => void) | null) => void
+  requestDeleteShapes: (ids?: string[]) => void
 }
 
 export const ProjectContext = createContext<ProjectContextValue>()

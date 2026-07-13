@@ -14,6 +14,7 @@ const ConfirmDialog: Component<{
   <FloatingModal
     open={props.open}
     onClose={() => props.onCancel()}
+    onSubmit={() => props.onConfirm()}
     labelledBy="confirm-dialog-title"
     describedBy="confirm-dialog-message"
   >

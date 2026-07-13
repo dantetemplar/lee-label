@@ -36,7 +36,7 @@ const AnnotationShapeLayer: Component<{
   labels: () => Label[]
   activeLabelId: () => string | null
   hiddenShapeId: () => string | null
-  hoveredShapeId: () => string | null
+  draftMarquee: () => { x: number; y: number; width: number; height: number } | null
   draftRect: () => { x: number; y: number; width: number; height: number } | null
   draftRectMode: () => 'draw' | 'erase'
   brushSvgPreview: () => { pixels: Array<{ x: number; y: number }>; opacity: number } | null
@@ -81,8 +81,10 @@ const AnnotationShapeLayer: Component<{
       <For each={rectangles()}>
         {(rect) => {
           const label = (): Label | undefined => labelMap().get(rect.labelId)
-          const selected = (): boolean => props.store.selectedShapeId[0]() === rect.id
-          const hovered = (): boolean => props.hoveredShapeId() === rect.id
+          const selected = (): boolean => props.store.isSelected(rect.id)
+          const hovered = (): boolean => props.store.hoveredShapeId[0]() === rect.id
+          const soleSelected = (): boolean =>
+            selected() && props.store.selectedShapeIds[0]().length === 1
           const marked = (): boolean => eraserMarkedIds().has(rect.id)
           const color = (): string => (marked() ? ERASER_MARK_COLOR : (label()?.color ?? '#ffffff'))
           const corners = (): Record<RectCorner, { x: number; y: number }> =>
@@ -101,7 +103,7 @@ const AnnotationShapeLayer: Component<{
                 stroke={color()}
                 stroke-width={selected() || marked() ? 2.5 : 1.5}
               />
-              <Show when={selected()}>
+              <Show when={soleSelected()}>
                 <For each={CORNER_KEYS}>
                   {(key) => (
                     <circle
@@ -122,8 +124,8 @@ const AnnotationShapeLayer: Component<{
       <For each={polygons()}>
         {(polygon) => {
           const label = (): Label | undefined => labelMap().get(polygon.labelId)
-          const selected = (): boolean => props.store.selectedShapeId[0]() === polygon.id
-          const hovered = (): boolean => props.hoveredShapeId() === polygon.id
+          const selected = (): boolean => props.store.isSelected(polygon.id)
+          const hovered = (): boolean => props.store.hoveredShapeId[0]() === polygon.id
           return (
             <polygon
               points={polygonPointsToSvg(polygon.points)}
@@ -137,6 +139,20 @@ const AnnotationShapeLayer: Component<{
           )
         }}
       </For>
+      <Show when={props.draftMarquee()}>
+        {(rect) => (
+          <rect
+            x={rect().x}
+            y={rect().y}
+            width={rect().width}
+            height={rect().height}
+            fill="rgba(255,255,255,0.08)"
+            stroke="#ffffff"
+            stroke-width={1.5 / props.scale}
+            stroke-dasharray={`${4 / props.scale} ${3 / props.scale}`}
+          />
+        )}
+      </Show>
       <Show when={props.draftRect()}>
         {(rect) => {
           const corners = (): Record<RectCorner, { x: number; y: number }> =>

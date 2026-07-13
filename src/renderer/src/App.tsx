@@ -20,6 +20,8 @@ import FileViewer, { type FileInfo } from './components/FileViewer'
 import ImportAnnotationsModal from './components/ImportAnnotationsModal'
 import ExportAnnotationsModal from './components/ExportAnnotationsModal'
 import LabelPanel from './components/LabelPanel'
+import CursorSidebar from './components/CursorSidebar'
+import ProjectSettingsModal from './components/ProjectSettingsModal'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
 import WelcomeScreen from './components/WelcomeScreen'
@@ -34,7 +36,8 @@ import {
   releaseKey,
   usePressedKeys
 } from './lib/pressed-keys'
-import { ProjectContext } from './lib/project-context'
+import { ProjectContext, type CursorSidebarTab } from './lib/project-context'
+import type { ImageBounds } from './lib/annotation-coords'
 import { isShortcutBlockedTarget, blurTextEditableOnEscape } from './lib/shortcut-guards'
 import { SemanticMapStore } from './lib/semantic-map-store'
 import {
@@ -70,10 +73,12 @@ const App: Component = () => {
   } | null>(null)
   const [importModalOpen, setImportModalOpen] = createSignal(false)
   const [exportModalOpen, setExportModalOpen] = createSignal(false)
+  const [projectSettingsOpen, setProjectSettingsOpen] = createSignal(false)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [toolModifierHeld, setToolModifierHeld] = createSignal(false)
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
+  const [cursorSidebarTab, setCursorSidebarTab] = createSignal<CursorSidebarTab>('objects')
   const [projectSettings, setProjectSettings] = createSignal<ProjectSettings>({
     name: 'Explorer',
     segmentationMode: DEFAULT_SEGMENTATION_MODE
@@ -85,6 +90,20 @@ const App: Component = () => {
   const semanticStore = new SemanticMapStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
   })
+
+  let focusShapeBoundsHandler: ((bounds: ImageBounds) => void) | null = null
+  const registerFocusShapeBounds = (handler: ((bounds: ImageBounds) => void) | null): void => {
+    focusShapeBoundsHandler = handler
+  }
+  const focusShapeBounds = (bounds: ImageBounds): void => {
+    focusShapeBoundsHandler?.(bounds)
+  }
+
+  const requestDeleteShapes = (ids?: string[]): void => {
+    const target = ids ?? annotationStore.selectedShapeIds[0]()
+    if (target.length === 0) return
+    annotationStore.deleteShapes(target)
+  }
 
   const textEditor = useTextFileEditor({
     selectedPath,
@@ -288,6 +307,9 @@ const App: Component = () => {
 
   const showLabelSidebar = (): boolean =>
     selectedKind() === 'image' && activeTool() !== 'cursor'
+
+  const showCursorSidebar = (): boolean =>
+    selectedKind() === 'image' && activeTool() === 'cursor'
 
   const currentImageRelativePath = (): string | null => {
     const root = folderPath()
@@ -553,8 +575,8 @@ const App: Component = () => {
 
       if (!toolModifierChordUsed) {
         if (activeTool() === 'cursor') {
-          if (annotationStore.selectedShapeId[0]()) {
-            annotationStore.setSelectedShapeId(null)
+          if (annotationStore.hasSelection()) {
+            annotationStore.clearSelection()
           }
         } else {
           setActiveTool('cursor')
@@ -579,14 +601,79 @@ const App: Component = () => {
   const handleUpdateProjectSettings = async (settings: {
     name: string
     segmentationMode: ProjectSettings['segmentationMode']
+    labels: Label[]
   }): Promise<void> => {
-    const updated = await window.api.project.update(settings)
-    setProjectSettings(updated)
-    setFolderName(updated.name)
-    const path = folderPath()
-    if (path) {
-      const recent = await window.api.recent.add(path)
-      setRecentProjects(recent)
+    const settingsChanged =
+      settings.name !== projectSettings().name ||
+      settings.segmentationMode !== projectSettings().segmentationMode
+    if (settingsChanged) {
+      const updated = await window.api.project.update({
+        name: settings.name,
+        segmentationMode: settings.segmentationMode
+      })
+      setProjectSettings(updated)
+      setFolderName(updated.name)
+      const path = folderPath()
+      if (path) {
+        const recent = await window.api.recent.add(path)
+        setRecentProjects(recent)
+      }
+    }
+
+    const baseline = labels()
+    const draftById = new Map(settings.labels.map((label) => [label.id, label]))
+    const baselineById = new Map(baseline.map((label) => [label.id, label]))
+
+    const toDelete = baseline.filter((label) => !draftById.has(label.id)).map((label) => label.id)
+    const toUpdate = settings.labels.filter((label) => {
+      if (label.id.startsWith('draft:')) return false
+      const prev = baselineById.get(label.id)
+      if (!prev) return false
+      return (
+        prev.name !== label.name ||
+        prev.color !== label.color ||
+        (prev.shortcut ?? undefined) !== (label.shortcut ?? undefined)
+      )
+    })
+    const toCreate = settings.labels.filter((label) => label.id.startsWith('draft:'))
+
+    for (const id of toDelete) {
+      await window.api.labels.delete(id)
+    }
+    for (const label of toUpdate) {
+      await window.api.labels.update({
+        id: label.id,
+        name: label.name,
+        color: label.color,
+        shortcut: label.shortcut
+      })
+    }
+    for (const label of toCreate) {
+      await window.api.labels.create({
+        name: label.name,
+        color: label.color,
+        shortcut: label.shortcut
+      })
+    }
+
+    if (toDelete.length > 0 || toUpdate.length > 0 || toCreate.length > 0) {
+      const nextLabels = await window.api.labels.list()
+      setLabels(nextLabels)
+      if (!nextLabels.some((label) => label.id === activeLabelId())) {
+        setActiveLabelId(nextLabels[0]?.id ?? null)
+      }
+
+      if (toDelete.length > 0) {
+        const relativePath = currentImageRelativePath()
+        const info = fileInfo()
+        if (relativePath && info?.width && info?.height) {
+          const store = getActiveStore(settings.segmentationMode, annotationStore, semanticStore)
+          await store.loadForImage(relativePath, {
+            width: info.width,
+            height: info.height
+          })
+        }
+      }
     }
   }
 
@@ -643,7 +730,12 @@ const App: Component = () => {
     brushSize,
     setBrushSize,
     shrinkBrushAtMaxZoom,
-    setShrinkBrushAtMaxZoom
+    setShrinkBrushAtMaxZoom,
+    cursorSidebarTab,
+    setCursorSidebarTab,
+    focusShapeBounds,
+    registerFocusShapeBounds,
+    requestDeleteShapes
   }
 
   return (
@@ -656,6 +748,7 @@ const App: Component = () => {
           onGoToWelcomeScreen={() => void lifecycle.goToWelcomeScreen()}
           onOpenFolder={() => void lifecycle.openFolder()}
           onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
+          onProjectSettings={() => setProjectSettingsOpen(true)}
           onImportAnnotations={() => void openImportModal()}
           onExportDataset={() => void openExportModal()}
         />
@@ -664,20 +757,47 @@ const App: Component = () => {
             <Show
               when={showLabelSidebar()}
               fallback={
-                <FileTree
-                  rootName={folderName}
-                  entries={entries}
-                  selectedPath={selectedPath}
-                  projectRoot={folderPath}
-                  imageStatuses={imageStatuses}
-                  onSelect={(node) => void selectFile(node)}
-                  onFocusChange={handleTreeFocusChange}
-                  onProjectSettingsChange={handleUpdateProjectSettings}
-                  projectSettings={projectSettings}
-                />
+                <Show
+                  when={showCursorSidebar()}
+                  fallback={
+                    <FileTree
+                      rootName={folderName}
+                      entries={entries}
+                      selectedPath={selectedPath}
+                      projectRoot={folderPath}
+                      imageStatuses={imageStatuses}
+                      onSelect={(node) => void selectFile(node)}
+                      onFocusChange={handleTreeFocusChange}
+                    />
+                  }
+                >
+                  <CursorSidebar
+                    rootName={folderName}
+                    entries={entries}
+                    selectedPath={selectedPath}
+                    projectRoot={folderPath}
+                    imageStatuses={imageStatuses}
+                    onSelectFile={(node) => void selectFile(node)}
+                    onTreeFocusChange={handleTreeFocusChange}
+                    labels={labels}
+                    activeLabelId={activeLabelId}
+                    onSelectLabel={setActiveLabelId}
+                    onCreateLabel={handleCreateLabel}
+                    onUpdateLabel={handleUpdateLabel}
+                    onDeleteLabel={handleRequestDeleteLabel}
+                    labelError={labelError}
+                  />
+                </Show>
               }
             >
               <aside class="flex w-[var(--sidebar-width)] min-w-[var(--sidebar-width)] flex-col border-base-300 bg-base-200 border-r">
+                <Show when={activeTool() === 'rectangle'}>
+                  <section class="shrink-0 border-b border-base-content/10">
+                    <div class="px-3 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">
+                      RECTANGLE
+                    </div>
+                  </section>
+                </Show>
                 <Show when={activeTool() === 'mask'}>
                   <BrushSettings
                     brushSize={brushSize}
@@ -748,6 +868,14 @@ const App: Component = () => {
         <StatusBar
           info={fileInfo}
           imagePosition={() => (showDatasetNav() ? datasetNavStats().position : null)}
+        />
+        <ProjectSettingsModal
+          open={projectSettingsOpen}
+          projectSettings={projectSettings}
+          projectPath={folderPath}
+          labels={labels}
+          onClose={() => setProjectSettingsOpen(false)}
+          onSave={handleUpdateProjectSettings}
         />
         <ConfirmDialog
           open={() => labelDeletePrompt() !== null}

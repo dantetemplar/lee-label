@@ -23,7 +23,7 @@ export type WorkingShape = RectangleShape | WorkingMask | WorkingPolygon
 
 interface AnnotationSnapshot {
   shapes: WorkingShape[]
-  selectedShapeId: string | null
+  selectedShapeIds: string[]
 }
 
 function cloneShape(shape: WorkingShape): WorkingShape {
@@ -40,13 +40,18 @@ function cloneShapes(shapes: WorkingShape[]): WorkingShape[] {
   return shapes.map(cloneShape)
 }
 
+function cloneIdList(ids: string[]): string[] {
+  return [...ids]
+}
+
 function isWorkingMask(shape: WorkingShape): shape is WorkingMask {
   return shape.type === 'mask'
 }
 
 export class AnnotationStore extends PersistedImageStore {
   readonly shapes = createSignal<WorkingShape[]>([])
-  readonly selectedShapeId = createSignal<string | null>(null)
+  readonly selectedShapeIds = createSignal<string[]>([])
+  readonly hoveredShapeId = createSignal<string | null>(null)
   readonly segmentationMode = createSignal<SegmentationMode>('instance')
   readonly canUndo = createSignal(false)
   readonly canRedo = createSignal(false)
@@ -66,16 +71,41 @@ export class AnnotationStore extends PersistedImageStore {
     this.segmentationMode[1](mode)
   }
 
+  primarySelectedId(): string | null {
+    const ids = this.selectedShapeIds[0]()
+    return ids.length > 0 ? ids[ids.length - 1] : null
+  }
+
+  isSelected(id: string): boolean {
+    return this.selectedShapeIds[0]().includes(id)
+  }
+
+  hasSelection(): boolean {
+    return this.selectedShapeIds[0]().length > 0
+  }
+
+  setHoveredShapeId(id: string | null): void {
+    this.hoveredShapeId[1](id)
+  }
+
   private snapshot(): AnnotationSnapshot {
     return {
       shapes: cloneShapes(this.shapes[0]()),
-      selectedShapeId: this.selectedShapeId[0]()
+      selectedShapeIds: cloneIdList(this.selectedShapeIds[0]())
     }
   }
 
   private syncHistoryFlags(): void {
     this.canUndo[1](this.undoStack.length > 0)
     this.canRedo[1](this.redoStack.length > 0)
+  }
+
+  private pruneMissingSelection(): void {
+    const shapeIds = new Set(this.shapes[0]().map((shape) => shape.id))
+    const next = this.selectedShapeIds[0]().filter((id) => shapeIds.has(id))
+    if (next.length !== this.selectedShapeIds[0]().length) {
+      this.selectedShapeIds[1](next)
+    }
   }
 
   pushUndo(): void {
@@ -90,7 +120,7 @@ export class AnnotationStore extends PersistedImageStore {
     if (!previous) return false
     this.redoStack.push(this.snapshot())
     this.shapes[1](cloneShapes(previous.shapes))
-    this.selectedShapeId[1](previous.selectedShapeId)
+    this.selectedShapeIds[1](cloneIdList(previous.selectedShapeIds))
     this.syncHistoryFlags()
     this.markDirty()
     return true
@@ -101,7 +131,7 @@ export class AnnotationStore extends PersistedImageStore {
     if (!next) return false
     this.undoStack.push(this.snapshot())
     this.shapes[1](cloneShapes(next.shapes))
-    this.selectedShapeId[1](next.selectedShapeId)
+    this.selectedShapeIds[1](cloneIdList(next.selectedShapeIds))
     this.syncHistoryFlags()
     this.markDirty()
     return true
@@ -149,14 +179,16 @@ export class AnnotationStore extends PersistedImageStore {
 
     if (!this.isLoadGenerationCurrent(generation)) return
     this.shapes[1](working)
-    this.selectedShapeId[1](null)
+    this.selectedShapeIds[1]([])
+    this.hoveredShapeId[1](null)
     this.finishLoad()
   }
 
   clear(): void {
     this.clearCommon()
     this.shapes[1]([])
-    this.selectedShapeId[1](null)
+    this.selectedShapeIds[1]([])
+    this.hoveredShapeId[1](null)
     this.undoStack = []
     this.redoStack = []
     this.syncHistoryFlags()
@@ -241,6 +273,7 @@ export class AnnotationStore extends PersistedImageStore {
     }
 
     this.shapes[1](working)
+    this.pruneMissingSelection()
     this.dirty[1](false)
     this.onDirtyChange?.(false)
   }
@@ -252,19 +285,103 @@ export class AnnotationStore extends PersistedImageStore {
   setShapes(shapes: WorkingShape[], options?: { pushUndo?: boolean }): void {
     if (options?.pushUndo) this.pushUndo()
     this.shapes[1](shapes)
+    this.pruneMissingSelection()
     this.markDirty()
   }
 
-  setSelectedShapeId(id: string | null): void {
-    this.selectedShapeId[1](id)
+  setSelectedShapeIds(ids: string[]): void {
+    const shapeIds = new Set(this.shapes[0]().map((shape) => shape.id))
+    this.selectedShapeIds[1](ids.filter((id) => shapeIds.has(id)))
+  }
+
+  selectOnly(id: string | null): void {
+    if (!id) {
+      this.selectedShapeIds[1]([])
+      return
+    }
+    if (!this.shapes[0]().some((shape) => shape.id === id)) return
+    this.selectedShapeIds[1]([id])
+  }
+
+  toggleSelect(id: string): void {
+    if (!this.shapes[0]().some((shape) => shape.id === id)) return
+    const current = this.selectedShapeIds[0]()
+    if (current.includes(id)) {
+      this.selectedShapeIds[1](current.filter((item) => item !== id))
+      return
+    }
+    this.selectedShapeIds[1]([...current, id])
+  }
+
+  addToSelection(ids: string[]): void {
+    const shapeIds = new Set(this.shapes[0]().map((shape) => shape.id))
+    const current = new Set(this.selectedShapeIds[0]())
+    for (const id of ids) {
+      if (shapeIds.has(id)) current.add(id)
+    }
+    this.selectedShapeIds[1]([...current])
+  }
+
+  selectAll(): void {
+    this.selectedShapeIds[1](this.shapes[0]().map((shape) => shape.id))
+  }
+
+  /** Cycle selection by creation order (number ascending). Returns the newly selected shape. */
+  selectAdjacent(direction: 1 | -1): WorkingShape | null {
+    const shapes = [...this.shapes[0]()].sort((left, right) => left.zOrder - right.zOrder)
+    if (shapes.length === 0) return null
+    const primary = this.primarySelectedId()
+    const currentIndex = primary ? shapes.findIndex((shape) => shape.id === primary) : -1
+    let nextIndex = currentIndex + direction
+    if (currentIndex < 0) nextIndex = direction > 0 ? 0 : shapes.length - 1
+    if (nextIndex < 0) nextIndex = shapes.length - 1
+    if (nextIndex >= shapes.length) nextIndex = 0
+    const next = shapes[nextIndex]
+    this.selectedShapeIds[1]([next.id])
+    return next
+  }
+
+  clearSelection(): void {
+    this.selectedShapeIds[1]([])
   }
 
   deleteSelected(): void {
-    const selectedId = this.selectedShapeId[0]()
-    if (!selectedId) return
+    const selected = new Set(this.selectedShapeIds[0]())
+    if (selected.size === 0) return
     this.pushUndo()
-    this.shapes[1](this.shapes[0]().filter((shape) => shape.id !== selectedId))
-    this.selectedShapeId[1](null)
+    this.shapes[1](this.shapes[0]().filter((shape) => !selected.has(shape.id)))
+    this.selectedShapeIds[1]([])
+    this.markDirty()
+  }
+
+  deleteShapes(ids: string[]): void {
+    const toDelete = new Set(ids)
+    if (toDelete.size === 0) return
+    this.pushUndo()
+    this.shapes[1](this.shapes[0]().filter((shape) => !toDelete.has(shape.id)))
+    this.selectedShapeIds[1](this.selectedShapeIds[0]().filter((id) => !toDelete.has(id)))
+    this.markDirty()
+  }
+
+  setShapeLabel(id: string, labelId: string): void {
+    const shapes = this.shapes[0]()
+    if (!shapes.some((shape) => shape.id === id)) return
+    this.pushUndo()
+    this.shapes[1](
+      shapes.map((shape) => (shape.id === id ? { ...shape, labelId } : shape))
+    )
+    this.markDirty()
+  }
+
+  setLabelForSelected(labelId: string): void {
+    const selected = new Set(this.selectedShapeIds[0]())
+    if (selected.size === 0) return
+    this.pushUndo()
+    this.shapes[1](
+      this.shapes[0]().map((shape) =>
+        selected.has(shape.id) ? { ...shape, labelId } : shape
+      )
+    )
     this.markDirty()
   }
 

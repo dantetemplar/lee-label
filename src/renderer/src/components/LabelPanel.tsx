@@ -27,6 +27,7 @@ const LabelPanel: Component<{
   const [editingId, setEditingId] = createSignal<string | null>(null)
   const [editName, setEditName] = createSignal('')
   const [colorPicker, setColorPicker] = createSignal<PickerSession | null>(null)
+  let skipEditBlurSave = false
   const layoutLabels = createKeyboardLayoutLabels()
 
   const shortcutHint = (index: number): string | null => {
@@ -54,6 +55,7 @@ const LabelPanel: Component<{
   }
 
   const cancelEditName = (): void => {
+    skipEditBlurSave = true
     setEditingId(null)
   }
 
@@ -64,16 +66,12 @@ const LabelPanel: Component<{
     setNewName('')
   }
 
-  const handleSaveName = async (label: Label): Promise<void> => {
-    const name = editName().trim()
-    if (!name) {
-      cancelEditName()
-      return
-    }
-    if (name !== label.name) {
-      await props.onUpdate({ ...label, name })
-    }
+  const handleSaveName = (label: Label, nextName = editName()): void => {
+    const name = nextName.trim()
+    // Leave edit mode synchronously so parent Enter/submit handlers cannot race.
     cancelEditName()
+    if (!name || name === label.name) return
+    void props.onUpdate({ ...label, name })
   }
 
   const handleColorChange = async (label: Label, color: string): Promise<void> => {
@@ -169,16 +167,28 @@ const LabelPanel: Component<{
                   class="input input-bordered input-xs bg-base-100 font-inherit h-5 min-h-5! min-w-0 flex-1 px-1 py-0! leading-none"
                   value={editName()}
                   ref={(element) => queueMicrotask(() => element.focus())}
-                  onInput={(event) => setEditName(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') void handleSaveName(label())
+                  on:input={(event) => setEditName(event.currentTarget.value)}
+                  on:keydown={(event) => {
+                    if (event.isComposing) return
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      handleSaveName(label(), event.currentTarget.value)
+                      return
+                    }
                     if (event.key === 'Escape') {
                       event.preventDefault()
                       event.stopPropagation()
                       cancelEditName()
                     }
                   }}
-                  onBlur={() => void handleSaveName(label())}
+                  onBlur={() => {
+                    if (skipEditBlurSave) {
+                      skipEditBlurSave = false
+                      return
+                    }
+                    handleSaveName(label())
+                  }}
                 />
               </Show>
 
@@ -201,8 +211,10 @@ const LabelPanel: Component<{
             placeholder="New label"
             value={newName()}
             onInput={(event) => setNewName(event.currentTarget.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void handleCreate()
+            on:keydown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              void handleCreate().then(() => event.currentTarget.blur())
             }}
           />
           <button

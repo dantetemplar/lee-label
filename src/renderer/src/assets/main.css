@@ -115,6 +115,31 @@ body {
   background: var(--color-primary);
 }
 
+.app [data-object-item][aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--color-primary);
+}
+
+.app .object-list-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.app .object-list-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-base-300;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 5px;
+}
+
+.app .object-list-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral/30;
+}
+
 .app [data-tree-item]:focus,
 .app [data-tree-item]:focus:not(:focus-visible) {
   outline: none;

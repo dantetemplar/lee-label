@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js'
 import { Show, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js'
 import type { Label } from '../../../shared/annotations'
-import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY } from '../../../shared/annotations'
+import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY, HOVERED_SHAPE_OPACITY } from '../../../shared/annotations'
 import type { Point2D } from '../../../shared/geometry'
 import { hexToRgbNormalized } from '../../../shared/label-color'
 import type { SegmentationMode } from '../../../shared/segmentation'
@@ -11,15 +11,18 @@ import {
 } from '../../../shared/segmentation'
 import type { RectCorner, ViewTransform } from '../lib/annotation-coords'
 import {
+    boundsIntersect,
     clampToImage,
     hitTestMaskBounds,
     hitTestPolygon,
     hitTestRectangle,
     hitTestRectangleCorner,
+    isBoundsFullyVisible,
     normalizeRectFromPoints,
     oppositeRectCorner,
     rectangleCornerPoints,
     rectanglesIntersect,
+    shapeBounds,
     snapPointToImagePixel,
     viewportToImage
 } from '../lib/annotation-coords'
@@ -113,17 +116,29 @@ const AnnotationOverlay: Component<{
     width: number
     height: number
   } | null>(null)
+  const [draftMarquee, setDraftMarquee] = createSignal<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
   const [draftRectMode, setDraftRectMode] = createSignal<'draw' | 'erase'>('draw')
   const [pendingRectOrigin, setPendingRectOrigin] = createSignal<Point2D | null>(null)
   const [hoverPoint, setHoverPoint] = createSignal<Point2D | null>(null)
   const [topologyIssues, setTopologyIssues] = createSignal<TopologyIssueMask[]>([])
   const [editingShapeId, setEditingShapeId] = createSignal<string | null>(null)
-  const [hoveredShapeId, setHoveredShapeId] = createSignal<string | null>(null)
 
   let lastPointerClient: { x: number; y: number } | null = null
 
-  let dragMode: 'none' | 'draw-rect' | 'finish-rect' | 'resize-rect' | 'erase-rect' = 'none'
+  let dragMode:
+    | 'none'
+    | 'draw-rect'
+    | 'finish-rect'
+    | 'resize-rect'
+    | 'erase-rect'
+    | 'marquee-select' = 'none'
   let dragStart = { x: 0, y: 0 }
+  let marqueeAdditive = false
   let resizeShapeId: string | null = null
   let resizeAnchor = { x: 0, y: 0 }
   let rectPointerId: number | null = null
@@ -137,6 +152,11 @@ const AnnotationOverlay: Component<{
     setDraftRectMode('draw')
   }
 
+  const clearMarqueeDraft = (): void => {
+    setDraftMarquee(null)
+    marqueeAdditive = false
+  }
+
   const commitRectangleAt = (rect: {
     x: number
     y: number
@@ -148,7 +168,7 @@ const AnnotationOverlay: Component<{
     props.store.pushUndo()
     const shape = props.store.createRectangle(labelId, rect)
     props.store.setShapes([...props.store.shapes[0](), shape])
-    props.store.setSelectedShapeId(shape.id)
+    props.store.selectOnly(shape.id)
     clearRectDraft()
     return true
   }
@@ -256,7 +276,8 @@ const AnnotationOverlay: Component<{
 
   const savedMaskLayers = createMemo((): SavedMaskLayer[] => {
     const editingId = editingShapeId()
-    const selectedId = props.store.selectedShapeId[0]()
+    const selectedIds = new Set(props.store.selectedShapeIds[0]())
+    const hoveredId = props.store.hoveredShapeId[0]()
     const masks = props.store
       .shapes[0]()
       .filter(
@@ -267,13 +288,18 @@ const AnnotationOverlay: Component<{
 
     return masks.map((shape) => {
       const label = labelMap().get(shape.labelId)
+      const opacity = selectedIds.has(shape.id)
+        ? SELECTED_SHAPE_OPACITY
+        : shape.id === hoveredId
+          ? HOVERED_SHAPE_OPACITY
+          : COMMITTED_MASK_OPACITY
       return {
         id: shape.id,
         version: shape.updatedAt,
         bounds: shape.bounds,
         data: shape.data,
         colorRgb: hexToRgbNormalized(label?.color ?? '#ffffff'),
-        opacity: shape.id === selectedId ? SELECTED_SHAPE_OPACITY : COMMITTED_MASK_OPACITY
+        opacity
       }
     })
   })
@@ -411,7 +437,7 @@ const AnnotationOverlay: Component<{
 
     if (props.activeTool() !== 'mask' || props.segmentationMode() !== 'instance') return
 
-    const selectedId = props.store.selectedShapeId[0]()
+    const selectedId = props.store.primarySelectedId()
     if (!selectedId) return
 
     const shape = props.store.shapes[0]().find((item) => item.id === selectedId)
@@ -644,7 +670,7 @@ const AnnotationOverlay: Component<{
       if (existing) {
         if (!brushSession.sessionUndoPushed) props.store.pushUndo()
         props.store.setShapes(props.store.shapes[0]().filter((shape) => shape.id !== existing.id))
-        props.store.setSelectedShapeId(null)
+        props.store.clearSelection()
         setEditingShapeId(null)
         resetBrushSession()
       }
@@ -706,7 +732,7 @@ const AnnotationOverlay: Component<{
       } else {
         props.store.setShapes([...props.store.shapes[0](), created])
       }
-      props.store.setSelectedShapeId(null)
+      props.store.clearSelection()
       finalizeStrokeAfterCommit()
       brushSession.sessionUndoPushed = false
       brushSession.topologyCommitAttempt = 0
@@ -723,7 +749,8 @@ const AnnotationOverlay: Component<{
 
   createEffect(() => {
     props.store.shapes[0]()
-    props.store.selectedShapeId[0]()
+    props.store.selectedShapeIds[0]()
+    props.store.hoveredShapeId[0]()
     props.semanticStore?.classMap[0]()
     props.labels()
     props.imageSize()
@@ -757,14 +784,14 @@ const AnnotationOverlay: Component<{
         [
           props.activeTool(),
           props.segmentationMode(),
-          props.store.selectedShapeId[0](),
+          props.store.selectedShapeIds[0](),
           props.imageSize()?.width ?? 0,
           props.imageSize()?.height ?? 0
         ] as const,
       () => {
         lastPointerClient = null
         setHoverPoint(null)
-        setHoveredShapeId(null)
+        props.store.setHoveredShapeId(null)
         resetBrushSession()
         queueMicrotask(() => {
           loadSelectedShapeForEditing()
@@ -848,6 +875,11 @@ const AnnotationOverlay: Component<{
       return
     }
 
+    if (dragMode === 'marquee-select') {
+      setDraftMarquee(normalizeRectFromPoints(dragStart, point))
+      return
+    }
+
     if (dragMode !== 'resize-rect' || !resizeShapeId) return
     const next = normalizeRectFromPoints(resizeAnchor, point)
     const shapes = props.store.shapes[0]()
@@ -879,14 +911,35 @@ const AnnotationOverlay: Component<{
     if (remaining.length === shapes.length) return
 
     props.store.pushUndo()
-    const selectedId = props.store.selectedShapeId[0]()
+    const selectedId = props.store.primarySelectedId()
     props.store.setShapes(remaining)
     if (selectedId && !remaining.some((shape) => shape.id === selectedId)) {
-      props.store.setSelectedShapeId(null)
+      props.store.clearSelection()
     }
   }
 
+  const finishMarqueePointer = (point: Point2D | null): void => {
+    const rect = point ? normalizeRectFromPoints(dragStart, point) : draftMarquee()
+    if (!rect || (rect.width < MIN_RECT_SIZE && rect.height < MIN_RECT_SIZE)) {
+      if (!marqueeAdditive) props.store.clearSelection()
+    } else {
+      const ids = props.store
+        .shapes[0]()
+        .filter((shape) => boundsIntersect(shapeBounds(shape), rect))
+        .map((shape) => shape.id)
+      if (marqueeAdditive) props.store.addToSelection(ids)
+      else props.store.setSelectedShapeIds(ids)
+    }
+    clearMarqueeDraft()
+    stopInteraction()
+  }
+
   const finishRectPointer = (point: Point2D | null): void => {
+    if (dragMode === 'marquee-select') {
+      finishMarqueePointer(point)
+      return
+    }
+
     if (dragMode === 'draw-rect') {
       const rect = point ? normalizeRectFromPoints(dragStart, point) : draftRect()
       if (rect && rect.width >= MIN_RECT_SIZE && rect.height >= MIN_RECT_SIZE) {
@@ -931,7 +984,7 @@ const AnnotationOverlay: Component<{
     corner: RectCorner
   ): void => {
     props.store.pushUndo()
-    props.store.setSelectedShapeId(shape.id)
+    props.store.selectOnly(shape.id)
     project.setActiveLabelId(shape.labelId)
     dragMode = 'resize-rect'
     resizeShapeId = shape.id
@@ -1006,8 +1059,8 @@ const AnnotationOverlay: Component<{
     if (!point) return
 
     if (tool === 'cursor') {
-      const selectedId = props.store.selectedShapeId[0]()
-      if (selectedId) {
+      const selectedId = props.store.primarySelectedId()
+      if (selectedId && props.store.selectedShapeIds[0]().length === 1) {
         const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
         if (selected?.type === 'rectangle') {
           const corner = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
@@ -1019,15 +1072,29 @@ const AnnotationOverlay: Component<{
       }
 
       const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
-      props.store.setSelectedShapeId(hit?.id ?? null)
-      if (hit) project.setActiveLabelId(hit.labelId)
+      if (hit) {
+        if (event.ctrlKey || event.metaKey) {
+          props.store.toggleSelect(hit.id)
+          if (props.store.isSelected(hit.id)) project.setActiveLabelId(hit.labelId)
+        } else {
+          props.store.selectOnly(hit.id)
+          project.setActiveLabelId(hit.labelId)
+        }
+        return
+      }
+
+      marqueeAdditive = event.ctrlKey || event.metaKey
+      dragMode = 'marquee-select'
+      dragStart = point
+      setDraftMarquee({ x: point.x, y: point.y, width: 0, height: 0 })
+      captureRectPointer(event)
       return
     }
 
     if (tool === 'rectangle' && props.segmentationMode() === 'instance') {
       const pendingOrigin = pendingRectOrigin()
       if (!pendingOrigin) {
-        const selectedId = props.store.selectedShapeId[0]()
+        const selectedId = props.store.primarySelectedId()
         if (selectedId) {
           const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
           if (selected?.type === 'rectangle') {
@@ -1071,26 +1138,26 @@ const AnnotationOverlay: Component<{
     if (tool === 'cursor') {
       const point = getImagePoint(event)
       if (!point) {
-        setHoveredShapeId(null)
+        props.store.setHoveredShapeId(null)
         if (overlayRef) overlayRef.style.cursor = ''
         return
       }
 
-      const selectedId = props.store.selectedShapeId[0]()
-      if (selectedId && overlayRef) {
+      const selectedId = props.store.primarySelectedId()
+      if (selectedId && props.store.selectedShapeIds[0]().length === 1 && overlayRef) {
         const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
         if (selected?.type === 'rectangle') {
           const corner = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
           if (corner) {
             overlayRef.style.cursor = cornerCursor(corner)
-            setHoveredShapeId(selected.id)
+            props.store.setHoveredShapeId(selected.id)
             return
           }
         }
       }
 
       const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
-      setHoveredShapeId(hit?.id ?? null)
+      props.store.setHoveredShapeId(hit?.id ?? null)
       if (overlayRef) overlayRef.style.cursor = ''
       return
     }
@@ -1107,7 +1174,7 @@ const AnnotationOverlay: Component<{
       if (dragMode !== 'none') return
       let cornerHit: RectCorner | null = null
       if (pendingOrigin == null) {
-        const selectedId = props.store.selectedShapeId[0]()
+        const selectedId = props.store.primarySelectedId()
         if (selectedId) {
           const selected = props.store.shapes[0]().find((shape) => shape.id === selectedId)
           if (selected?.type === 'rectangle') {
@@ -1174,7 +1241,7 @@ const AnnotationOverlay: Component<{
   }
 
   const handleOverlayPointerLeave = (): void => {
-    setHoveredShapeId(null)
+    props.store.setHoveredShapeId(null)
     if (props.activeTool() !== 'mask') return
     if (brushSession.isDrawing) {
       stopBrushDrawing()
@@ -1193,20 +1260,52 @@ const AnnotationOverlay: Component<{
     brushSession.savedMasksErased ||
     topologyIssues().length > 0
 
+  const cycleSelection = (direction: 1 | -1): void => {
+    const next = props.store.selectAdjacent(direction)
+    if (!next) return
+    project.setActiveLabelId(next.labelId)
+
+    const viewport = props.viewportRef()
+    if (!viewport) return
+    const bounds = shapeBounds(next)
+    const visible = isBoundsFullyVisible(
+      bounds,
+      props.transform(),
+      viewport.clientWidth,
+      viewport.clientHeight,
+      8
+    )
+    if (!visible) project.focusShapeBounds(bounds)
+  }
+
   const handleKeyDown = (event: KeyboardEvent): void => {
+    if (isShortcutBlockedTarget(event.target)) return
+
+    if (event.key === 'Escape') {
+      if (project.cursorSidebarTab() === 'files' && props.activeTool() === 'cursor') {
+        event.preventDefault()
+        event.stopPropagation()
+        project.setCursorSidebarTab('objects')
+        return
+      }
+    }
+
     if (event.key === 'Escape') {
       if (
         dragMode === 'draw-rect' ||
         dragMode === 'finish-rect' ||
         dragMode === 'erase-rect' ||
         dragMode === 'resize-rect' ||
+        dragMode === 'marquee-select' ||
         draftRect() ||
+        draftMarquee() ||
         pendingRectOrigin()
       ) {
         event.preventDefault()
         event.stopPropagation()
         stopInteraction()
         clearRectDraft()
+        clearMarqueeDraft()
         return
       }
 
@@ -1217,12 +1316,19 @@ const AnnotationOverlay: Component<{
         loadSelectedShapeForEditing()
         return
       }
+
+      if (props.store.hasSelection()) {
+        event.preventDefault()
+        event.stopPropagation()
+        props.store.clearSelection()
+      }
+      return
     }
 
     if (event.key === 'Delete' || event.key === 'Backspace') {
       event.preventDefault()
       if (props.segmentationMode() === 'instance') {
-        props.store.deleteSelected()
+        project.requestDeleteShapes()
       }
       return
     }
@@ -1232,6 +1338,42 @@ const AnnotationOverlay: Component<{
       event.preventDefault()
       if (event.shiftKey) store?.redo()
       else store?.undo()
+    }
+  }
+
+  const handleCursorNavKeyDown = (event: KeyboardEvent): void => {
+    if (props.activeTool() !== 'cursor') return
+    if (props.segmentationMode() !== 'instance') return
+    if (project.cursorSidebarTab() === 'files') return
+    if (isShortcutBlockedTarget(event.target)) return
+
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      event.preventDefault()
+      props.store.selectAll()
+      return
+    }
+
+    if (event.key === 'Escape') {
+      if (!props.store.hasSelection()) return
+      event.preventDefault()
+      props.store.clearSelection()
+      return
+    }
+
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      if (!props.store.hasSelection()) return
+      event.preventDefault()
+      event.stopPropagation()
+      project.requestDeleteShapes()
+      return
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      event.stopPropagation()
+      cycleSelection(event.shiftKey ? -1 : 1)
     }
   }
 
@@ -1260,6 +1402,12 @@ const AnnotationOverlay: Component<{
     if (!viewport) return
     viewport.addEventListener('keydown', handleKeyDown)
     onCleanup(() => viewport.removeEventListener('keydown', handleKeyDown))
+  })
+
+  createEffect(() => {
+    if (props.activeTool() !== 'cursor') return
+    document.addEventListener('keydown', handleCursorNavKeyDown, true)
+    onCleanup(() => document.removeEventListener('keydown', handleCursorNavKeyDown, true))
   })
 
   onCleanup(() => {
@@ -1320,7 +1468,7 @@ const AnnotationOverlay: Component<{
             labels={props.labels}
             activeLabelId={props.activeLabelId}
             hiddenShapeId={editingShapeId}
-            hoveredShapeId={hoveredShapeId}
+            draftMarquee={draftMarquee}
             draftRect={draftRect}
             draftRectMode={draftRectMode}
             brushSvgPreview={brushSvgPreview}

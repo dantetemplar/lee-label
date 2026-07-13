@@ -180,3 +180,82 @@ export function hitTestPolygon(
   }
   return inside
 }
+
+export interface ImageBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export function shapeBounds(shape: {
+  type: 'rectangle' | 'mask' | 'polygon'
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  bounds?: ImageBounds
+  points?: { x: number; y: number }[]
+}): ImageBounds {
+  if (shape.type === 'rectangle') {
+    return {
+      x: shape.x ?? 0,
+      y: shape.y ?? 0,
+      width: shape.width ?? 0,
+      height: shape.height ?? 0
+    }
+  }
+  if (shape.type === 'mask' && shape.bounds) {
+    return { ...shape.bounds }
+  }
+  const points = shape.points ?? []
+  if (points.length === 0) {
+    return { x: 0, y: 0, width: 0, height: 0 }
+  }
+  let minX = points[0].x
+  let minY = points[0].y
+  let maxX = points[0].x
+  let maxY = points[0].y
+  for (const point of points) {
+    minX = Math.min(minX, point.x)
+    minY = Math.min(minY, point.y)
+    maxX = Math.max(maxX, point.x)
+    maxY = Math.max(maxY, point.y)
+  }
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(0, maxX - minX),
+    height: Math.max(0, maxY - minY)
+  }
+}
+
+export function boundsIntersect(a: ImageBounds, b: ImageBounds): boolean {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  )
+}
+
+/** True when image-space bounds lie fully inside the viewport (with optional screen padding). */
+export function isBoundsFullyVisible(
+  bounds: ImageBounds,
+  transform: ViewTransform,
+  viewportWidth: number,
+  viewportHeight: number,
+  padding = 0
+): boolean {
+  if (bounds.width <= 0 || bounds.height <= 0) return false
+  const left = bounds.x * transform.scale + transform.panX
+  const top = bounds.y * transform.scale + transform.panY
+  const right = left + bounds.width * transform.scale
+  const bottom = top + bounds.height * transform.scale
+  return (
+    left >= padding &&
+    top >= padding &&
+    right <= viewportWidth - padding &&
+    bottom <= viewportHeight - padding
+  )
+}
