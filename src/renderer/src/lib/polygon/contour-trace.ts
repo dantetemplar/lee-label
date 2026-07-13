@@ -393,3 +393,13 @@ export function extractExternalContour(
 
   return pixelChain
 }
+
+export function extractGridContour(
+  data: Uint8Array,
+  width: number,
+  height: number
+): Point2D[] {
+  const gridRing = traceGridBoundary(data, width, height)
+  if (gridRing.length >= 3) return gridRing
+  return traceOuterBoundary(data, width, height)
+}

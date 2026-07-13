@@ -13,12 +13,12 @@ export interface ProjectSettings {
 export const DEFAULT_SEGMENTATION_MODE: SegmentationMode = 'instance'
 
 export const POLYGON_SIMPLIFICATION: PolygonSimplificationSettings = {
-  epsilonRatio: 0.005
+  epsilonRatio: 0.001
 }
 
 /** Tighter RDP when refining an existing polygon so edits keep more contour detail. */
 export const POLYGON_SIMPLIFICATION_EDIT: PolygonSimplificationSettings = {
-  epsilonRatio: 0.001
+  epsilonRatio: 0.0003
 }
 
 /** Ignore disconnected speckle smaller than this when validating mask topology. */
