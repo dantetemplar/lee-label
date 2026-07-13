@@ -11,46 +11,46 @@ import type { FileEntry, RecentProject } from '../../shared/types'
 import type { AnnotationTool } from './components/AnnotationToolbar'
 import BrushSettings from './components/BrushSettings'
 import ConfirmDialog from './components/ConfirmDialog'
+import CursorSidebar from './components/CursorSidebar'
 import DatasetNavBar, {
-  DATASET_NAV_STEP,
-  type DatasetNavStats
+    DATASET_NAV_STEP,
+    type DatasetNavStats
 } from './components/DatasetNavBar'
+import ExportAnnotationsModal from './components/ExportAnnotationsModal'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
 import ImportAnnotationsModal from './components/ImportAnnotationsModal'
-import ExportAnnotationsModal from './components/ExportAnnotationsModal'
 import LabelPanel from './components/LabelPanel'
-import CursorSidebar from './components/CursorSidebar'
 import ProjectSettingsModal from './components/ProjectSettingsModal'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
 import WelcomeScreen from './components/WelcomeScreen'
 import { getActiveStore } from './lib/annotation-backend'
+import type { ImageBounds } from './lib/annotation-coords'
 import { AnnotationStore } from './lib/annotation-store'
 import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
 import { labelIndexFromCode } from './lib/label-shortcuts'
 import {
-  clearPressedKeys,
-  getPressedKeys,
-  pressKey,
-  releaseKey,
-  usePressedKeys
+    clearPressedKeys,
+    getPressedKeys,
+    pressKey,
+    releaseKey,
+    usePressedKeys
 } from './lib/pressed-keys'
 import { ProjectContext, type CursorSidebarTab } from './lib/project-context'
-import type { ImageBounds } from './lib/annotation-coords'
-import { isShortcutBlockedTarget, blurTextEditableOnEscape } from './lib/shortcut-guards'
 import { SemanticMapStore } from './lib/semantic-map-store'
+import { blurTextEditableOnEscape, isShortcutBlockedTarget } from './lib/shortcut-guards'
 import {
-  countImageStatuses,
-  findFirstImageFile,
-  findLastImageFile,
-  findNextUnfinishedImage,
-  findNodeByPath,
-  getAdjacentImagePaths,
-  getImageAtIndex,
-  getImagePathByOffset,
-  getImagePosition,
-  listImageStatusesInOrder
+    countImageStatuses,
+    findFirstImageFile,
+    findLastImageFile,
+    findNextUnfinishedImage,
+    findNodeByPath,
+    getAdjacentImagePaths,
+    getImageAtIndex,
+    getImagePathByOffset,
+    getImagePosition,
+    listImageStatusesInOrder
 } from './lib/tree-nav'
 import { useProjectLifecycle } from './lib/useProjectLifecycle'
 import { useTextFileEditor } from './lib/useTextFileEditor'

@@ -1,11 +1,12 @@
 import type { Accessor, Component } from 'solid-js'
-import { For, Show, createSignal, onCleanup, onMount } from 'solid-js'
+import { createSignal, createMemo, For, onCleanup, onMount, Show } from 'solid-js'
 import type { ImageLayers } from '../../../shared/image-layers'
-import { useProjectContext } from '../lib/project-context'
-import type { TopologyAlert } from '../lib/polygon/topology-session'
 import { createImageLayerCache, LAYERS, type LayerRole } from '../lib/image-layer-cache'
+import { hasAltKey } from '../lib/pressed-keys'
 import { createImageViewport } from '../lib/image-viewport'
 import { toLocalImageUrl } from '../lib/local-image-url'
+import type { TopologyAlert } from '../lib/polygon/topology-session'
+import { useProjectContext } from '../lib/project-context'
 import AnnotationOverlay from './AnnotationOverlay'
 import TopologyAlertBanner from './TopologyAlertBanner'
 
@@ -57,12 +58,21 @@ const ImageViewer: Component<{
     viewport.stopPan()
   })
 
-  const viewportCursor = (): string => {
+  const isAltSelectMode = (): boolean => {
+    if (project.projectSettings().segmentationMode !== 'instance') return false
+    if (!hasAltKey(project.pressedKeys())) return false
+    const tool = project.activeTool()
+    return tool === 'rectangle' || tool === 'mask'
+  }
+
+  const viewportCursor = createMemo((): string => {
+    project.pressedKeys()
     if (viewport.panning()) return 'grabbing'
+    if (isAltSelectMode()) return 'pointer'
     if (project.activeTool() === 'mask') return 'none'
     if (project.activeTool() === 'rectangle') return 'crosshair'
     return 'default'
-  }
+  })
 
   const focusWorkspace = (): void => {
     const el = viewportRef

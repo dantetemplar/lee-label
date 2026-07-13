@@ -8,6 +8,7 @@ import { hexToRgba } from '../../../shared/label-color'
 import type { Component } from 'solid-js'
 import { For, Show, createMemo } from 'solid-js'
 import type { AnnotationStore } from '../lib/annotation-store'
+import type { AnnotationTool } from './AnnotationToolbar'
 import {
   rectangleCornerPoints,
   rectanglesIntersect,
@@ -32,6 +33,7 @@ const AnnotationShapeLayer: Component<{
   width: number
   height: number
   scale: number
+  activeTool: () => AnnotationTool
   store: AnnotationStore
   labels: () => Label[]
   activeLabelId: () => string | null
@@ -40,6 +42,7 @@ const AnnotationShapeLayer: Component<{
   draftRect: () => { x: number; y: number; width: number; height: number } | null
   draftRectMode: () => 'draw' | 'erase'
   brushSvgPreview: () => { pixels: Array<{ x: number; y: number }>; opacity: number } | null
+  altSelectMode: () => boolean
 }> = (props) => {
   const labelMap = createMemo(() => new Map(props.labels().map((label) => [label.id, label])))
   const activeLabelColor = createMemo(() => {
@@ -86,6 +89,8 @@ const AnnotationShapeLayer: Component<{
           const soleSelected = (): boolean =>
             selected() && props.store.selectedShapeIds[0]().length === 1
           const marked = (): boolean => eraserMarkedIds().has(rect.id)
+          const showCornerHandles = (): boolean =>
+            (props.activeTool() === 'rectangle' && !props.altSelectMode()) || soleSelected()
           const color = (): string => (marked() ? ERASER_MARK_COLOR : (label()?.color ?? '#ffffff'))
           const corners = (): Record<RectCorner, { x: number; y: number }> =>
             rectangleCornerPoints(rect)
@@ -103,7 +108,7 @@ const AnnotationShapeLayer: Component<{
                 stroke={color()}
                 stroke-width={selected() || marked() ? 2.5 : 1.5}
               />
-              <Show when={soleSelected()}>
+              <Show when={showCornerHandles()}>
                 <For each={CORNER_KEYS}>
                   {(key) => (
                     <circle

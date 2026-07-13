@@ -140,6 +140,30 @@ body {
   @apply bg-neutral/30;
 }
 
+.app .statusbar-hints {
+  height: 100%;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--color-base-content) 22%, transparent) transparent;
+}
+
+.app .statusbar-hints::-webkit-scrollbar {
+  height: 3px;
+}
+
+.app .statusbar-hints::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.app .statusbar-hints::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-base-content) 22%, transparent);
+  border-radius: 999px;
+}
+
+.app .statusbar-hints::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-base-content) 34%, transparent);
+}
+
 .app [data-tree-item]:focus,
 .app [data-tree-item]:focus:not(:focus-visible) {
   outline: none;

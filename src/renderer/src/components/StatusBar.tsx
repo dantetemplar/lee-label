@@ -1,6 +1,7 @@
 import type { Component } from 'solid-js'
 import { Show } from 'solid-js'
 import type { FileInfo } from './FileViewer'
+import ToolControlHints from './ToolControlHints'
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
@@ -11,38 +12,46 @@ function formatSize(bytes: number): string {
 const StatusBar: Component<{
   info: () => FileInfo | null
   imagePosition?: () => { index: number; total: number } | null
-}> = (props) => (
-  <footer class="flex h-[var(--statusbar-height)] min-h-[var(--statusbar-height)] w-full shrink-0 items-center justify-end border-base-300 bg-base-200 px-3 text-xs text-base-content/60 border-t">
-    <Show when={props.info()}>
-      {(info) => (
-        <div class="flex items-center">
-          <span class="whitespace-nowrap px-2">{info().dirty ? `${info().name} •` : info().name}</span>
-          <Show when={info().width && info().height}>
+}> = (props) => {
+  const isImage = (): boolean => {
+    const info = props.info()
+    return Boolean(info?.width && info?.height)
+  }
+
+  return (
+    <footer class="flex h-[var(--statusbar-height)] min-h-[var(--statusbar-height)] w-full shrink-0 items-center justify-between gap-2 border-base-300 bg-base-200 px-3 text-xs text-base-content/60 border-t">
+      <ToolControlHints isImage={isImage} />
+      <Show when={props.info()}>
+        {(info) => (
+          <div class="flex shrink-0 items-center">
+            <span class="whitespace-nowrap px-2">{info().dirty ? `${info().name} •` : info().name}</span>
+            <Show when={info().width && info().height}>
+              <span class="h-3.5 w-px bg-base-300" />
+              <span class="whitespace-nowrap px-2">
+                {info().width}×{info().height}
+              </span>
+            </Show>
+            <Show when={info().lines}>
+              <span class="h-3.5 w-px bg-base-300" />
+              <span class="whitespace-nowrap px-2">{info().lines} lines</span>
+            </Show>
             <span class="h-3.5 w-px bg-base-300" />
-            <span class="whitespace-nowrap px-2">
-              {info().width}×{info().height}
-            </span>
-          </Show>
-          <Show when={info().lines}>
-            <span class="h-3.5 w-px bg-base-300" />
-            <span class="whitespace-nowrap px-2">{info().lines} lines</span>
-          </Show>
-          <span class="h-3.5 w-px bg-base-300" />
-          <span class="whitespace-nowrap px-2">{formatSize(info().size)}</span>
-          <Show when={props.imagePosition?.()}>
-            {(position) => (
-              <>
-                <span class="h-3.5 w-px bg-base-300" />
-                <span class="whitespace-nowrap px-2 tabular-nums">
-                  {position().index + 1} / {position().total}
-                </span>
-              </>
-            )}
-          </Show>
-        </div>
-      )}
-    </Show>
-  </footer>
-)
+            <span class="whitespace-nowrap px-2">{formatSize(info().size)}</span>
+            <Show when={props.imagePosition?.()}>
+              {(position) => (
+                <>
+                  <span class="h-3.5 w-px bg-base-300" />
+                  <span class="whitespace-nowrap px-2 tabular-nums">
+                    {position().index + 1} / {position().total}
+                  </span>
+                </>
+              )}
+            </Show>
+          </div>
+        )}
+      </Show>
+    </footer>
+  )
+}
 
 export default StatusBar

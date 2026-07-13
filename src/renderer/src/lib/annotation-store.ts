@@ -326,14 +326,15 @@ export class AnnotationStore extends PersistedImageStore {
     this.selectedShapeIds[1](this.shapes[0]().map((shape) => shape.id))
   }
 
-  /** Cycle selection by creation order (number ascending). Returns the newly selected shape. */
+  /** Cycle selection by creation order (Tab: newest → oldest). Returns the newly selected shape. */
   selectAdjacent(direction: 1 | -1): WorkingShape | null {
     const shapes = [...this.shapes[0]()].sort((left, right) => left.zOrder - right.zOrder)
     if (shapes.length === 0) return null
     const primary = this.primarySelectedId()
     const currentIndex = primary ? shapes.findIndex((shape) => shape.id === primary) : -1
-    let nextIndex = currentIndex + direction
-    if (currentIndex < 0) nextIndex = direction > 0 ? 0 : shapes.length - 1
+    const step = -direction
+    let nextIndex = currentIndex + step
+    if (currentIndex < 0) nextIndex = direction > 0 ? shapes.length - 1 : 0
     if (nextIndex < 0) nextIndex = shapes.length - 1
     if (nextIndex >= shapes.length) nextIndex = 0
     const next = shapes[nextIndex]

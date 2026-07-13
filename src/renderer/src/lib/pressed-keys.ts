@@ -43,3 +43,7 @@ export function hasModifierKey(keys: ReadonlySet<string>): boolean {
 export function hasShiftKey(keys: ReadonlySet<string>): boolean {
   return keys.has('ShiftLeft') || keys.has('ShiftRight')
 }
+
+export function hasAltKey(keys: ReadonlySet<string>): boolean {
+  return keys.has('AltLeft') || keys.has('AltRight')
+}
