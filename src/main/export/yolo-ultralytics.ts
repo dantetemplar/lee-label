@@ -2,7 +2,6 @@ import { constants } from 'fs'
 import { copyFile, mkdir, writeFile } from 'fs/promises'
 import { availableParallelism } from 'os'
 import { basename, dirname, extname, join } from 'path'
-import sharp from 'sharp'
 import type { Shape } from '../../shared/annotations'
 import { IMAGE_EXTENSIONS } from '../../shared/file-types'
 import type {
@@ -16,6 +15,7 @@ import type { ShapeRow } from '../db/types'
 import { mapShape } from '../db/types'
 import { readImageSize } from '../import/image-size'
 import { buildExportFileTree } from './export-tree'
+import { writeJpegCopy } from './jpeg-copy'
 import { formatYoloDetectionLine, formatYoloSegmentationLine } from './yolo-format'
 
 /** SSD-friendly copy concurrency; also used for mkdir / label writes. */
@@ -125,18 +125,6 @@ function shapeToYoloLine(
     return { line: formatYoloSegmentationLine(classIndex, points, imageWidth, imageHeight) }
   }
   return { line: null, warning: 'Skipped mask shape in segmentation export' }
-}
-
-async function writeJpegCopy(
-  sourcePath: string,
-  destPath: string,
-  quality: number
-): Promise<void> {
-  const q = Math.min(100, Math.max(1, Math.round(quality)))
-  await sharp(sourcePath)
-    .withMetadata()
-    .jpeg({ quality: q, mozjpeg: false })
-    .toFile(destPath)
 }
 
 async function copyImageFile(sourcePath: string, destPath: string): Promise<void> {
