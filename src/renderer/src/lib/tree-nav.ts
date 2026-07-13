@@ -91,6 +91,18 @@ export function findFirstImageFile(entries: FileEntry[]): FileEntry | null {
   return flattenImageFiles(entries)[0] ?? null
 }
 
+export function findImageByRelativePath(
+  entries: FileEntry[],
+  projectRoot: string,
+  relativePath: string
+): FileEntry | null {
+  const normalized = relativePath.replace(/\\/g, '/')
+  for (const image of flattenImageFiles(entries)) {
+    if (toRelativePath(projectRoot, image.path) === normalized) return image
+  }
+  return null
+}
+
 export function getAdjacentImagePaths(
   entries: FileEntry[],
   currentPath: string

@@ -8,6 +8,7 @@ import type {
   UpdateLabelInput
 } from '../shared/annotations'
 import type { SegmentationMode } from '../shared/segmentation'
+import type { WorkspaceSession } from '../shared/workspace-session'
 import { projectDatabase } from './db/project-db'
 
 function requireOpenProject(): void {
@@ -44,6 +45,16 @@ export function registerAnnotationsIpc(): void {
   ipcMain.handle('project:get-annotation-stats', () => {
     requireOpenProject()
     return projectDatabase.getAnnotationStats()
+  })
+
+  ipcMain.handle('project:get-workspace-session', () => {
+    requireOpenProject()
+    return projectDatabase.getWorkspaceSession()
+  })
+
+  ipcMain.handle('project:set-workspace-session', (_, session: WorkspaceSession) => {
+    requireOpenProject()
+    projectDatabase.setWorkspaceSession(session)
   })
 
   ipcMain.handle('labels:list', () => {

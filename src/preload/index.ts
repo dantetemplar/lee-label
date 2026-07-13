@@ -11,6 +11,7 @@ import type {
   UpdateLabelInput
 } from '../shared/annotations'
 import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
+import type { WorkspaceSession } from '../shared/workspace-session'
 import type { YoloImportOptions, YoloImportPreview, YoloImportResult } from '../shared/import'
 import type {
   YoloExportOptions,
@@ -65,7 +66,11 @@ const api = {
       segmentationMode?: SegmentationMode
     }): Promise<ProjectSettings> => ipcRenderer.invoke('project:update', input),
     getAnnotationStats: (): Promise<AnnotationStats> =>
-      ipcRenderer.invoke('project:get-annotation-stats')
+      ipcRenderer.invoke('project:get-annotation-stats'),
+    getWorkspaceSession: (): Promise<WorkspaceSession> =>
+      ipcRenderer.invoke('project:get-workspace-session'),
+    setWorkspaceSession: (session: WorkspaceSession): Promise<void> =>
+      ipcRenderer.invoke('project:set-workspace-session', session)
   },
   labels: {
     list: (): Promise<import('../shared/annotations').Label[]> =>

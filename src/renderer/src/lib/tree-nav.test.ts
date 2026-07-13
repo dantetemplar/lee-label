@@ -3,6 +3,7 @@ import type { ImageStatus } from '../../../shared/annotations'
 import type { FileEntry } from '../../../shared/types'
 import {
   countImageStatuses,
+  findImageByRelativePath,
   findLastImageFile,
   findNextUnfinishedImage,
   flattenImageFiles,
@@ -108,6 +109,11 @@ describe('tree-nav dataset helpers', () => {
     }
 
     expect(findNextUnfinishedImage(entries, root, statuses, `${root}/a.jpg`)).toBeNull()
+  })
+
+  it('finds an image by relative path', () => {
+    expect(findImageByRelativePath(entries, root, 'b.jpg')?.name).toBe('b.jpg')
+    expect(findImageByRelativePath(entries, root, 'missing.jpg')).toBeNull()
   })
 
   it('seeks by index and offset', () => {

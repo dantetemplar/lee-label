@@ -14,6 +14,7 @@ import type {
   UpdateLabelInput
 } from '../shared/annotations'
 import type { ProjectSettings, SegmentationMode } from '../shared/segmentation'
+import type { WorkspaceSession } from '../shared/workspace-session'
 import type { YoloImportOptions, YoloImportPreview, YoloImportResult } from '../shared/import'
 import type {
   YoloExportOptions,
@@ -58,6 +59,8 @@ export interface AppAPI {
       segmentationMode?: SegmentationMode
     }) => Promise<ProjectSettings>
     getAnnotationStats: () => Promise<AnnotationStats>
+    getWorkspaceSession: () => Promise<WorkspaceSession>
+    setWorkspaceSession: (session: WorkspaceSession) => Promise<void>
   }
   labels: {
     list: () => Promise<Label[]>

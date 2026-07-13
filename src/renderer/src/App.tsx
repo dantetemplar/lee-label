@@ -54,6 +54,7 @@ import {
 } from './lib/tree-nav'
 import { useProjectLifecycle } from './lib/useProjectLifecycle'
 import { useTextFileEditor } from './lib/useTextFileEditor'
+import { createWorkspaceSessionStore } from './lib/workspace-session-store'
 
 const App: Component = () => {
   const [folderPath, setFolderPath] = createSignal<string | null>(null)
@@ -90,6 +91,7 @@ const App: Component = () => {
   const semanticStore = new SemanticMapStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
   })
+  const workspaceSession = createWorkspaceSessionStore()
 
   let focusShapeBoundsHandler: ((bounds: ImageBounds) => void) | null = null
   const registerFocusShapeBounds = (handler: ((bounds: ImageBounds) => void) | null): void => {
@@ -143,6 +145,11 @@ const App: Component = () => {
       size: node.size ?? 0
     })
 
+    const root = folderPath()
+    if (root && getFileKind(node.name) === 'image') {
+      workspaceSession.setLastImage(toRelativePath(root, node.path))
+    }
+
     // Image loads call saveCurrent() before replacing store state.
     // Non-image files still need an explicit flush.
     if (getFileKind(node.name) !== 'image') {
@@ -163,6 +170,10 @@ const App: Component = () => {
     setLabelError,
     resetViewerState,
     selectFile,
+    loadWorkspaceSession: () => workspaceSession.load(),
+    flushWorkspaceSession: () => workspaceSession.flush(),
+    clearWorkspaceSession: () => workspaceSession.clear(),
+    getLastImageRelativePath: () => workspaceSession.getLastImageRelativePath(),
     annotationStore,
     semanticStore,
     saveOpenTextIfDirty: () => textEditor.saveOpenTextIfDirty()
@@ -170,6 +181,10 @@ const App: Component = () => {
 
   onMount(() => {
     void window.api.recent.get().then(setRecentProjects)
+  })
+
+  onCleanup(() => {
+    void workspaceSession.flush()
   })
 
   const selectedKind = (): FileKind | null => {

@@ -3,7 +3,7 @@ import type { ImageStatus, Label } from '../../../shared/annotations'
 import type { ProjectSettings } from '../../../shared/segmentation'
 import type { AnnotationStore } from './annotation-store'
 import type { SemanticMapStore } from './semantic-map-store'
-import { findFirstImageFile } from './tree-nav'
+import { findFirstImageFile, findImageByRelativePath } from './tree-nav'
 
 export function useProjectLifecycle(options: {
   folderPath: () => string | null
@@ -18,6 +18,10 @@ export function useProjectLifecycle(options: {
   setLabelError: (error: string | null) => void
   resetViewerState: () => void
   selectFile: (node: FileEntry) => Promise<void>
+  loadWorkspaceSession: () => Promise<void>
+  flushWorkspaceSession: () => Promise<void>
+  clearWorkspaceSession: () => void
+  getLastImageRelativePath: () => string | null
   annotationStore: AnnotationStore
   semanticStore: SemanticMapStore
   saveOpenTextIfDirty: () => void
@@ -39,6 +43,7 @@ export function useProjectLifecycle(options: {
   const prepareNavigation = async (): Promise<void> => {
     options.saveOpenTextIfDirty()
     await flushAnnotations()
+    await options.flushWorkspaceSession()
   }
 
   const openAnnotationProject = async (path: string): Promise<void> => {
@@ -61,7 +66,9 @@ export function useProjectLifecycle(options: {
 
   const closeAnnotationProject = async (): Promise<void> => {
     await flushAnnotations()
+    await options.flushWorkspaceSession()
     await window.api.project.close()
+    options.clearWorkspaceSession()
     options.setLabels([])
     options.setImageStatuses({})
     options.setActiveLabelId(null)
@@ -71,14 +78,19 @@ export function useProjectLifecycle(options: {
   const loadFolderAtPath = async (path: string): Promise<void> => {
     await closeAnnotationProject()
     await openAnnotationProject(path)
+    await options.loadWorkspaceSession()
     const tree = await window.api.files.readDirectoryTree(path)
     const recent = await window.api.recent.add(path)
     options.setFolderPath(path)
     options.setEntries(tree)
     options.setRecentProjects(recent)
     options.resetViewerState()
-    const firstImage = findFirstImageFile(tree)
-    if (firstImage) await options.selectFile(firstImage)
+
+    const lastRelativePath = options.getLastImageRelativePath()
+    const resumeImage =
+      lastRelativePath !== null ? findImageByRelativePath(tree, path, lastRelativePath) : null
+    const targetImage = resumeImage ?? findFirstImageFile(tree)
+    if (targetImage) await options.selectFile(targetImage)
   }
 
   const openFolder = async (): Promise<void> => {
@@ -95,6 +107,7 @@ export function useProjectLifecycle(options: {
     options.setFolderPath(null)
     options.setEntries([])
     options.resetViewerState()
+    options.clearWorkspaceSession?.()
   }
 
   const openRecentProject = async (

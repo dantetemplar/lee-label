@@ -21,6 +21,11 @@ import {
   type SegmentationMode,
   SETTINGS_KEY_SEGMENTATION_MODE
 } from '../../shared/segmentation'
+import {
+  EMPTY_WORKSPACE_SESSION,
+  SETTINGS_KEY_WORKSPACE_SESSION,
+  type WorkspaceSession
+} from '../../shared/workspace-session'
 import { ImagesRepository } from './images'
 import { LabelsRepository } from './labels'
 import { runMigrations } from './migrations'
@@ -105,6 +110,19 @@ export class ProjectDatabase implements DbContext {
 
     this.touchProject()
     return this.getProject()
+  }
+
+  getWorkspaceSession(): WorkspaceSession {
+    const stored = this.getSetting<{ lastImageRelativePath?: string | null }>(
+      SETTINGS_KEY_WORKSPACE_SESSION,
+      EMPTY_WORKSPACE_SESSION
+    )
+    return { lastImageRelativePath: stored.lastImageRelativePath ?? null }
+  }
+
+  setWorkspaceSession(session: WorkspaceSession): void {
+    this.setSetting(SETTINGS_KEY_WORKSPACE_SESSION, session)
+    this.touchProject()
   }
 
   getAnnotationStats(): AnnotationStats {
