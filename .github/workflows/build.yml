@@ -114,18 +114,30 @@ jobs:
       - name: Package
         run: pnpm exec electron-builder ${{ matrix.command }}
 
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          shopt -s nullglob
+          for pattern in \
+            dist/*.AppImage \
+            dist/*.deb \
+            dist/*.exe \
+            dist/*.dmg \
+            dist/*.zip \
+            dist/*.blockmap \
+            dist/latest-*.yml; do
+            for file in $pattern; do
+              cp "$file" artifacts/
+            done
+          done
+          ls -la artifacts/
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: lee-label-${{ matrix.platform }}-${{ github.sha }}
-          path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/*.exe
-            dist/*.dmg
-            dist/*.zip
-            dist/*.blockmap
-            dist/latest-*.yml
+          path: artifacts/
           if-no-files-found: error
 
   upload-release:
@@ -142,4 +154,4 @@ jobs:
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/dist/*
+          files: release-assets/*
