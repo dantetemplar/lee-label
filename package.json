@@ -25,6 +25,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@corvu/dialog": "^0.2.4",
+    "@corvu/popover": "^0.2.0",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "^1.7.6",
     "better-sqlite3": "^12.11.1",

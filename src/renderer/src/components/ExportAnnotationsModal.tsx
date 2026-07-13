@@ -194,6 +194,24 @@ const ExportAnnotationsModal: Component<{
     void window.api.export.cancelYoloUltralytics()
   }
 
+  const canSubmit = (): boolean => {
+    if (busy() || exporting()) return false
+    if (step() === 'setup') return Boolean(outputDir())
+    if (step() === 'preview') {
+      const value = preview()
+      return Boolean(value && value.labelFileCount > 0)
+    }
+    if (step() === 'done') return true
+    return false
+  }
+
+  const handleModalSubmit = (): void => {
+    if (!canSubmit()) return
+    if (step() === 'setup') handlePreview()
+    else if (step() === 'preview') handleExport()
+    else props.onClose()
+  }
+
   return (
     <FloatingModal
       open={props.open}
@@ -205,6 +223,7 @@ const ExportAnnotationsModal: Component<{
         if (busy()) return
         props.onClose()
       }}
+      onSubmit={handleModalSubmit}
       labelledBy="export-annotations-title"
       panelClass={step() === 'preview' ? 'max-w-2xl p-6' : 'max-w-xl p-8'}
     >

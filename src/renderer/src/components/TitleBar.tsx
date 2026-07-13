@@ -3,6 +3,7 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid
 import { BsChevronRight, BsDash, BsSquare, BsWindowStack, BsX } from 'solid-icons/bs'
 import type { RecentProject } from '../../../shared/types'
 import { getRecentProjectFullLabel } from '../lib/recent-project-path'
+import { clearStickyHover } from '../lib/clear-sticky-hover'
 import AppLogo from './AppLogo'
 
 const menuPanelClass =
@@ -38,12 +39,7 @@ const TitleBar: Component<{
     if (root && active instanceof HTMLElement && root.contains(active)) {
       active.blur()
     }
-    // Dropdown overlays can swallow mouseleave; drop sticky :hover paint.
-    if (!root) return
-    root.style.pointerEvents = 'none'
-    requestAnimationFrame(() => {
-      root.style.pointerEvents = ''
-    })
+    clearStickyHover(root ?? undefined)
   }
 
   const closeMenus = (): void => {

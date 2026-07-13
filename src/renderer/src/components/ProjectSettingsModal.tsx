@@ -3,6 +3,7 @@ import { Show, createEffect, createMemo, createSignal, on } from 'solid-js'
 import type { Label, LabelDeleteStats } from '../../../shared/annotations'
 import { getLabelColor } from '../../../shared/label-color'
 import type { ProjectSettings, SegmentationMode } from '../../../shared/segmentation'
+import { focusDialogPanel } from '../lib/focus-dialog-panel'
 import ConfirmDialog from './ConfirmDialog'
 import FloatingModal from './FloatingModal'
 import LabelPanel from './LabelPanel'
@@ -58,9 +59,6 @@ const ProjectSettingsModal: Component<{
   const [error, setError] = createSignal<string | null>(null)
   const [labelError, setLabelError] = createSignal<string | null>(null)
   const [modeChangePrompt, setModeChangePrompt] = createSignal<SegmentationMode | null>(null)
-  const [modeRadioSync, setModeRadioSync] = createSignal(0)
-
-  const syncModeRadios = (): void => setModeRadioSync((n) => n + 1)
   const [labelDeletePrompt, setLabelDeletePrompt] = createSignal<{
     label: Label
     stats: LabelDeleteStats
@@ -216,39 +214,31 @@ const ProjectSettingsModal: Component<{
   }
 
   const handleModeChange = (mode: SegmentationMode): void => {
-    if (mode === draftMode()) {
-      syncModeRadios()
-      return
-    }
+    if (mode === draftMode()) return
 
     // Reverting to the saved mode never needs a confirm.
     if (mode === baseline()?.segmentationMode) {
       setDraftMode(mode)
-      syncModeRadios()
       return
     }
 
     void window.api.project.getAnnotationStats().then((stats) => {
       if (stats.shapeCount > 0 || stats.semanticMaskCount > 0) {
         setModeChangePrompt(mode)
-        syncModeRadios()
       } else {
         setDraftMode(mode)
-        syncModeRadios()
       }
     })
   }
 
   const cancelModeChange = (): void => {
     setModeChangePrompt(null)
-    syncModeRadios()
   }
 
   const confirmModeChange = (): void => {
     const mode = modeChangePrompt()
     if (mode) setDraftMode(mode)
     setModeChangePrompt(null)
-    syncModeRadios()
   }
 
   const handleSave = (): void => {
@@ -256,148 +246,167 @@ const ProjectSettingsModal: Component<{
   }
 
   return (
-    <>
-      <FloatingModal
-        open={props.open}
-        onClose={props.onClose}
-        onSubmit={() => {
-          if (canSave()) handleSave()
-        }}
-        labelledBy="project-settings-title"
-        panelClass="max-w-2xl p-8"
-      >
-        <h2 id="project-settings-title" class="text-xl font-semibold">
-          Project settings
-        </h2>
-        <div class="mt-6 space-y-5">
-          <label class="block text-sm text-base-content/70">
-            Name
-            <input
-              type="text"
-              class="input input-bordered mt-2 w-full bg-base-100 font-inherit"
-              value={draftName()}
+    <FloatingModal
+      open={props.open}
+      onClose={props.onClose}
+      onSubmit={() => {
+        if (canSave()) handleSave()
+      }}
+      labelledBy="project-settings-title"
+      panelClass="max-w-2xl p-8"
+      nested={
+        <>
+          <ConfirmDialog
+            open={() => modeChangePrompt() !== null}
+            title={() => 'Change segmentation mode?'}
+            message={() => (
+              <>
+                Existing annotations may be incompatible with the new mode and will not be migrated
+                automatically. Continue?
+              </>
+            )}
+            destructive
+            onCancel={cancelModeChange}
+            onConfirm={confirmModeChange}
+          />
+          <ConfirmDialog
+            open={() => labelDeletePrompt() !== null}
+            title={() => {
+              const label = labelDeletePrompt()?.label
+              return label ? `Do you want to delete "${label.name}" label?` : ''
+            }}
+            message={() => {
+              const prompt = labelDeletePrompt()
+              if (!prompt) return ''
+              const { fileCount, instanceCount } = prompt.stats
+              return (
+                <>
+                  This label will be removed when you save. All annotations ({fileCount} files,{' '}
+                  {instanceCount} instances) associated to the label will be deleted.
+                </>
+              )
+            }}
+            destructive
+            onCancel={() => setLabelDeletePrompt(null)}
+            onConfirm={() => {
+              const id = labelDeletePrompt()?.label.id
+              setLabelDeletePrompt(null)
+              if (id) removeDraftLabel(id)
+            }}
+          />
+        </>
+      }
+    >
+      <h2 id="project-settings-title" class="text-xl font-semibold">
+        Project settings
+      </h2>
+      <div class="mt-6 space-y-5">
+        <label class="block text-sm text-base-content/70">
+          Name
+          <input
+            type="text"
+            class="input input-bordered mt-2 w-full bg-base-100 font-inherit"
+            value={draftName()}
+            disabled={saving()}
+            on:input={(event) => setDraftName(event.currentTarget.value)}
+            on:blur={(event) => setDraftName(event.currentTarget.value.trim())}
+            on:keydown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              event.stopPropagation()
+              setDraftName(event.currentTarget.value.trim())
+              event.currentTarget.blur()
+              focusDialogPanel(event.currentTarget)
+            }}
+          />
+        </label>
+        <div class="block text-sm text-base-content/70">
+          Path
+          <div class="field-readonly mt-2 cursor-default">{displayPath()}</div>
+        </div>
+
+        <fieldset class="space-y-2">
+          <legend class="text-sm text-base-content/70">Segmentation mode</legend>
+          <div role="radiogroup" class="space-y-2">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={draftMode() === 'instance'}
+              class="flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
               disabled={saving()}
-              on:input={(event) => setDraftName(event.currentTarget.value)}
-              on:blur={(event) => setDraftName(event.currentTarget.value.trim())}
-              on:keydown={(event) => {
-                if (event.key !== 'Enter') return
-                event.preventDefault()
-                event.stopPropagation()
-                setDraftName(event.currentTarget.value.trim())
-                event.currentTarget.blur()
-              }}
-            />
-          </label>
-          <div class="block text-sm text-base-content/70">
-            Path
-            <div class="field-readonly mt-2 cursor-default">{displayPath()}</div>
-          </div>
-
-          <fieldset class="space-y-2">
-            <legend class="text-sm text-base-content/70">Segmentation mode</legend>
-            <label class="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="segmentation-mode"
-                class="radio radio-sm"
-                prop:checked={modeRadioSync() >= 0 && draftMode() === 'instance'}
-                disabled={saving()}
-                on:click={(event) => {
-                  event.preventDefault()
-                  handleModeChange('instance')
+              onClick={() => handleModeChange('instance')}
+            >
+              <span
+                class="flex size-4 shrink-0 items-center justify-center rounded-full border-2"
+                classList={{
+                  'border-primary': draftMode() === 'instance',
+                  'border-base-content/40': draftMode() !== 'instance'
                 }}
-              />
+                aria-hidden="true"
+              >
+                <Show when={draftMode() === 'instance'}>
+                  <span class="size-2 rounded-full bg-primary" />
+                </Show>
+              </span>
               Instance segmentation (brush to polygon)
-            </label>
-            <label class="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="segmentation-mode"
-                class="radio radio-sm"
-                prop:checked={modeRadioSync() >= 0 && draftMode() === 'semantic'}
-                disabled={saving()}
-                on:click={(event) => {
-                  event.preventDefault()
-                  handleModeChange('semantic')
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={draftMode() === 'semantic'}
+              class="flex w-full cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={saving()}
+              onClick={() => handleModeChange('semantic')}
+            >
+              <span
+                class="flex size-4 shrink-0 items-center justify-center rounded-full border-2"
+                classList={{
+                  'border-primary': draftMode() === 'semantic',
+                  'border-base-content/40': draftMode() !== 'semantic'
                 }}
-              />
+                aria-hidden="true"
+              >
+                <Show when={draftMode() === 'semantic'}>
+                  <span class="size-2 rounded-full bg-primary" />
+                </Show>
+              </span>
               Semantic segmentation (class-id bitmap)
-            </label>
-          </fieldset>
-
-          <div class="flex h-64 w-[var(--sidebar-width)] flex-col overflow-hidden rounded-lg border border-base-content/10 bg-base-200">
-            <LabelPanel
-              labels={draftLabels}
-              activeLabelId={draftActiveLabelId}
-              onSelect={setDraftActiveLabelId}
-              onCreate={handleDraftCreate}
-              onUpdate={handleDraftUpdate}
-              onDelete={handleDraftDelete}
-              showShortcuts={() => false}
-              error={labelError}
-            />
+            </button>
           </div>
+        </fieldset>
 
-          <Show when={error()}>
-            <p class="text-sm text-error">{error()}</p>
-          </Show>
+        <div class="flex h-64 w-[var(--sidebar-width)] flex-col overflow-hidden rounded-lg border border-base-content/10 bg-base-200">
+          <LabelPanel
+            labels={draftLabels}
+            activeLabelId={draftActiveLabelId}
+            onSelect={setDraftActiveLabelId}
+            onCreate={handleDraftCreate}
+            onUpdate={handleDraftUpdate}
+            onDelete={handleDraftDelete}
+            showShortcuts={() => false}
+            error={labelError}
+          />
         </div>
-        <div class="mt-8 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost" disabled={saving()} onClick={() => props.onClose()}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            classList={{ 'btn-disabled': !canSave() }}
-            disabled={!canSave()}
-            onClick={handleSave}
-          >
-            Save
-          </button>
-        </div>
-      </FloatingModal>
 
-      <ConfirmDialog
-        open={() => modeChangePrompt() !== null}
-        title={() => 'Change segmentation mode?'}
-        message={() => (
-          <>
-            Existing annotations may be incompatible with the new mode and will not be migrated
-            automatically. Continue?
-          </>
-        )}
-        destructive
-        onCancel={cancelModeChange}
-        onConfirm={confirmModeChange}
-      />
-
-      <ConfirmDialog
-        open={() => labelDeletePrompt() !== null}
-        title={() => {
-          const label = labelDeletePrompt()?.label
-          return label ? `Do you want to delete "${label.name}" label?` : ''
-        }}
-        message={() => {
-          const prompt = labelDeletePrompt()
-          if (!prompt) return ''
-          const { fileCount, instanceCount } = prompt.stats
-          return (
-            <>
-              This label will be removed when you save. All annotations ({fileCount} files,{' '}
-              {instanceCount} instances) associated to the label will be deleted.
-            </>
-          )
-        }}
-        destructive
-        onCancel={() => setLabelDeletePrompt(null)}
-        onConfirm={() => {
-          const id = labelDeletePrompt()?.label.id
-          setLabelDeletePrompt(null)
-          if (id) removeDraftLabel(id)
-        }}
-      />
-    </>
+        <Show when={error()}>
+          <p class="text-sm text-error">{error()}</p>
+        </Show>
+      </div>
+      <div class="mt-8 flex justify-end gap-2">
+        <button type="button" class="btn btn-ghost" disabled={saving()} onClick={() => props.onClose()}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary"
+          classList={{ 'btn-disabled': !canSave() }}
+          disabled={!canSave()}
+          onClick={handleSave}
+        >
+          Save
+        </button>
+      </div>
+    </FloatingModal>
   )
 }
 

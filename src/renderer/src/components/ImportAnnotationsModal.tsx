@@ -360,6 +360,28 @@ const ImportAnnotationsModal: Component<{
       .finally(() => setBusy(false))
   }
 
+  const canSubmit = (): boolean => {
+    if (busy()) return false
+    if (step() === 'setup') return Boolean(labelsDir())
+    if (step() === 'preview') {
+      const value = preview()
+      if (!value) return false
+      return !(
+        value.matchedImages === 0 &&
+        (unmatchedAction() === 'leave' || value.unmatchedImages === 0)
+      )
+    }
+    if (step() === 'done') return true
+    return false
+  }
+
+  const handleModalSubmit = (): void => {
+    if (!canSubmit()) return
+    if (step() === 'setup') handlePreview()
+    else if (step() === 'preview') handleImport()
+    else props.onClose()
+  }
+
   return (
     <FloatingModal
       open={props.open}
@@ -367,6 +389,7 @@ const ImportAnnotationsModal: Component<{
         if (busy()) return
         props.onClose()
       }}
+      onSubmit={handleModalSubmit}
       labelledBy="import-annotations-title"
       panelClass={step() === 'preview' ? 'max-w-5xl p-6' : 'max-w-xl p-8'}
     >

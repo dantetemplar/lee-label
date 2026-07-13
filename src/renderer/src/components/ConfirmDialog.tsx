@@ -1,6 +1,11 @@
 import type { Component, JSX } from 'solid-js'
+import { createEffect, createUniqueId } from 'solid-js'
 import { BsExclamationCircleFill } from 'solid-icons/bs'
 import FloatingModal from './FloatingModal'
+
+const log = (...args: unknown[]): void => {
+  console.debug('[ConfirmDialog]', ...args)
+}
 
 const ConfirmDialog: Component<{
   open: () => boolean
@@ -10,38 +15,72 @@ const ConfirmDialog: Component<{
   destructive?: boolean
   onCancel: () => void
   onConfirm: () => void
-}> = (props) => (
-  <FloatingModal
-    open={props.open}
-    onClose={() => props.onCancel()}
-    onSubmit={() => props.onConfirm()}
-    labelledBy="confirm-dialog-title"
-    describedBy="confirm-dialog-message"
-  >
-    <div class="flex items-start gap-3">
-      <BsExclamationCircleFill class="text-warning mt-0.5 shrink-0" size={22} aria-hidden="true" />
-      <div class="min-w-0">
-        <h2 id="confirm-dialog-title" class="text-base font-semibold leading-snug">
-          {props.title()}
-        </h2>
-        <p id="confirm-dialog-message" class="text-base-content/70 mt-2 text-sm leading-relaxed">
-          {props.message()}
-        </p>
+}> = (props) => {
+  const titleId = createUniqueId()
+  const messageId = createUniqueId()
+  let confirmBtn: HTMLButtonElement | undefined
+
+  createEffect(() => {
+    if (!props.open()) return
+    queueMicrotask(() => {
+      confirmBtn?.focus({ preventScroll: true })
+      log('initial focus → OK', document.activeElement === confirmBtn)
+    })
+  })
+
+  return (
+    <FloatingModal
+      open={props.open}
+      onClose={() => {
+        log('onClose → onCancel')
+        props.onCancel()
+      }}
+      onSubmit={() => {
+        log('onSubmit → onConfirm')
+        props.onConfirm()
+      }}
+      role="alertdialog"
+      labelledBy={titleId}
+      describedBy={messageId}
+      initialFocusEl={() => confirmBtn}
+      panelClass="max-w-md p-5"
+    >
+      <div class="flex items-start gap-3">
+        <BsExclamationCircleFill class="text-warning mt-0.5 shrink-0" size={22} aria-hidden="true" />
+        <div class="min-w-0">
+          <h2 id={titleId} class="text-base font-semibold leading-snug">
+            {props.title()}
+          </h2>
+          <p id={messageId} class="text-base-content/70 mt-2 text-sm leading-relaxed">
+            {props.message()}
+          </p>
+        </div>
       </div>
-    </div>
-    <div class="mt-6 flex justify-end gap-2">
-      <button type="button" class="btn btn-ghost" onClick={() => props.onCancel()}>
-        Cancel
-      </button>
-      <button
-        type="button"
-        class={`btn ${props.destructive ? 'btn-error' : 'btn-primary'}`}
-        onClick={() => props.onConfirm()}
-      >
-        {props.confirmLabel ?? 'OK'}
-      </button>
-    </div>
-  </FloatingModal>
-)
+      <div class="mt-6 flex justify-end gap-2">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          onClick={() => {
+            log('Cancel click')
+            props.onCancel()
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          ref={confirmBtn}
+          class={`btn ${props.destructive ? 'btn-error' : 'btn-primary'}`}
+          onClick={() => {
+            log('OK click')
+            props.onConfirm()
+          }}
+        >
+          {props.confirmLabel ?? 'OK'}
+        </button>
+      </div>
+    </FloatingModal>
+  )
+}
 
 export default ConfirmDialog

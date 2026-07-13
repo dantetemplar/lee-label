@@ -9,6 +9,7 @@ import {
 } from '../lib/label-shortcuts'
 import { createKeyboardLayoutLabels } from '../lib/useKeyboardLayoutLabels'
 import { useProjectContext } from '../lib/project-context'
+import { focusDialogPanel } from '../lib/focus-dialog-panel'
 import LabelColorPicker, { type PickerSession } from './LabelColorPicker'
 import KeyboardHint from './KeyboardHint'
 
@@ -66,12 +67,19 @@ const LabelPanel: Component<{
     setNewName('')
   }
 
+  let lastEditInput: HTMLInputElement | undefined
+
   const handleSaveName = (label: Label, nextName = editName()): void => {
     const name = nextName.trim()
+    const input = lastEditInput
     // Leave edit mode synchronously so parent Enter/submit handlers cannot race.
     cancelEditName()
-    if (!name || name === label.name) return
+    if (!name || name === label.name) {
+      if (input) focusDialogPanel(input)
+      return
+    }
     void props.onUpdate({ ...label, name })
+    if (input) focusDialogPanel(input)
   }
 
   const handleColorChange = async (label: Label, color: string): Promise<void> => {
@@ -166,7 +174,10 @@ const LabelPanel: Component<{
                 <input
                   class="input input-bordered input-xs bg-base-100 font-inherit h-5 min-h-5! min-w-0 flex-1 px-1 py-0! leading-none"
                   value={editName()}
-                  ref={(element) => queueMicrotask(() => element.focus())}
+                  ref={(element) => {
+                    lastEditInput = element
+                    queueMicrotask(() => element.focus())
+                  }}
                   on:input={(event) => setEditName(event.currentTarget.value)}
                   on:keydown={(event) => {
                     if (event.isComposing) return
@@ -214,7 +225,12 @@ const LabelPanel: Component<{
             on:keydown={(event) => {
               if (event.key !== 'Enter') return
               event.preventDefault()
-              void handleCreate().then(() => event.currentTarget.blur())
+              event.stopPropagation()
+              const input = event.currentTarget
+              void handleCreate().then(() => {
+                input.blur()
+                focusDialogPanel(input)
+              })
             }}
           />
           <button

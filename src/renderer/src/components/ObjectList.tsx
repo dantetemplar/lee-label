@@ -1,12 +1,11 @@
 import type { Component } from 'solid-js'
-import { For, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js'
-import { Portal } from 'solid-js/web'
-import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom'
+import { For, Show, createEffect, createMemo, createSignal } from 'solid-js'
 import { BsArrowsFullscreen, BsChevronDown, BsTrash } from 'solid-icons/bs'
 import type { Label } from '../../../shared/annotations'
 import { shapeBounds } from '../lib/annotation-coords'
 import type { WorkingShape } from '../lib/annotation-store'
 import { useProjectContext } from '../lib/project-context'
+import FloatingPopover from './FloatingPopover'
 
 const SHAPE_TYPE_LABEL: Record<WorkingShape['type'], string> = {
   rectangle: 'Rect',
@@ -25,7 +24,6 @@ const ObjectList: Component<{ embedded?: boolean }> = (props) => {
   const project = useProjectContext()
   const store = project.annotationStore
   const [labelMenu, setLabelMenu] = createSignal<LabelMenuSession | null>(null)
-  const [menuEl, setMenuEl] = createSignal<HTMLDivElement | undefined>()
 
   const labelMap = createMemo(() => new Map(project.labels().map((label) => [label.id, label])))
 
@@ -126,67 +124,6 @@ const ObjectList: Component<{ embedded?: boolean }> = (props) => {
     store.selectOnly(shape.id)
     project.setActiveLabelId(shape.labelId)
   }
-
-  createEffect(() => {
-    const session = labelMenu()
-    const panel = menuEl()
-    if (!session || !panel) return
-
-    panel.style.position = 'fixed'
-    panel.style.left = `${Math.round(session.rect.left)}px`
-    panel.style.top = `${Math.round(session.rect.bottom + 4)}px`
-
-    const reference = {
-      getBoundingClientRect: () =>
-        session.trigger.isConnected
-          ? session.trigger.getBoundingClientRect()
-          : DOMRect.fromRect({
-              x: session.rect.left,
-              y: session.rect.top,
-              width: session.rect.width,
-              height: session.rect.height
-            })
-    }
-
-    const place = (): void => {
-      void computePosition(reference, panel, {
-        placement: 'bottom-start',
-        strategy: 'fixed',
-        middleware: [offset(4), flip(), shift({ padding: 8 })]
-      }).then(({ x, y }) => {
-        panel.style.left = `${Math.round(x)}px`
-        panel.style.top = `${Math.round(y)}px`
-      })
-    }
-
-    place()
-    const cleanup = autoUpdate(reference, panel, place)
-    onCleanup(cleanup)
-  })
-
-  createEffect(() => {
-    if (!labelMenu()) return
-    const onPointerDown = (event: PointerEvent): void => {
-      const panel = menuEl()
-      const target = event.target
-      if (!(target instanceof Node)) return
-      if (panel?.contains(target)) return
-      if (labelMenu()?.trigger.contains(target)) return
-      closeLabelMenu()
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        closeLabelMenu()
-      }
-    }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    document.addEventListener('keydown', onKeyDown)
-    onCleanup(() => {
-      document.removeEventListener('pointerdown', onPointerDown, true)
-      document.removeEventListener('keydown', onKeyDown)
-    })
-  })
 
   const currentMenuLabelId = createMemo(() => {
     const session = labelMenu()
@@ -351,39 +288,38 @@ const ObjectList: Component<{ embedded?: boolean }> = (props) => {
         </div>
       </section>
 
-      <Show when={labelMenu()}>
-        <Portal>
-          <div
-            ref={setMenuEl}
-            class="bg-base-100 border-base-300 z-50 min-w-40 rounded-box border p-1 shadow-md"
-            role="listbox"
-            aria-label="Change label"
-          >
-            <For each={project.labels()}>
-              {(item) => {
-                const active = (): boolean => currentMenuLabelId() === item.id
-                return (
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={active()}
-                    class="flex h-7 w-full items-center gap-2 rounded-btn px-2 text-left text-xs hover:bg-base-content/8"
-                    classList={{ 'bg-primary/15': active() }}
-                    onClick={() => applyLabel(item.id)}
-                  >
-                    <span
-                      class="h-2.5 w-2.5 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_18%,transparent)]"
-                      style={{ background: item.color }}
-                      aria-hidden="true"
-                    />
-                    <span class="truncate">{item.name}</span>
-                  </button>
-                )
-              }}
-            </For>
-          </div>
-        </Portal>
-      </Show>
+      <FloatingPopover
+        open={() => labelMenu() !== null}
+        onClose={closeLabelMenu}
+        reference={() => labelMenu()?.trigger}
+        placement="bottom-start"
+        contentRole="listbox"
+        panelClass="bg-base-100 border-base-300 min-w-40 rounded-box border p-1 shadow-md"
+        fitContent={false}
+      >
+        <For each={project.labels()}>
+          {(item) => {
+            const active = (): boolean => currentMenuLabelId() === item.id
+            return (
+              <button
+                type="button"
+                role="option"
+                aria-selected={active()}
+                class="flex h-7 w-full items-center gap-2 rounded-btn px-2 text-left text-xs hover:bg-base-content/8"
+                classList={{ 'bg-primary/15': active() }}
+                onClick={() => applyLabel(item.id)}
+              >
+                <span
+                  class="h-2.5 w-2.5 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-base-content)_18%,transparent)]"
+                  style={{ background: item.color }}
+                  aria-hidden="true"
+                />
+                <span class="truncate">{item.name}</span>
+              </button>
+            )
+          }}
+        </For>
+      </FloatingPopover>
     </div>
   )
 }
