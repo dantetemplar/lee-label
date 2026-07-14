@@ -130,21 +130,20 @@ jobs:
 
           if [ "$PLATFORM" = "linux" ]; then
             mkdir -p artifacts/appimage artifacts/deb
-            cp dist/*.AppImage dist/latest-*.yml artifacts/appimage/
+            cp dist/*.AppImage artifacts/appimage/
             cp dist/*.deb artifacts/deb/
           elif [ "$PLATFORM" = "mac" ]; then
             mkdir -p artifacts/dmg artifacts/x64 artifacts/arm64
-            cp dist/*.dmg dist/*.dmg.blockmap artifacts/dmg/
-            cp dist/latest-mac.yml artifacts/dmg/ 2>/dev/null || true
-            for file in dist/*-arm64-mac.zip dist/*-arm64-mac.zip.blockmap; do
+            cp dist/*.dmg artifacts/dmg/
+            for file in dist/*-arm64-mac.zip; do
               cp "$file" artifacts/arm64/
             done
-            for file in dist/*-mac.zip dist/*-mac.zip.blockmap; do
+            for file in dist/*-mac.zip; do
               [[ "$file" == *arm64* ]] && continue
               cp "$file" artifacts/x64/
             done
           elif [ "$PLATFORM" = "win" ]; then
-            cp dist/*.exe dist/*.exe.blockmap dist/latest.yml artifacts/
+            cp dist/*.exe artifacts/
           fi
 
           find artifacts -type f | sort
@@ -206,12 +205,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --tag ${{ needs.prepare.outputs.release_tag }} --strip header
+          args: --current --strip header
         env:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}

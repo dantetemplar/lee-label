@@ -1,28 +1,30 @@
 [changelog]
 body = """
-{% if version %}\
-## {{ version }}
-{% endif %}\
-{% for group, commits in commits | group_by(attribute="group") %}
+<details>
+<summary>Changelog</summary>
+{%- for group, commits in commits | group_by(attribute="group") %}
+
 ### {{ group | striptags | trim | upper_first }}
-{% for commit in commits %}
-- {{ commit.message | split(pat="\n") | first | trim }}\
+{% for commit in commits -%}
+- [`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/commit/{{ commit.id }}) {{ commit.raw_message | split(pat="\n") | first | trim }}
+{% endfor -%}
 {% endfor %}
-{% endfor %}
+
+</details>
 """
 trim = true
 
 [git]
 conventional_commits = true
+filter_unconventional = false
 commit_parsers = [
-  { message = "^feat", group = "Features" },
-  { message = "^fix", group = "Bug Fixes" },
-  { message = "^doc", group = "Documentation" },
-  { message = "^test", group = "Testing" },
-  { message = "^ci", group = "CI" },
-  { message = "^chore", group = "Maintenance" },
+  { message = "^feat", group = "<!-- 0 -->Features" },
   { message = "^Release", skip = true },
-  { message = ".*", group = "Other" },
+  { message = ".*", group = "<!-- 1 -->Other changes" },
 ]
 filter_commits = false
 sort_commits = "oldest"
+
+[remote.github]
+owner = "dantetemplar"
+repo = "lee-label"
