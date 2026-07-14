@@ -16,22 +16,34 @@ on:
         type: boolean
         default: true
   release:
-    types: [published, edited]
+    types: [published]
+  repository_dispatch:
+    types: [run-release-build]
 
 permissions:
   contents: write
 
 jobs:
   prepare:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'release' && github.event.action == 'published') ||
-      (github.event_name == 'release' && github.event.action == 'edited' && startsWith(github.event.release.body, '[run build]'))
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
+      ref: ${{ steps.set-ref.outputs.ref }}
+      release_tag: ${{ steps.set-ref.outputs.release_tag }}
     steps:
+      - id: set-ref
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "ref=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "ref=${{ github.event.client_payload.tag }}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=${{ github.event.client_payload.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "release_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
       - id: set-matrix
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -41,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "$EVENT_NAME" = "release" ]; then
+          if [ "$EVENT_NAME" = "release" ] || [ "$EVENT_NAME" = "repository_dispatch" ]; then
             {
               echo 'matrix<<EOF'
               echo '{"include":[{"platform":"linux","os":"ubuntu-latest","command":"--linux AppImage deb --publish never"},{"platform":"win","os":"windows-latest","command":"--win --publish never"},{"platform":"mac","os":"macos-latest","command":"--mac --x64 --arm64 --publish never"}]}'
@@ -186,8 +198,8 @@ jobs:
           if-no-files-found: error
 
   upload-release:
-    needs: build
-    if: github.event_name == 'release'
+    needs: [prepare, build]
+    if: github.event_name == 'release' || github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -199,7 +211,7 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --tag ${{ github.event.release.tag_name }} --strip header
+          args: --tag ${{ needs.prepare.outputs.release_tag }} --strip header
         env:
           OUTPUT: RELEASE_NOTES.md
           GITHUB_REPO: ${{ github.repository }}
@@ -216,7 +228,7 @@ jobs:
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
           body_path: RELEASE_NOTES.md
           files: |
             release-assets/**/*

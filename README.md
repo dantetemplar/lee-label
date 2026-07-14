@@ -84,7 +84,12 @@ The [Build](.github/workflows/build.yml) workflow builds installers on GitHub Ac
 
 **Release build** — publish a GitHub Release from a tag; CI builds all platforms, attaches installers, and generates release notes from commits via [git-cliff](https://git-cliff.org) ([`cliff.toml`](cliff.toml)). Use conventional commit prefixes: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`.
 
-**Re-run release build** — edit the release description so it **starts with** `[run build]` and save. CI runs again and replaces the body with the generated changelog when finished.
+**Re-run release build** — edit the release description so it **starts with** `[run build]`, then either:
+
+1. Save the release (if [Release Build Trigger](.github/workflows/release-trigger.yml) runs automatically on edit), or
+2. Actions → **Release Build Trigger** → Run workflow → enter the tag (e.g. `v0.1.0`)
+
+That dispatches the Build workflow, rebuilds all platforms, uploads assets, and replaces the body with the git-cliff changelog.
 
 Linux CI builds AppImage and deb only (snap remains available via local `pnpm build:linux`).
 

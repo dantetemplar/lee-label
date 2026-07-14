@@ -1,0 +1,45 @@
+name: Release Build Trigger
+
+on:
+  release:
+    types: [edited]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check prefix and dispatch build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          body=$(gh release view "$TAG" --json body -q .body)
+          trimmed=$(printf '%s' "$body" | tr -d '\r' | sed 's/^[[:space:]]*//')
+
+          if [[ "$trimmed" != '[run build]'* ]]; then
+            if [ "$EVENT" = "release" ]; then
+              echo "No [run build] prefix — skipping."
+              exit 0
+            fi
+            echo "Release description must start with [run build]."
+            exit 1
+          fi
+
+          gh api "repos/${{ github.repository }}/dispatches" \
+            -f event_type='run-release-build' \
+            -f "client_payload[tag]=$TAG"
+
+          echo "Dispatched build for $TAG"
