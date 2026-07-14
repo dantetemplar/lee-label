@@ -1,0 +1,28 @@
+[changelog]
+body = """
+{% if version %}\
+## {{ version }}
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {{ commit.message | split(pat="\n") | first | trim }}\
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^ci", group = "CI" },
+  { message = "^chore", group = "Maintenance" },
+  { message = "^Release", skip = true },
+  { message = ".*", group = "Other" },
+]
+filter_commits = false
+sort_commits = "oldest"

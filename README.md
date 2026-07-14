@@ -22,7 +22,8 @@ Download the latest release for your platform from **[GitHub Releases](https://g
 | **Linux** | `lee-label-X.Y.Z.AppImage` | `chmod +x lee-label-*.AppImage` then run it (portable, no install) |
 | **Linux** | `lee-label_X.Y.Z_amd64.deb` | `sudo dpkg -i lee-label_*.deb` |
 | **Windows** | `lee-label-X.Y.Z-setup.exe` | Run the installer and follow the prompts |
-| **macOS** | `lee-label-X.Y.Z.dmg` or `Lee Label-X.Y.Z-*-mac.zip` | Open the dmg (or unzip), drag **Lee Label** to Applications |
+| **macOS (Intel)** | `lee-label-X.Y.Z-x64.dmg` or `Lee Label-X.Y.Z-mac.zip` | Open the dmg (or unzip), drag **Lee Label** to Applications |
+| **macOS (Apple Silicon)** | `lee-label-X.Y.Z-arm64.dmg` or `Lee Label-X.Y.Z-arm64-mac.zip` | Open the dmg (or unzip), drag **Lee Label** to Applications |
 
 **macOS:** use the **arm64** build on Apple Silicon (M1/M2/M3) and the **x64** build on Intel Macs. If macOS blocks the app (unsigned build), right-click → Open, or allow it in **System Settings → Privacy & Security**.
 
@@ -82,7 +83,7 @@ The [Build](.github/workflows/build.yml) workflow builds installers on GitHub Ac
 - Toggle **Linux**, **Windows**, and/or **macOS**
 - Download artifacts from the completed run
 
-**Release build** — publish a GitHub Release from a tag; the workflow builds all platforms and attaches installers automatically. Use **Generate release notes** when drafting a release (configured in [.github/release.yml](.github/release.yml)).
+**Release build** — publish a GitHub Release from a tag; CI builds all platforms, attaches installers, and generates release notes from commits via [git-cliff](https://git-cliff.org) ([`cliff.toml`](cliff.toml)). Use conventional commit prefixes: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`.
 
 Linux CI builds AppImage and deb only (snap remains available via local `pnpm build:linux`).
 

@@ -116,27 +116,78 @@ jobs:
 
       - name: Stage artifacts
         shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
         run: |
-          mkdir -p artifacts
           shopt -s nullglob
-          for pattern in \
-            dist/*.AppImage \
-            dist/*.deb \
-            dist/*.exe \
-            dist/*.dmg \
-            dist/*.zip \
-            dist/*.blockmap \
-            dist/latest-*.yml; do
-            for file in $pattern; do
-              cp "$file" artifacts/
-            done
-          done
-          ls -la artifacts/
+          mkdir -p artifacts
 
-      - name: Upload artifacts
+          if [ "$PLATFORM" = "linux" ]; then
+            mkdir -p artifacts/appimage artifacts/deb
+            cp dist/*.AppImage dist/latest-*.yml artifacts/appimage/
+            cp dist/*.deb artifacts/deb/
+          elif [ "$PLATFORM" = "mac" ]; then
+            mkdir -p artifacts/dmg artifacts/x64 artifacts/arm64
+            cp dist/*.dmg dist/*.dmg.blockmap artifacts/dmg/
+            cp dist/latest-mac.yml artifacts/dmg/ 2>/dev/null || true
+            for file in dist/*-arm64-mac.zip dist/*-arm64-mac.zip.blockmap; do
+              cp "$file" artifacts/arm64/
+            done
+            for file in dist/*-mac.zip dist/*-mac.zip.blockmap; do
+              [[ "$file" == *arm64* ]] && continue
+              cp "$file" artifacts/x64/
+            done
+          elif [ "$PLATFORM" = "win" ]; then
+            cp dist/*.exe dist/*.exe.blockmap dist/latest.yml artifacts/
+          fi
+
+          find artifacts -type f | sort
+
+      - name: Upload Linux AppImage
+        if: matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
         with:
-          name: lee-label-${{ matrix.platform }}-${{ github.sha }}
+          name: lee-label-linux-appimage-${{ github.sha }}
+          path: artifacts/appimage/
+          if-no-files-found: error
+
+      - name: Upload Linux deb
+        if: matrix.platform == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lee-label-linux-deb-${{ github.sha }}
+          path: artifacts/deb/
+          if-no-files-found: error
+
+      - name: Upload macOS dmg
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lee-label-mac-dmg-${{ github.sha }}
+          path: artifacts/dmg/
+          if-no-files-found: error
+
+      - name: Upload macOS Intel zip
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lee-label-mac-x64-${{ github.sha }}
+          path: artifacts/x64/
+          if-no-files-found: error
+
+      - name: Upload macOS Apple Silicon zip
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lee-label-mac-arm64-${{ github.sha }}
+          path: artifacts/arm64/
+          if-no-files-found: error
+
+      - name: Upload Windows installer
+        if: matrix.platform == 'win'
+        uses: actions/upload-artifact@v4
+        with:
+          name: lee-label-win-${{ github.sha }}
           path: artifacts/
           if-no-files-found: error
 
@@ -145,13 +196,33 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --tag ${{ github.event.release.tag_name }} --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+          GITHUB_REPO: ${{ github.repository }}
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
+      - name: List release assets
+        run: find release-assets -type f | sort
+
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*
+          tag_name: ${{ github.event.release.tag_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            release-assets/**/*
