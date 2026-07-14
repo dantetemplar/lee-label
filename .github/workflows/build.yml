@@ -3,11 +3,6 @@ name: Build
 on:
   workflow_dispatch:
     inputs:
-      ref:
-        description: Branch or tag to build (e.g. main, v1.0.0)
-        type: string
-        default: main
-        required: true
       build_linux:
         description: Build Linux (AppImage + deb)
         type: boolean
@@ -21,23 +16,25 @@ on:
         type: boolean
         default: true
   release:
-    types: [published]
+    types: [published, edited]
 
 permissions:
   contents: write
 
 jobs:
   prepare:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'release' && github.event.action == 'published') ||
+      (github.event_name == 'release' && github.event.action == 'edited' && startsWith(github.event.release.body, '[run build]'))
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
-      ref: ${{ steps.set-matrix.outputs.ref }}
+      ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_name }}
     steps:
       - id: set-matrix
         env:
           EVENT_NAME: ${{ github.event_name }}
-          INPUT_REF: ${{ inputs.ref }}
-          TAG_NAME: ${{ github.event.release.tag_name }}
           BUILD_LINUX: ${{ inputs.build_linux }}
           BUILD_WINDOWS: ${{ inputs.build_windows }}
           BUILD_MACOS: ${{ inputs.build_macos }}
@@ -45,7 +42,6 @@ jobs:
           set -euo pipefail
 
           if [ "$EVENT_NAME" = "release" ]; then
-            echo "ref=$TAG_NAME" >> "$GITHUB_OUTPUT"
             {
               echo 'matrix<<EOF'
               echo '{"include":[{"platform":"linux","os":"ubuntu-latest","command":"--linux AppImage deb --publish never"},{"platform":"win","os":"windows-latest","command":"--win --publish never"},{"platform":"mac","os":"macos-latest","command":"--mac --x64 --arm64 --publish never"}]}'
@@ -53,8 +49,6 @@ jobs:
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          echo "ref=$INPUT_REF" >> "$GITHUB_OUTPUT"
 
           entries=()
           if [ "$BUILD_LINUX" = "true" ]; then

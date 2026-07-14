@@ -77,13 +77,14 @@ Artifacts are produced via `electron-builder` after `electron-vite build`.
 
 The [Build](.github/workflows/build.yml) workflow builds installers on GitHub Actions.
 
-**Manual build** — Actions → Build → Run workflow:
+**Manual build** — Actions → Build → Run workflow (pick branch from the native dropdown):
 
-- **ref** — branch or tag to build (e.g. `main`, `v1.0.0`)
 - Toggle **Linux**, **Windows**, and/or **macOS**
 - Download artifacts from the completed run
 
 **Release build** — publish a GitHub Release from a tag; CI builds all platforms, attaches installers, and generates release notes from commits via [git-cliff](https://git-cliff.org) ([`cliff.toml`](cliff.toml)). Use conventional commit prefixes: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`.
+
+**Re-run release build** — edit the release description so it **starts with** `[run build]` and save. CI runs again and replaces the body with the generated changelog when finished.
 
 Linux CI builds AppImage and deb only (snap remains available via local `pnpm build:linux`).
 
