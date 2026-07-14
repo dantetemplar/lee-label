@@ -9,8 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: read
-  actions: write
+  contents: write
 
 jobs:
   dispatch:
