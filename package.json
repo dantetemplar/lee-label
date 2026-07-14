@@ -1,6 +1,6 @@
 {
   "name": "lee-label",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Lee Label — The no-nonsense, local-first labeling app for images.",
   "packageManager": "pnpm@11.1.3",
   "main": "./out/main/index.js",
