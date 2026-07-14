@@ -207,6 +207,11 @@ jobs:
           fetch-depth: 0
           ref: ${{ needs.prepare.outputs.ref }}
 
+      - name: Use changelog config from default branch
+        run: |
+          git fetch --depth=1 origin "${{ github.event.repository.default_branch }}"
+          git show "origin/${{ github.event.repository.default_branch }}:cliff.toml" > cliff.toml
+
       - name: Generate changelog
         uses: orhun/git-cliff-action@v4
         with:
