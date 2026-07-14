@@ -22,6 +22,7 @@ import type {
   YoloExportProgress,
   YoloExportResult
 } from '../shared/export'
+import type { GpuFeatureStatus, RuntimeInfo } from '../shared/runtime-diagnostics'
 
 export interface AppAPI {
   window: {
@@ -33,6 +34,7 @@ export interface AppAPI {
   }
   shell: {
     openExternal: (url: string) => Promise<void>
+    openInApp: (url: string, title?: string) => Promise<void>
   }
   files: {
     openFolder: () => Promise<string | null>
@@ -50,6 +52,13 @@ export interface AppAPI {
   }
   paths: {
     formatDisplay: (path: string) => Promise<string>
+  }
+  runtime: {
+    getInfo: () => Promise<RuntimeInfo>
+  }
+  gpu: {
+    getFeatureStatus: () => Promise<GpuFeatureStatus>
+    openChromeGpu: () => Promise<void>
   }
   project: {
     open: (rootPath: string) => Promise<{ rootPath: string } & ProjectSettings>

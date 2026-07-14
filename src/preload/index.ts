@@ -34,7 +34,9 @@ const api = {
     }
   },
   shell: {
-    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:open-external', url)
+    openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:open-external', url),
+    openInApp: (url: string, title?: string): Promise<void> =>
+      ipcRenderer.invoke('shell:open-in-app', url, title)
   },
   files: {
     openFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:open-folder'),
@@ -56,6 +58,15 @@ const api = {
   },
   paths: {
     formatDisplay: (path: string): Promise<string> => ipcRenderer.invoke('paths:format-display', path)
+  },
+  runtime: {
+    getInfo: (): Promise<import('../shared/runtime-diagnostics').RuntimeInfo> =>
+      ipcRenderer.invoke('runtime:get-info')
+  },
+  gpu: {
+    getFeatureStatus: (): Promise<import('../shared/runtime-diagnostics').GpuFeatureStatus> =>
+      ipcRenderer.invoke('gpu:get-feature-status'),
+    openChromeGpu: (): Promise<void> => ipcRenderer.invoke('gpu:open-chrome-gpu')
   },
   project: {
     open: (rootPath: string): Promise<{ rootPath: string } & ProjectSettings> =>

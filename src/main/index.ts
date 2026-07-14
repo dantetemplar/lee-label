@@ -16,6 +16,14 @@ import { resolveProjectPath } from './project-fs'
 
 registerImageProtocolSchemes()
 
+/** WebGPU flags must run synchronously before app.ready (no await above). */
+function configureGpuCommandLine(): void {
+  app.commandLine.appendSwitch('ignore-gpu-blocklist')
+  app.commandLine.appendSwitch('enable-unsafe-webgpu')
+}
+
+configureGpuCommandLine()
+
 const appIcon = nativeImage.createFromPath(icon)
 
 if (process.platform === 'linux') {
@@ -49,6 +57,33 @@ async function readDirTree(dirPath: string): Promise<FileEntry[]> {
   return nodes
 }
 
+function openAuxiliaryBrowserWindow(url: string, title: string): void {
+  const win = new BrowserWindow({
+    width: 960,
+    height: 720,
+    show: false,
+    autoHideMenuBar: true,
+    title,
+    icon: appIcon.isEmpty() ? undefined : appIcon,
+    webPreferences: {
+      sandbox: true
+    }
+  })
+
+  win.once('ready-to-show', () => win.show())
+
+  win.webContents.setWindowOpenHandler((details) => {
+    shell.openExternal(details.url)
+    return { action: 'deny' }
+  })
+
+  void win.loadURL(url)
+}
+
+function openChromeGpuWindow(): void {
+  openAuxiliaryBrowserWindow('chrome://gpu', 'GPU Internals')
+}
+
 function registerIpc(): void {
   ipcMain.handle('window:minimize', (event) => {
     BrowserWindow.fromWebContents(event.sender)?.minimize()
@@ -78,6 +113,13 @@ function registerIpc(): void {
       throw new Error('Only http(s) URLs can be opened')
     }
     await shell.openExternal(url)
+  })
+
+  ipcMain.handle('shell:open-in-app', (_, url: string, title?: string) => {
+    if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
+      throw new Error('Only http(s) URLs can be opened in-app')
+    }
+    openAuxiliaryBrowserWindow(url, typeof title === 'string' && title.length > 0 ? title : url)
   })
 
   ipcMain.handle('dialog:open-folder', async (event) => {
@@ -122,6 +164,20 @@ function registerIpc(): void {
 
   ipcMain.handle('paths:format-display', (_, path: string) => {
     return formatDisplayPath(path, app.getPath('home'))
+  })
+
+  ipcMain.handle('runtime:get-info', () => ({
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    node: process.versions.node,
+    platform: process.platform,
+    arch: process.arch
+  }))
+
+  ipcMain.handle('gpu:get-feature-status', () => app.getGPUFeatureStatus())
+
+  ipcMain.handle('gpu:open-chrome-gpu', () => {
+    openChromeGpuWindow()
   })
 }
 

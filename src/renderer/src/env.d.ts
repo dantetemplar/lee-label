@@ -17,5 +17,6 @@ interface Keyboard {
 
 interface Navigator {
   readonly keyboard?: Keyboard
+  readonly gpu?: GPU
 }
 

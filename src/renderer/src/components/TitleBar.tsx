@@ -15,7 +15,7 @@ const menuItemClass =
 const menuTriggerClass =
   'btn btn-ghost btn-xs h-[var(--titlebar-height)] cursor-pointer rounded-none px-2.5 text-xs font-normal leading-[var(--titlebar-height)] hover:bg-base-300 focus:bg-transparent focus-visible:bg-base-300'
 
-type OpenMenu = 'file' | 'import' | 'export' | null
+type OpenMenu = 'file' | 'import' | 'export' | 'help' | null
 
 const TitleBar: Component<{
   title: () => string
@@ -27,6 +27,7 @@ const TitleBar: Component<{
   onProjectSettings: () => void
   onImportAnnotations: () => void
   onExportDataset: () => void
+  onPlatformInfo: () => void
 }> = (props) => {
   const [maximized, setMaximized] = createSignal(false)
   const [openMenu, setOpenMenu] = createSignal<OpenMenu>(null)
@@ -274,17 +275,48 @@ const TitleBar: Component<{
             </div>
           </Show>
         </div>
-        <button
-          type="button"
-          class={menuTriggerClass}
-          onClick={(event) => {
-            closeMenus()
-            event.currentTarget.blur()
-            void window.api.shell.openExternal('https://github.com/dantetemplar/lee-label.git')
-          }}
-        >
-          Help
-        </button>
+        <div class="relative">
+          <button
+            type="button"
+            class={menuTriggerClass}
+            classList={{ 'bg-base-300!': openMenu() === 'help' }}
+            aria-haspopup="menu"
+            aria-expanded={openMenu() === 'help'}
+            onClick={(event) => toggleMenu('help', event)}
+          >
+            Help
+          </button>
+          <Show when={openMenu() === 'help'}>
+            <div
+              class={`absolute top-full left-0 z-50 min-w-[220px] ${menuPanelClass}`}
+              role="menu"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                class={menuItemClass}
+                onClick={() => {
+                  closeMenus()
+                  props.onPlatformInfo()
+                }}
+              >
+                Platform Info…
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class={menuItemClass}
+                onClick={() => {
+                  closeMenus()
+                  void window.api.shell.openExternal('https://github.com/dantetemplar/lee-label')
+                }}
+              >
+                GitHub
+              </button>
+            </div>
+          </Show>
+        </div>
       </div>
       <div class="flex min-w-0 flex-1 items-center justify-center px-20 text-xs text-base-content/60">
         <span class="truncate">{props.title()}</span>

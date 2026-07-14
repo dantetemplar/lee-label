@@ -24,6 +24,7 @@ import LabelPanel from './components/LabelPanel'
 import ProjectSettingsModal from './components/ProjectSettingsModal'
 import StatusBar from './components/StatusBar'
 import TitleBar from './components/TitleBar'
+import PlatformInfoModal from './components/PlatformInfoModal'
 import WelcomeScreen from './components/WelcomeScreen'
 import { getActiveStore } from './lib/annotation-backend'
 import type { ImageBounds } from './lib/annotation-coords'
@@ -75,6 +76,7 @@ const App: Component = () => {
   const [importModalOpen, setImportModalOpen] = createSignal(false)
   const [exportModalOpen, setExportModalOpen] = createSignal(false)
   const [projectSettingsOpen, setProjectSettingsOpen] = createSignal(false)
+  const [platformInfoOpen, setPlatformInfoOpen] = createSignal(false)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [toolModifierHeld, setToolModifierHeld] = createSignal(false)
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
@@ -782,6 +784,7 @@ const App: Component = () => {
           onProjectSettings={() => setProjectSettingsOpen(true)}
           onImportAnnotations={() => void openImportModal()}
           onExportDataset={() => void openExportModal()}
+          onPlatformInfo={() => setPlatformInfoOpen(true)}
         />
         <div class="flex min-h-0 flex-1">
           <Show when={folderPath()}>
@@ -913,6 +916,10 @@ const App: Component = () => {
           labels={labels}
           onClose={() => setProjectSettingsOpen(false)}
           onSave={handleUpdateProjectSettings}
+        />
+        <PlatformInfoModal
+          open={platformInfoOpen}
+          onClose={() => setPlatformInfoOpen(false)}
         />
         <ConfirmDialog
           open={() => labelDeletePrompt() !== null}
