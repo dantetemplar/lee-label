@@ -169,6 +169,33 @@ const PlatformInfoModal: Component<{
 
         <section class="mb-5">
           <h3 class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase">
+            Runtime
+          </h3>
+          <Show
+            when={runtime()}
+            fallback={
+              <div class="skeleton h-20 w-full rounded-lg" />
+            }
+          >
+            {(info) => (
+              <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                <dt class="text-base-content/60">Electron</dt>
+                <dd>{info().electron}</dd>
+                <dt class="text-base-content/60">Chromium</dt>
+                <dd>{info().chrome}</dd>
+                <dt class="text-base-content/60">Node.js</dt>
+                <dd>{info().node}</dd>
+                <dt class="text-base-content/60">Platform</dt>
+                <dd>
+                  {info().platform} ({info().arch})
+                </dd>
+              </dl>
+            )}
+          </Show>
+        </section>
+
+        <section class="mb-5">
+          <h3 class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase">
             Active GPU
           </h3>
           <Show
@@ -210,33 +237,6 @@ const PlatformInfoModal: Component<{
                       </div>
                     )}
                   </Show>
-                </dd>
-              </dl>
-            )}
-          </Show>
-        </section>
-
-        <section class="mb-5">
-          <h3 class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase">
-            Runtime
-          </h3>
-          <Show
-            when={runtime()}
-            fallback={
-              <div class="skeleton h-20 w-full rounded-lg" />
-            }
-          >
-            {(info) => (
-              <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-                <dt class="text-base-content/60">Electron</dt>
-                <dd>{info().electron}</dd>
-                <dt class="text-base-content/60">Chromium</dt>
-                <dd>{info().chrome}</dd>
-                <dt class="text-base-content/60">Node.js</dt>
-                <dd>{info().node}</dd>
-                <dt class="text-base-content/60">Platform</dt>
-                <dd>
-                  {info().platform} ({info().arch})
                 </dd>
               </dl>
             )}

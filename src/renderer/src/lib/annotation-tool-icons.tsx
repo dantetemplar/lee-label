@@ -3,6 +3,7 @@ import type { IconProps, IconTree, IconTypes } from 'solid-icons'
 import brushIconSvg from '../assets/brush-icon.svg?raw'
 import cursorIconSvg from '../assets/cursor-icon.svg?raw'
 import deleteIconSvg from '../assets/delete-icon.svg?raw'
+import magicStickIconSvg from '../assets/magic-stick-icon.svg?raw'
 import rectangleIconSvg from '../assets/rectangle-icon.svg?raw'
 
 type ToolIconConfig = {
@@ -38,6 +39,12 @@ export const BrushToolIcon = createToolIcon({
   viewBox: '0 0 24 25',
   fill: 'currentColor',
   content: brushIconSvg
+})
+
+export const MagicStickToolIcon = createToolIcon({
+  viewBox: '0 0 512 512',
+  fill: 'currentColor',
+  content: magicStickIconSvg
 })
 
 export const DeleteToolIcon = createToolIcon({

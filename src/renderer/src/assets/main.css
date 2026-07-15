@@ -5,6 +5,12 @@
   include: button, input, modal, toggle, range, badge, kbd, progress;
 }
 
+/* CMYK theme maps success to magenta; use green for success states */
+[data-theme='cmyk'] {
+  --color-success: oklch(55% 0.17 145);
+  --color-success-content: oklch(98% 0.02 145);
+}
+
 @theme {
   --titlebar-height: 30px;
   --sidebar-width: 260px;

@@ -9,7 +9,7 @@ export function isToolShortcutPressed(
   if (!modifier) return false
 
   if (toolId === 'cursor') {
-    return !keys.has('Digit1') && !keys.has('Digit2')
+    return !keys.has('Digit1') && !keys.has('Digit2') && !keys.has('Digit3')
   }
 
   if (toolId === 'rectangle') {
@@ -18,6 +18,10 @@ export function isToolShortcutPressed(
 
   if (toolId === 'mask') {
     return keys.has('Digit2')
+  }
+
+  if (toolId === 'magic-stick') {
+    return instanceMode && keys.has('Digit3')
   }
 
   return false
@@ -30,5 +34,6 @@ export function isToolShortcutEmphasized(
   if (!keys.has('Backquote')) return false
   if (toolId === 'rectangle') return !keys.has('Digit1')
   if (toolId === 'mask') return !keys.has('Digit2')
+  if (toolId === 'magic-stick') return !keys.has('Digit3')
   return false
 }

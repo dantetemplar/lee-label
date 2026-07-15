@@ -5,7 +5,7 @@
     <title>Lee Label</title>
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: local-image:"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: local-image:; connect-src 'self' local-image: websam-model:; worker-src 'self' blob:"
     />
   </head>
 

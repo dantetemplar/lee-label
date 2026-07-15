@@ -19,6 +19,11 @@ import type {
   YoloExportProgress,
   YoloExportResult
 } from '../shared/export'
+import type {
+  WebsamDownloadProgress,
+  WebsamModelFileUrls,
+  WebsamModelStatus
+} from '../shared/websam-models'
 
 const api = {
   window: {
@@ -47,6 +52,8 @@ const api = {
     readDirectoryTree: (path: string): Promise<FileEntry[]> =>
       ipcRenderer.invoke('fs:read-directory-tree', path),
     readTextFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read-text-file', path),
+    readBinaryFile: (path: string): Promise<ArrayBuffer> =>
+      ipcRenderer.invoke('fs:read-binary-file', path),
     writeTextFile: (path: string, content: string): Promise<number> =>
       ipcRenderer.invoke('fs:write-text-file', path, content)
   },
@@ -167,6 +174,20 @@ const api = {
         callback(progress)
       ipcRenderer.on('export:yolo-ultralytics-progress', handler)
       return () => ipcRenderer.removeListener('export:yolo-ultralytics-progress', handler)
+    }
+  },
+  models: {
+    listStatus: (): Promise<WebsamModelStatus[]> => ipcRenderer.invoke('models:list-status'),
+    getFileUrls: (modelId: string): Promise<WebsamModelFileUrls | null> =>
+      ipcRenderer.invoke('models:get-file-urls', modelId),
+    download: (modelId: string): Promise<{ ok: boolean; cancelled?: boolean }> =>
+      ipcRenderer.invoke('models:download', modelId),
+    cancelDownload: (): Promise<string | null> => ipcRenderer.invoke('models:cancel-download'),
+    onDownloadProgress: (callback: (progress: WebsamDownloadProgress) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, progress: WebsamDownloadProgress): void =>
+        callback(progress)
+      ipcRenderer.on('models:download-progress', handler)
+      return () => ipcRenderer.removeListener('models:download-progress', handler)
     }
   }
 }

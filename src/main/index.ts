@@ -1,11 +1,16 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
 import { readdir, stat } from 'fs/promises'
-import { join } from 'path'
+import { isAbsolute, join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import type { FileEntry } from '../shared/types'
-import { readTextFile, writeTextFile } from './file-io'
+import { readTextFile, writeTextFile, readBinaryFile } from './file-io'
 import { registerImageProtocolSchemes, setupImageProtocol } from './image-protocol'
+import {
+  registerWebsamModelProtocolSchemes,
+  setupWebsamModelProtocol,
+  registerModelsIpc
+} from './models-ipc'
 import { addRecentProject, getRecentProjects, isExistingDirectory, removeRecentProject } from './recent-projects'
 import { APP_DISPLAY_NAME } from '../shared/app-name'
 import { formatDisplayPath } from '../shared/paths'
@@ -15,6 +20,7 @@ import { registerExportIpc } from './export-ipc'
 import { resolveProjectPath } from './project-fs'
 
 registerImageProtocolSchemes()
+registerWebsamModelProtocolSchemes()
 
 /** WebGPU flags must run synchronously before app.ready (no await above). */
 function configureGpuCommandLine(): void {
@@ -139,6 +145,14 @@ function registerIpc(): void {
   ipcMain.handle('fs:read-text-file', async (_, filePath: string) => {
     const resolved = resolveProjectPath(filePath)
     return readTextFile(resolved)
+  })
+
+  ipcMain.handle('fs:read-binary-file', async (_, filePath: string) => {
+    // Absolute paths only — same reach as local-image:// (project images may live anywhere).
+    if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
+      throw new Error('Absolute path required')
+    }
+    return readBinaryFile(resolve(filePath))
   })
 
   ipcMain.handle('fs:write-text-file', async (_, filePath: string, content: string) => {
@@ -267,7 +281,9 @@ app.whenReady().then(() => {
   registerAnnotationsIpc()
   registerImportIpc()
   registerExportIpc()
+  registerModelsIpc()
   setupImageProtocol()
+  setupWebsamModelProtocol()
   createWindow()
 
   app.on('activate', function () {

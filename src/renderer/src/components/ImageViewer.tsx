@@ -62,7 +62,7 @@ const ImageViewer: Component<{
     if (project.projectSettings().segmentationMode !== 'instance') return false
     if (!hasAltKey(project.pressedKeys())) return false
     const tool = project.activeTool()
-    return tool === 'rectangle' || tool === 'mask'
+    return tool === 'rectangle' || tool === 'mask' || tool === 'magic-stick'
   }
 
   const viewportCursor = createMemo((): string => {
@@ -70,7 +70,9 @@ const ImageViewer: Component<{
     if (viewport.panning()) return 'grabbing'
     if (isAltSelectMode()) return 'pointer'
     if (project.activeTool() === 'mask') return 'none'
-    if (project.activeTool() === 'rectangle') return 'crosshair'
+    if (project.activeTool() === 'rectangle' || project.activeTool() === 'magic-stick') {
+      return 'crosshair'
+    }
     return 'default'
   })
 
@@ -92,8 +94,7 @@ const ImageViewer: Component<{
     if (!viewportRef) return
     const bounds = viewportRef.getBoundingClientRect()
     const pointerInRightBottom =
-      clientX >= bounds.left + bounds.width * 0.6 &&
-      clientY >= bounds.top + bounds.height * 0.6
+      clientX >= bounds.left + bounds.width * 0.6 && clientY >= bounds.top + bounds.height * 0.6
     setTopologyAlertOnLeft(pointerInRightBottom)
   }
 
@@ -145,7 +146,11 @@ const ImageViewer: Component<{
               invisible: layerCache.visibleRole() !== role || !layerCache.showVisible()
             }}
             data-layer={role}
-            src={layerCache.layerPaths()[role] ? toLocalImageUrl(layerCache.layerPaths()[role]!) : undefined}
+            src={
+              layerCache.layerPaths()[role]
+                ? toLocalImageUrl(layerCache.layerPaths()[role]!)
+                : undefined
+            }
             alt=""
             decoding="async"
             draggable={false}
@@ -167,6 +172,21 @@ const ImageViewer: Component<{
           viewportRef={() => viewportRef}
           transform={viewport.viewTransform}
           imageSize={imageSize}
+          getCurrentImage={() => {
+            const path = props.layers()?.currentPath
+            const role = layerCache.visibleRole()
+            const visible = layerRefs[role]
+            if (path && visible && layerCache.layerPaths()[role] === path) {
+              return visible
+            }
+            for (const candidate of LAYERS) {
+              if (layerCache.layerPaths()[candidate] === path) {
+                return layerRefs[candidate]
+              }
+            }
+            return visible
+          }}
+          imageKey={() => props.layers()?.currentPath ?? null}
           activeTool={project.activeTool}
           activeLabelId={project.activeLabelId}
           brushSize={project.brushSize}

@@ -23,6 +23,11 @@ import type {
   YoloExportResult
 } from '../shared/export'
 import type { GpuFeatureStatus, RuntimeInfo } from '../shared/runtime-diagnostics'
+import type {
+  WebsamDownloadProgress,
+  WebsamModelFileUrls,
+  WebsamModelStatus
+} from '../shared/websam-models'
 
 export interface AppAPI {
   window: {
@@ -42,6 +47,7 @@ export interface AppAPI {
     openFile: (filters?: { name: string; extensions: string[] }[]) => Promise<string | null>
     readDirectoryTree: (path: string) => Promise<import('../shared/types').FileEntry[]>
     readTextFile: (path: string) => Promise<string>
+    readBinaryFile: (path: string) => Promise<ArrayBuffer>
     writeTextFile: (path: string, content: string) => Promise<number>
   }
   recent: {
@@ -117,6 +123,13 @@ export interface AppAPI {
     yoloUltralytics: (options: YoloExportOptions) => Promise<YoloExportResult>
     cancelYoloUltralytics: () => Promise<void>
     onYoloUltralyticsProgress: (callback: (progress: YoloExportProgress) => void) => () => void
+  }
+  models: {
+    listStatus: () => Promise<WebsamModelStatus[]>
+    getFileUrls: (modelId: string) => Promise<WebsamModelFileUrls | null>
+    download: (modelId: string) => Promise<{ ok: boolean; cancelled?: boolean }>
+    cancelDownload: () => Promise<string | null>
+    onDownloadProgress: (callback: (progress: WebsamDownloadProgress) => void) => () => void
   }
 }
 

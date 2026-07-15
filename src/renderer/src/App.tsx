@@ -10,12 +10,10 @@ import { DEFAULT_SEGMENTATION_MODE } from '../../shared/segmentation'
 import type { FileEntry, RecentProject } from '../../shared/types'
 import type { AnnotationTool } from './components/AnnotationToolbar'
 import BrushSettings from './components/BrushSettings'
+import MagicStickSettings from './components/MagicStickSettings'
 import ConfirmDialog from './components/ConfirmDialog'
 import CursorSidebar from './components/CursorSidebar'
-import DatasetNavBar, {
-    DATASET_NAV_STEP,
-    type DatasetNavStats
-} from './components/DatasetNavBar'
+import DatasetNavBar, { DATASET_NAV_STEP, type DatasetNavStats } from './components/DatasetNavBar'
 import ExportAnnotationsModal from './components/ExportAnnotationsModal'
 import FileTree from './components/FileTree'
 import FileViewer, { type FileInfo } from './components/FileViewer'
@@ -32,26 +30,26 @@ import { AnnotationStore } from './lib/annotation-store'
 import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
 import { labelIndexFromCode } from './lib/label-shortcuts'
 import {
-    clearPressedKeys,
-    getPressedKeys,
-    pressKey,
-    releaseKey,
-    usePressedKeys
+  clearPressedKeys,
+  getPressedKeys,
+  pressKey,
+  releaseKey,
+  usePressedKeys
 } from './lib/pressed-keys'
 import { ProjectContext, type CursorSidebarTab } from './lib/project-context'
 import { SemanticMapStore } from './lib/semantic-map-store'
 import { blurTextEditableOnEscape, isShortcutBlockedTarget } from './lib/shortcut-guards'
 import {
-    countImageStatuses,
-    findFirstImageFile,
-    findLastImageFile,
-    findNextUnfinishedImage,
-    findNodeByPath,
-    getAdjacentImagePaths,
-    getImageAtIndex,
-    getImagePathByOffset,
-    getImagePosition,
-    listImageStatusesInOrder
+  countImageStatuses,
+  findFirstImageFile,
+  findLastImageFile,
+  findNextUnfinishedImage,
+  findNodeByPath,
+  getAdjacentImagePaths,
+  getImageAtIndex,
+  getImagePathByOffset,
+  getImagePosition,
+  listImageStatusesInOrder
 } from './lib/tree-nav'
 import { useProjectLifecycle } from './lib/useProjectLifecycle'
 import { useTextFileEditor } from './lib/useTextFileEditor'
@@ -136,7 +134,12 @@ const App: Component = () => {
     if (node.path === previousPath) return
 
     if (previousFile && previousPath) {
-      textEditor.saveTextSnapshot(previousPath, previousFile, textEditor.textDraft(), textEditor.textSaved())
+      textEditor.saveTextSnapshot(
+        previousPath,
+        previousFile,
+        textEditor.textDraft(),
+        textEditor.textSaved()
+      )
     }
 
     // Update selection immediately so image scrubbing stays live.
@@ -312,21 +315,18 @@ const App: Component = () => {
 
   createEffect(
     on(
-      () => [imageLayers(), selectedKind()] as const,
-      ([layers, kind], previous) => {
-        const layersChanged = previous !== undefined && previous[0] !== layers
-        if (layersChanged || kind !== 'image') {
+      () => selectedKind(),
+      (kind) => {
+        if (kind !== 'image') {
           setActiveTool('cursor')
         }
       }
     )
   )
 
-  const showLabelSidebar = (): boolean =>
-    selectedKind() === 'image' && activeTool() !== 'cursor'
+  const showLabelSidebar = (): boolean => selectedKind() === 'image' && activeTool() !== 'cursor'
 
-  const showCursorSidebar = (): boolean =>
-    selectedKind() === 'image' && activeTool() === 'cursor'
+  const showCursorSidebar = (): boolean => selectedKind() === 'image' && activeTool() === 'cursor'
 
   const currentImageRelativePath = (): string | null => {
     const root = folderPath()
@@ -437,9 +437,7 @@ const App: Component = () => {
     on(
       () => [annotationStore.dirty[0](), semanticStore.dirty[0]()] as const,
       ([annotationDirty, semanticDirty]) => {
-        setFileInfo((info) =>
-          info ? { ...info, dirty: annotationDirty || semanticDirty } : info
-        )
+        setFileInfo((info) => (info ? { ...info, dirty: annotationDirty || semanticDirty } : info))
       }
     )
   )
@@ -449,7 +447,10 @@ const App: Component = () => {
       () => projectSettings().segmentationMode,
       (mode) => {
         annotationStore.setSegmentationMode(mode)
-        if (mode === 'semantic' && activeTool() === 'rectangle') {
+        if (
+          mode === 'semantic' &&
+          (activeTool() === 'rectangle' || activeTool() === 'magic-stick')
+        ) {
           setActiveTool('cursor')
         }
       }
@@ -518,6 +519,11 @@ const App: Component = () => {
         return true
       }
 
+      if (keys.has('Digit3') && projectSettings().segmentationMode === 'instance') {
+        activateToolWithModifier(event, 'magic-stick')
+        return true
+      }
+
       return false
     }
 
@@ -569,13 +575,18 @@ const App: Component = () => {
           activateToolWithModifier(event, 'mask')
           return
         }
+
+        if (event.code === 'Digit3' && projectSettings().segmentationMode === 'instance') {
+          activateToolWithModifier(event, 'magic-stick')
+          return
+        }
       }
 
       const tool = activeTool()
-      if (tool === 'rectangle' || tool === 'mask') {
+      if (tool === 'rectangle' || tool === 'mask' || tool === 'magic-stick') {
         const labelIndex = labelIndexFromCode(event.code)
         if (labelIndex !== null) {
-          if (event.code === 'Digit1' || event.code === 'Digit2') {
+          if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3') {
             queueMicrotask(() => {
               if (
                 toolModifierChordUsed ||
@@ -840,6 +851,9 @@ const App: Component = () => {
                     onShrinkAtMaxZoomChange={setShrinkBrushAtMaxZoom}
                   />
                 </Show>
+                <Show when={activeTool() === 'magic-stick'}>
+                  <MagicStickSettings />
+                </Show>
                 <LabelPanel
                   labels={labels}
                   activeLabelId={activeLabelId}
@@ -847,7 +861,11 @@ const App: Component = () => {
                   onCreate={handleCreateLabel}
                   onUpdate={handleUpdateLabel}
                   onDelete={handleRequestDeleteLabel}
-                  showShortcuts={() => activeTool() === 'rectangle' || activeTool() === 'mask'}
+                  showShortcuts={() =>
+                    activeTool() === 'rectangle' ||
+                    activeTool() === 'mask' ||
+                    activeTool() === 'magic-stick'
+                  }
                   error={labelError}
                 />
               </aside>
@@ -917,10 +935,7 @@ const App: Component = () => {
           onClose={() => setProjectSettingsOpen(false)}
           onSave={handleUpdateProjectSettings}
         />
-        <PlatformInfoModal
-          open={platformInfoOpen}
-          onClose={() => setPlatformInfoOpen(false)}
-        />
+        <PlatformInfoModal open={platformInfoOpen} onClose={() => setPlatformInfoOpen(false)} />
         <ConfirmDialog
           open={() => labelDeletePrompt() !== null}
           title={() => {
@@ -947,10 +962,7 @@ const App: Component = () => {
           onClose={() => setImportModalOpen(false)}
           onImported={() => handleImported()}
         />
-        <ExportAnnotationsModal
-          open={exportModalOpen}
-          onClose={() => setExportModalOpen(false)}
-        />
+        <ExportAnnotationsModal open={exportModalOpen} onClose={() => setExportModalOpen(false)} />
       </div>
     </ProjectContext.Provider>
   )

@@ -54,6 +54,20 @@ const MASK_SEMANTIC_HINTS: ToolControlHint[] = [
   { label: 'Erase', keys: [MOUSE_BUTTON_KEYS.right] }
 ]
 
+const MAGIC_STICK_HINTS: ToolControlHint[] = [
+  { label: 'Select', keys: ['Alt', MOUSE_BUTTON_KEYS.left] },
+  { label: 'Positive', keys: [MOUSE_BUTTON_KEYS.left] },
+  { label: 'Negative', keys: [MOUSE_BUTTON_KEYS.right] },
+  {
+    label: 'Box',
+    keys: ['Hold', MOUSE_BUTTON_KEYS.left, 'Release'],
+    sequential: true
+  },
+  { label: 'Commit', keys: ['Space'] },
+  { label: 'Cycle', keys: ['Tab'] },
+  { label: 'Cancel', keys: ['Esc'] }
+]
+
 const DATASET_HINTS: ToolControlHint[] = [
   { label: 'Mark done', keys: ['Ctrl', 'Enter'] },
   { label: 'Skip', keys: ['Ctrl', 'Shift', 'Enter'] }
@@ -80,6 +94,8 @@ export function getToolControlHints(
       segmentationMode === 'instance'
         ? [...VIEW_HINTS, ...MASK_INSTANCE_HINTS]
         : [...VIEW_HINTS, ...MASK_SEMANTIC_HINTS]
+  } else if (tool === 'magic-stick' && segmentationMode === 'instance') {
+    toolHints = [...VIEW_HINTS, ...MAGIC_STICK_HINTS]
   } else {
     toolHints = VIEW_HINTS
   }

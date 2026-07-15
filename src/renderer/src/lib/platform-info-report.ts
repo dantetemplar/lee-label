@@ -75,8 +75,8 @@ export function formatPlatformInfoReport(input: {
     'Platform Info',
     `Generated: ${generatedAt}`,
     '',
-    section('Active GPU', formatGpuUsage(input.gpuUsage)),
     section('Runtime', formatRuntime(input.runtime)),
+    section('Active GPU', formatGpuUsage(input.gpuUsage)),
     section(
       'Chromium GPU features',
       formatGpuFeatures(input.gpuFeatures, input.gpuFeatureKeys)

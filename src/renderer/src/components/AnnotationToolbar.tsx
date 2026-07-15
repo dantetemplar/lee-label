@@ -6,28 +6,45 @@ import type { SegmentationMode } from '../../../shared/segmentation'
 import { getActiveStore } from '../lib/annotation-backend'
 import { hasModifierKey, hasShiftKey } from '../lib/pressed-keys'
 import { useProjectContext } from '../lib/project-context'
-import {
-  isToolShortcutEmphasized,
-  isToolShortcutPressed
-} from '../lib/tool-shortcut-pressed'
+import { isToolShortcutEmphasized, isToolShortcutPressed } from '../lib/tool-shortcut-pressed'
 import {
   BrushToolIcon,
   CursorToolIcon,
   DeleteToolIcon,
+  MagicStickToolIcon,
   RectangleToolIcon
 } from '../lib/annotation-tool-icons'
 import KeyboardHint from './KeyboardHint'
 
-export type AnnotationTool = 'cursor' | 'rectangle' | 'mask'
+export type AnnotationTool = 'cursor' | 'rectangle' | 'mask' | 'magic-stick'
 
 const ICON_SIZE = 22
 const TOOL_BUTTON_CLASS =
   'relative inline-flex h-14 min-h-14 w-full shrink-0 cursor-pointer flex-col items-center justify-center gap-0.5 border-0 px-0 text-base-content'
 
-const TOOLS: { id: AnnotationTool; label: string; icon: IconTypes; hint: string; shortcut: string }[] = [
+const TOOLS: {
+  id: AnnotationTool
+  label: string
+  icon: IconTypes
+  hint: string
+  shortcut: string
+}[] = [
   { id: 'cursor', label: 'Cursor', icon: CursorToolIcon, hint: '~', shortcut: 'Backquote' },
-  { id: 'rectangle', label: 'Rectangle', icon: RectangleToolIcon, hint: '~1', shortcut: 'Backquote 1' },
-  { id: 'mask', label: 'Mask', icon: BrushToolIcon, hint: '~2', shortcut: 'Backquote 2' }
+  {
+    id: 'rectangle',
+    label: 'Detection Rectangle',
+    icon: RectangleToolIcon,
+    hint: '~1',
+    shortcut: 'Backquote 1'
+  },
+  { id: 'mask', label: 'Segmentation Mask Brush', icon: BrushToolIcon, hint: '~2', shortcut: 'Backquote 2' },
+  {
+    id: 'magic-stick',
+    label: 'Magic Segmentation with points and bboxes exemplars',
+    icon: MagicStickToolIcon,
+    hint: '~3',
+    shortcut: 'Backquote 3'
+  }
 ]
 
 const AnnotationToolbar: Component<{
@@ -36,7 +53,7 @@ const AnnotationToolbar: Component<{
   onToolChange: (tool: AnnotationTool) => void
 }> = (props) => {
   const project = useProjectContext()
-  const activeStore = () =>
+  const activeStore = (): ReturnType<typeof getActiveStore> =>
     getActiveStore(props.segmentationMode(), project.annotationStore, project.semanticStore)
   const hasSelection = (): boolean => project.annotationStore.hasSelection()
   const canUndo = (): boolean => activeStore().canUndo[0]()
@@ -53,7 +70,14 @@ const AnnotationToolbar: Component<{
           {(tool) => {
             const isActive = (): boolean => props.activeTool() === tool.id
             return (
-              <Show when={tool.id !== 'rectangle' || props.segmentationMode() === 'instance'}>
+              <Show
+                when={
+                  tool.id === 'cursor' ||
+                  tool.id === 'mask' ||
+                  (tool.id === 'rectangle' && props.segmentationMode() === 'instance') ||
+                  (tool.id === 'magic-stick' && props.segmentationMode() === 'instance')
+                }
+              >
                 <button
                   type="button"
                   class={TOOL_BUTTON_CLASS}

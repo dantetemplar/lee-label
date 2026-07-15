@@ -1,64 +1,59 @@
 import type { Component } from 'solid-js'
-import { Show, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js'
+import { For, Show, createEffect, createMemo, createSignal, on, onCleanup } from 'solid-js'
 import type { Label } from '../../../shared/annotations'
-import { SELECTED_SHAPE_OPACITY, SHAPE_OPACITY, HOVERED_SHAPE_OPACITY } from '../../../shared/annotations'
+import {
+  SELECTED_SHAPE_OPACITY,
+  SHAPE_OPACITY,
+  HOVERED_SHAPE_OPACITY
+} from '../../../shared/annotations'
 import type { Point2D } from '../../../shared/geometry'
 import { hexToRgbNormalized } from '../../../shared/label-color'
 import type { SegmentationMode } from '../../../shared/segmentation'
-import {
-    POLYGON_SIMPLIFICATION,
-    POLYGON_SIMPLIFICATION_EDIT
-} from '../../../shared/segmentation'
+import { POLYGON_SIMPLIFICATION, POLYGON_SIMPLIFICATION_EDIT } from '../../../shared/segmentation'
 import type { RectCorner, ViewTransform } from '../lib/annotation-coords'
 import {
-    boundsIntersect,
-    clampToImage,
-    hitTestMaskBounds,
-    hitTestPolygon,
-    hitTestRectangle,
-    hitTestRectangleCorner,
-    isBoundsFullyVisible,
-    normalizeRectFromPoints,
-    oppositeRectCorner,
-    rectangleCornerPoints,
-    rectanglesIntersect,
-    shapeBounds,
-    snapPointToImagePixel,
-    viewportToImage
+  boundsIntersect,
+  clampToImage,
+  hitTestMaskBounds,
+  hitTestPolygon,
+  hitTestRectangle,
+  hitTestRectangleCorner,
+  isBoundsFullyVisible,
+  normalizeRectFromPoints,
+  oppositeRectCorner,
+  rectangleCornerPoints,
+  rectanglesIntersect,
+  shapeBounds,
+  snapPointToImagePixel,
+  viewportToImage
 } from '../lib/annotation-coords'
 import type { WorkingShape } from '../lib/annotation-store'
 import { AnnotationStore } from '../lib/annotation-store'
+import { BrushEngine, type SavedMaskLayer } from '../lib/brush/brush-engine'
 import {
-    BrushEngine,
-    type SavedMaskLayer
-} from '../lib/brush/brush-engine'
-import {
-    applyManualIssueGuesses,
-    createBrushSessionState,
-    resetBrushSessionState
+  applyManualIssueGuesses,
+  createBrushSessionState,
+  resetBrushSessionState
 } from '../lib/brush/brush-session'
+import { forEachPixelBrushPixel, usesPixelBrushShape } from '../lib/brush/brush-shapes'
 import {
-    forEachPixelBrushPixel,
-    usesPixelBrushShape
-} from '../lib/brush/brush-shapes'
-import {
-    BRUSH_PREVIEW_FILLED_OPACITY,
-    COMMITTED_MASK_OPACITY,
-    getBrushPreviewSettings,
-    getEffectiveBrushDiameter,
-    usesSvgBrushPreview
+  BRUSH_PREVIEW_FILLED_OPACITY,
+  COMMITTED_MASK_OPACITY,
+  getBrushPreviewSettings,
+  getEffectiveBrushDiameter,
+  usesSvgBrushPreview
 } from '../lib/brush/constants'
 import {
-    eraseCapsuleFromMaskData,
-    erasePixelBrushStrokeFromMaskData,
-    expandMaskBitmap,
-    tightenMaskBitmap
+  eraseCapsuleFromMaskData,
+  erasePixelBrushStrokeFromMaskData,
+  expandMaskBitmap,
+  tightenMaskBitmap
 } from '../lib/mask-bitmap'
 import { rasterizePolygon } from '../lib/polygon/rasterize'
 import {
-    TopologySession,
-    topologyHintsFromIssues,
-    type TopologyAlert
+  TopologySession,
+  topologyHintsFromIssues,
+  type TopologyAlert
 } from '../lib/polygon/topology-session'
 import type { TopologyIssueMask } from '../lib/polygon/worker-types'
 import { useProjectContext } from '../lib/project-context'
@@ -68,17 +63,17 @@ import { renderSemanticOverlay, stampClassIdStroke } from '../lib/semantic-class
 import type { SemanticMapStore } from '../lib/semantic-map-store'
 import AnnotationShapeLayer from './AnnotationShapeLayer'
 import type { AnnotationTool } from './AnnotationToolbar'
+import { samPipeline } from '../lib/sam/sam-pipeline'
+import type { Point as SamPoint } from '../lib/sam/types'
+import { isSameImageSrc } from '../lib/image-layer-cache'
+import { toLocalImageUrl } from '../lib/local-image-url'
 
 export type { TopologyAlert }
 
 const MIN_RECT_SIZE = 3
 const CORNER_HIT_SCREEN_PX = 10
 
-function findShapeAtPoint(
-  shapes: WorkingShape[],
-  x: number,
-  y: number
-): WorkingShape | null {
+function findShapeAtPoint(shapes: WorkingShape[], x: number, y: number): WorkingShape | null {
   for (let index = shapes.length - 1; index >= 0; index--) {
     const shape = shapes[index]
     if (shape.type === 'rectangle' && hitTestRectangle(x, y, shape)) return shape
@@ -111,6 +106,8 @@ const AnnotationOverlay: Component<{
   viewportRef: () => HTMLDivElement | undefined
   transform: () => ViewTransform
   imageSize: () => { width: number; height: number } | null
+  getCurrentImage: () => HTMLImageElement | undefined
+  imageKey: () => string | null
   activeTool: () => AnnotationTool
   activeLabelId: () => string | null
   brushSize: () => number
@@ -143,6 +140,12 @@ const AnnotationOverlay: Component<{
   const [hoverPoint, setHoverPoint] = createSignal<Point2D | null>(null)
   const [topologyIssues, setTopologyIssues] = createSignal<TopologyIssueMask[]>([])
   const [editingShapeId, setEditingShapeId] = createSignal<string | null>(null)
+  const [samDraftBox, setSamDraftBox] = createSignal<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
 
   let lastPointerClient: { x: number; y: number } | null = null
 
@@ -152,7 +155,8 @@ const AnnotationOverlay: Component<{
     | 'finish-rect'
     | 'resize-rect'
     | 'erase-rect'
-    | 'marquee-select' = 'none'
+    | 'marquee-select'
+    | 'sam-box' = 'none'
   let dragStart = { x: 0, y: 0 }
   let marqueeAdditive = false
   let resizeShapeId: string | null = null
@@ -189,11 +193,7 @@ const AnnotationOverlay: Component<{
   }
 
   const stopRectPointerCapture = (): void => {
-    if (
-      rectPointerId !== null &&
-      overlayRef &&
-      overlayRef.hasPointerCapture(rectPointerId)
-    ) {
+    if (rectPointerId !== null && overlayRef && overlayRef.hasPointerCapture(rectPointerId)) {
       overlayRef.releasePointerCapture(rectPointerId)
     }
     rectPointerId = null
@@ -265,7 +265,7 @@ const AnnotationOverlay: Component<{
   const isAltSelectMode = (): boolean => {
     if (props.segmentationMode() !== 'instance') return false
     const tool = props.activeTool()
-    if (tool !== 'rectangle' && tool !== 'mask') return false
+    if (tool !== 'rectangle' && tool !== 'mask' && tool !== 'magic-stick') return false
     return hasAltKey(project.pressedKeys())
   }
 
@@ -278,18 +278,24 @@ const AnnotationOverlay: Component<{
       let cornerHit: RectCorner | null = null
       if (point && pendingRectOrigin() == null) {
         cornerHit =
-          findRectangleCornerHit(
-            props.store.shapes[0](),
-            point.x,
-            point.y,
-            cornerHitRadius()
-          )?.corner ?? null
+          findRectangleCornerHit(props.store.shapes[0](), point.x, point.y, cornerHitRadius())
+            ?.corner ?? null
       }
       overlayRef.style.cursor = cornerHit ? cornerCursor(cornerHit) : 'crosshair'
       return
     }
 
-    if (tool === 'mask' && props.segmentationMode() === 'instance' && updateSelectedRectangleCornerCursor(point)) {
+    if (tool === 'magic-stick' && props.segmentationMode() === 'instance') {
+      props.store.setHoveredShapeId(null)
+      overlayRef.style.cursor = 'crosshair'
+      return
+    }
+
+    if (
+      tool === 'mask' &&
+      props.segmentationMode() === 'instance' &&
+      updateSelectedRectangleCornerCursor(point)
+    ) {
       return
     }
 
@@ -372,12 +378,10 @@ const AnnotationOverlay: Component<{
     const editingId = editingShapeId()
     const selectedIds = new Set(props.store.selectedShapeIds[0]())
     const hoveredId = props.store.hoveredShapeId[0]()
-    const masks = props.store
-      .shapes[0]()
-      .filter(
-        (shape): shape is Extract<WorkingShape, { type: 'mask' }> =>
-          shape.type === 'mask' && shape.id !== editingId
-      )
+    const masks = props.store.shapes[0]().filter(
+      (shape): shape is Extract<WorkingShape, { type: 'mask' }> =>
+        shape.type === 'mask' && shape.id !== editingId
+    )
     masks.sort((left, right) => left.zOrder - right.zOrder)
 
     return masks.map((shape) => {
@@ -493,7 +497,9 @@ const AnnotationOverlay: Component<{
       ? ([0.13, 0.65, 0.35] as [number, number, number])
       : labelColor
     const activeOutsideStrokeColor =
-      brushSession.brushStrokeMode === 'erase' ? ([1, 1, 1] as [number, number, number]) : labelColor
+      brushSession.brushStrokeMode === 'erase'
+        ? ([1, 1, 1] as [number, number, number])
+        : labelColor
     const preview = getBrushPreviewSettings(effectiveBrushDiameter())
     const useGlPreview =
       maskToolActive && Boolean(hover) && !usesSvgBrushPreview(effectiveBrushDiameter())
@@ -529,7 +535,13 @@ const AnnotationOverlay: Component<{
   const loadSelectedShapeForEditing = (): void => {
     setEditingShapeId(null)
 
-    if (props.activeTool() !== 'mask' || props.segmentationMode() !== 'instance') return
+    const tool = props.activeTool()
+    if (
+      (tool !== 'mask' && tool !== 'magic-stick') ||
+      props.segmentationMode() !== 'instance'
+    ) {
+      return
+    }
 
     const selectedId = props.store.primarySelectedId()
     if (!selectedId) return
@@ -544,19 +556,17 @@ const AnnotationOverlay: Component<{
     const mask =
       shape.type === 'polygon'
         ? rasterizePolygon(shape.points, size.width, size.height)
-        : expandMaskBitmap(
-            shape.data,
-            shape.bounds.width,
-            shape.bounds,
-            size.width,
-            size.height
-          )
+        : expandMaskBitmap(shape.data, shape.bounds.width, shape.bounds, size.width, size.height)
 
     if (!mask.some((value) => value > 0)) return
 
     engine.loadSessionMask(mask)
     setEditingShapeId(shape.id)
     project.setActiveLabelId(shape.labelId)
+    if (tool === 'magic-stick') {
+      samPipeline.clearPrompts()
+      setSamDraftBox(null)
+    }
     requestOverlayRender()
   }
 
@@ -566,7 +576,11 @@ const AnnotationOverlay: Component<{
   }
 
   const releaseActivePointerCapture = (): void => {
-    if (overlayRef && brushSession.activePointerId !== null && overlayRef.hasPointerCapture(brushSession.activePointerId)) {
+    if (
+      overlayRef &&
+      brushSession.activePointerId !== null &&
+      overlayRef.hasPointerCapture(brushSession.activePointerId)
+    ) {
       overlayRef.releasePointerCapture(brushSession.activePointerId)
     }
     brushSession.activePointerId = null
@@ -693,7 +707,13 @@ const AnnotationOverlay: Component<{
         return
       }
 
-      brushEngine?.stampPixelBrushStroke(from, to, brushSession.lockedBrushDiameterImagePx, 'active', 'paint')
+      brushEngine?.stampPixelBrushStroke(
+        from,
+        to,
+        brushSession.lockedBrushDiameterImagePx,
+        'active',
+        'paint'
+      )
       return
     }
 
@@ -836,6 +856,10 @@ const AnnotationOverlay: Component<{
       brushSession.topologyCommitAttempt = 0
       clearTopologyAlert()
       setEditingShapeId(null)
+      if (props.activeTool() === 'magic-stick') {
+        samPipeline.clearPrompts()
+        setSamDraftBox(null)
+      }
       flushOverlayRender()
     } catch (error) {
       console.error('Mask conversion failed:', error)
@@ -861,11 +885,7 @@ const AnnotationOverlay: Component<{
   createEffect(() => {
     const size = props.imageSize()
     if (!size) return
-    if (
-      brushEngine &&
-      size.width === lastEngineWidth &&
-      size.height === lastEngineHeight
-    ) {
+    if (brushEngine && size.width === lastEngineWidth && size.height === lastEngineHeight) {
       return
     }
     lastEngineWidth = size.width
@@ -895,7 +915,12 @@ const AnnotationOverlay: Component<{
           loadSelectedShapeForEditing()
           requestOverlayRender()
           const viewport = props.viewportRef()
-          if (props.activeTool() === 'mask' && viewport && document.activeElement !== viewport) {
+          const tool = props.activeTool()
+          if (
+            (tool === 'mask' || tool === 'magic-stick') &&
+            viewport &&
+            document.activeElement !== viewport
+          ) {
             viewport.focus({ preventScroll: true })
           }
         })
@@ -1028,8 +1053,7 @@ const AnnotationOverlay: Component<{
     if (!rect || (rect.width < MIN_RECT_SIZE && rect.height < MIN_RECT_SIZE)) {
       if (!marqueeAdditive) props.store.clearSelection()
     } else {
-      const ids = props.store
-        .shapes[0]()
+      const ids = props.store.shapes[0]()
         .filter((shape) => boundsIntersect(shapeBounds(shape), rect))
         .map((shape) => shape.id)
       if (marqueeAdditive) props.store.addToSelection(ids)
@@ -1102,10 +1126,7 @@ const AnnotationOverlay: Component<{
     return selected?.type === 'rectangle' ? selected : null
   }
 
-  const tryBeginSelectedRectangleCornerResize = (
-    event: PointerEvent,
-    point: Point2D
-  ): boolean => {
+  const tryBeginSelectedRectangleCornerResize = (event: PointerEvent, point: Point2D): boolean => {
     const selected = getSoleSelectedRectangle()
     if (!selected) return false
     const corner = hitTestRectangleCorner(point.x, point.y, selected, cornerHitRadius())
@@ -1125,6 +1146,43 @@ const AnnotationOverlay: Component<{
     return true
   }
 
+  const applySamResultToSession = async (): Promise<void> => {
+    const size = props.imageSize()
+    if (!size) return
+    await samPipeline.decodeCurrentPrompts(size.width, size.height)
+    const raw = samPipeline.getBestMaskBitmap()
+    if (!raw) return
+
+    const engine = ensureBrushEngine()
+    if (!engine) return
+
+    if (!brushSession.sessionUndoPushed) {
+      props.store.pushUndo()
+      brushSession.sessionUndoPushed = true
+    }
+
+    engine.loadSessionMask(raw)
+    clearTopologyAlert()
+    requestOverlayRender()
+  }
+
+  const ensureSamEncoded = async (): Promise<boolean> => {
+    const image = props.getCurrentImage()
+    const key = props.imageKey()
+    if (!image || !key || image.naturalWidth === 0) return false
+    if (!isSameImageSrc(image, toLocalImageUrl(key))) return false
+    return samPipeline.encodeImage(image, key)
+  }
+
+  const addSamPointAndDecode = async (point: Point2D, label: 0 | 1): Promise<void> => {
+    if (!props.activeLabelId()) return
+    const encoded = await ensureSamEncoded()
+    if (!encoded) return
+    const samPoint: SamPoint = { x: point.x, y: point.y, label }
+    samPipeline.addPoint(samPoint)
+    await applySamResultToSession()
+  }
+
   const handleOverlayPointerDown = (event: PointerEvent): void => {
     if (isAltSelectMode()) {
       if (event.button !== 0) return
@@ -1135,12 +1193,28 @@ const AnnotationOverlay: Component<{
       return
     }
 
+    if (props.activeTool() === 'magic-stick' && props.segmentationMode() === 'instance') {
+      if (event.button !== 0 && event.button !== 2) return
+      event.preventDefault()
+      const point = getImagePoint(event)
+      if (!point) return
+      if (!props.activeLabelId()) return
+
+      if (event.button === 2) {
+        void addSamPointAndDecode(point, 0)
+        return
+      }
+
+      dragMode = 'sam-box'
+      dragStart = point
+      setSamDraftBox({ x: point.x, y: point.y, width: 0, height: 0 })
+      overlayRef?.setPointerCapture(event.pointerId)
+      rectPointerId = event.pointerId
+      return
+    }
+
     if (props.activeTool() === 'mask') {
-      if (
-        event.button === 0 &&
-        props.segmentationMode() === 'instance' &&
-        dragMode === 'none'
-      ) {
+      if (event.button === 0 && props.segmentationMode() === 'instance' && dragMode === 'none') {
         const point = getImagePoint(event)
         if (point && tryBeginSelectedRectangleCornerResize(event, point)) {
           event.preventDefault()
@@ -1189,11 +1263,7 @@ const AnnotationOverlay: Component<{
 
     const tool = props.activeTool()
 
-    if (
-      tool === 'rectangle' &&
-      props.segmentationMode() === 'instance' &&
-      event.button === 2
-    ) {
+    if (tool === 'rectangle' && props.segmentationMode() === 'instance' && event.button === 2) {
       event.preventDefault()
       const point = getImagePoint(event)
       if (!point) return
@@ -1274,6 +1344,12 @@ const AnnotationOverlay: Component<{
 
   const handleOverlayPointerMove = (event: PointerEvent): void => {
     lastPointerClient = { x: event.clientX, y: event.clientY }
+
+    if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode === 'sam-box') {
+      const point = getImagePoint(event)
+      if (point) setSamDraftBox(normalizeRectFromPoints(dragStart, point))
+      return
+    }
 
     if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode !== 'none') {
       const point = getImagePoint(event)
@@ -1366,6 +1442,41 @@ const AnnotationOverlay: Component<{
   }
 
   const handleOverlayPointerUp = (event: PointerEvent): void => {
+    if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode === 'sam-box') {
+      const allowedButton = event.type === 'pointercancel' || event.button === 0
+      if (!allowedButton) return
+
+      const point = getImagePoint(event) ?? dragStart
+      const box = normalizeRectFromPoints(dragStart, point)
+      dragMode = 'none'
+      rectPointerId = null
+      try {
+        overlayRef?.releasePointerCapture(event.pointerId)
+      } catch {
+        // ignore
+      }
+
+      if (box.width >= MIN_RECT_SIZE && box.height >= MIN_RECT_SIZE) {
+        setSamDraftBox(null)
+        void (async () => {
+          if (!props.activeLabelId()) return
+          const encoded = await ensureSamEncoded()
+          if (!encoded) return
+          samPipeline.setBox({
+            x1: box.x,
+            y1: box.y,
+            x2: box.x + box.width,
+            y2: box.y + box.height
+          })
+          await applySamResultToSession()
+        })()
+      } else {
+        setSamDraftBox(null)
+        void addSamPointAndDecode(point, 1)
+      }
+      return
+    }
+
     if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode !== 'none') {
       const allowedButton =
         event.type === 'pointercancel' ||
@@ -1413,12 +1524,21 @@ const AnnotationOverlay: Component<{
   const hasCancellableAnnotationWork = (): boolean => {
     if (hasCancellableRectWork()) return true
     if (props.activeTool() === 'mask' && hasCancellableBrushWork()) return true
+    if (props.activeTool() === 'magic-stick') {
+      return (
+        hasCancellableBrushWork() ||
+        samPipeline.promptPoints().length > 0 ||
+        samPipeline.promptBox() !== null ||
+        samDraftBox() !== null ||
+        dragMode === 'sam-box'
+      )
+    }
     return false
   }
 
   const isInstanceNavTool = (): boolean => {
     const tool = props.activeTool()
-    return tool === 'cursor' || tool === 'rectangle' || tool === 'mask'
+    return tool === 'cursor' || tool === 'rectangle' || tool === 'mask' || tool === 'magic-stick'
   }
 
   const cycleSelection = (direction: 1 | -1): void => {
@@ -1467,6 +1587,25 @@ const AnnotationOverlay: Component<{
         resetBrushSession()
         loadSelectedShapeForEditing()
         return
+      }
+
+      if (props.activeTool() === 'magic-stick') {
+        if (
+          hasCancellableBrushWork() ||
+          samPipeline.promptPoints().length > 0 ||
+          samPipeline.promptBox() !== null ||
+          samDraftBox() !== null ||
+          dragMode === 'sam-box'
+        ) {
+          event.preventDefault()
+          event.stopPropagation()
+          dragMode = 'none'
+          rectPointerId = null
+          setSamDraftBox(null)
+          samPipeline.clearPrompts()
+          resetBrushSession()
+          return
+        }
       }
 
       if (props.store.hasSelection()) {
@@ -1533,13 +1672,13 @@ const AnnotationOverlay: Component<{
   }
 
   createEffect(() => {
-    if (props.activeTool() === 'rectangle') return
-    clearRectDraft()
-    if (overlayRef) overlayRef.style.cursor = ''
-  })
-
-  createEffect(() => {
-    if (props.activeTool() !== 'mask' || props.segmentationMode() !== 'instance') return
+    const tool = props.activeTool()
+    if (
+      (tool !== 'mask' && tool !== 'magic-stick') ||
+      props.segmentationMode() !== 'instance'
+    ) {
+      return
+    }
 
     const handleSpace = (event: KeyboardEvent): void => {
       if (event.code !== 'Space' && event.key !== ' ') return
@@ -1550,6 +1689,46 @@ const AnnotationOverlay: Component<{
 
     document.addEventListener('keydown', handleSpace)
     onCleanup(() => document.removeEventListener('keydown', handleSpace))
+  })
+
+  createEffect(() => {
+    if (props.activeTool() !== 'magic-stick') {
+      setSamDraftBox(null)
+      samPipeline.clearPrompts()
+    }
+  })
+
+  createEffect(
+    on(
+      () => props.imageKey(),
+      (key) => {
+        samPipeline.clearPrompts()
+        samPipeline.invalidateEmbedding()
+        setSamDraftBox(null)
+        if (props.activeTool() !== 'magic-stick') return
+        const size = props.imageSize()
+        const image = props.getCurrentImage()
+        if (!size || !key || !image || image.naturalWidth === 0) return
+        if (!isSameImageSrc(image, toLocalImageUrl(key))) return
+        void ensureSamEncoded()
+      }
+    )
+  )
+
+  createEffect(() => {
+    if (props.activeTool() !== 'magic-stick') return
+    const size = props.imageSize()
+    const key = props.imageKey()
+    const image = props.getCurrentImage()
+    if (!size || !key || !image || image.naturalWidth === 0) return
+    if (samPipeline.embeddingReady()) return
+    void ensureSamEncoded()
+  })
+
+  createEffect(() => {
+    if (props.activeTool() === 'rectangle') return
+    clearRectDraft()
+    if (overlayRef) overlayRef.style.cursor = ''
   })
 
   createEffect(() => {
@@ -1599,7 +1778,11 @@ const AnnotationOverlay: Component<{
           onPointerCancel={handleOverlayPointerUp}
           onPointerLeave={handleOverlayPointerLeave}
           onContextMenu={(event) => {
-            if (props.activeTool() === 'mask' || props.activeTool() === 'rectangle') {
+            if (
+              props.activeTool() === 'mask' ||
+              props.activeTool() === 'rectangle' ||
+              props.activeTool() === 'magic-stick'
+            ) {
               event.preventDefault()
             }
           }}
@@ -1615,6 +1798,53 @@ const AnnotationOverlay: Component<{
               ref={semanticCanvasRef}
               class="annotation-gl-canvas pointer-events-none absolute top-0 left-0 z-1 h-full w-full"
             />
+          </Show>
+          <Show when={props.activeTool() === 'magic-stick'}>
+            <svg
+              class="pointer-events-none absolute top-0 left-0 z-3 h-full w-full overflow-visible"
+              width={size().width}
+              height={size().height}
+            >
+              <Show when={samDraftBox()}>
+                {(box) => (
+                  <rect
+                    x={box().x}
+                    y={box().y}
+                    width={box().width}
+                    height={box().height}
+                    fill="none"
+                    stroke="#22c55e"
+                    stroke-width={1.5 / props.transform().scale}
+                    stroke-dasharray={`${4 / props.transform().scale} ${3 / props.transform().scale}`}
+                  />
+                )}
+              </Show>
+              <Show when={samPipeline.promptBox()}>
+                {(box) => (
+                  <rect
+                    x={box().x1}
+                    y={box().y1}
+                    width={box().x2 - box().x1}
+                    height={box().y2 - box().y1}
+                    fill="none"
+                    stroke="#22c55e"
+                    stroke-width={1.5 / props.transform().scale}
+                  />
+                )}
+              </Show>
+              <For each={samPipeline.promptPoints()}>
+                {(point) => (
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={5 / props.transform().scale}
+                    fill={point.label === 1 ? '#22c55e' : '#ef4444'}
+                    stroke="#fff"
+                    stroke-width={1.25 / props.transform().scale}
+                  />
+                )}
+              </For>
+            </svg>
           </Show>
           <AnnotationShapeLayer
             width={size().width}
