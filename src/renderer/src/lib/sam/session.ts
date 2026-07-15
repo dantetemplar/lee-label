@@ -63,14 +63,17 @@ async function configureOrt(useWebGPU: boolean): Promise<OrtModule> {
       webgpuAdapterReady = true
     }
   } else {
-    ort.env.wasm.numThreads = navigator.hardwareConcurrency || 4
+    // Multi-thread WASM needs SharedArrayBuffer (crossOriginIsolated via COOP/COEP).
+    const cores = navigator.hardwareConcurrency || 4
+    ort.env.wasm.numThreads = globalThis.crossOriginIsolated ? Math.min(cores, 8) : 1
   }
 
   return ort
 }
 
 function isPreOptimizedEncoder(model: ModelInfo): boolean {
-  return model.encoderKey.endsWith('.ort')
+  // .ort is pre-optimized; fp16 .onnx must skip ORT graph opts (shape-merge breaks).
+  return model.encoderKey.endsWith('.ort') || model.quantization === 'fp16'
 }
 
 /** Chromium often reports Softmax/Add bind failures as uncaptured errors without rejecting OrtRun. */
@@ -135,8 +138,12 @@ async function createSessionPair(
 
 export async function createSession(model: ModelInfo, buffers: ModelBuffers): Promise<OnnxSession> {
   const ort = await getOrt()
-  const webgpuProviders: InferenceSession.ExecutionProviderConfig[] = [{ name: 'webgpu' }]
   const wasmProviders: InferenceSession.ExecutionProviderConfig[] = ['wasm']
+  // Explicit NCHW: default JS WebGPU layout path corrupts the first SAM2 box
+  // decode (labels 2/3) on NVIDIA/Electron; preferredLayout:'NCHW' fixes it.
+  const webgpuProviders: InferenceSession.ExecutionProviderConfig[] = [
+    { name: 'webgpu', preferredLayout: 'NCHW' }
+  ]
 
   // Lightweight models (EdgeSAM, SlimSAM): WASM only. No WebGPU→WASM fallback for GPU models.
   if (model.family === 'edgesam' || !model.requiresWebGPU) {

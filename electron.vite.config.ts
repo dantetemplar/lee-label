@@ -21,6 +21,13 @@ export default defineConfig({
     worker: {
       format: 'es',
       plugins: () => [ortWasmAssets(resolve('.'))]
+    },
+    // SharedArrayBuffer for ORT WASM threads (EdgeSAM / SlimSAM).
+    server: {
+      headers: {
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp'
+      }
     }
   }
 })

@@ -15,7 +15,7 @@ import {
 } from '../shared/websam-models'
 
 const SCHEME = 'websam-model'
-const CACHE_DIR_NAME = 'websam-models'
+const CACHE_DIR_NAME = 'Models'
 
 let activeDownloadAbort: AbortController | null = null
 let activeDownloadId: string | null = null
@@ -52,7 +52,7 @@ export function registerWebsamModelProtocolSchemes(): void {
 }
 
 export function setupWebsamModelProtocol(): void {
-  protocol.handle(SCHEME, (request) => {
+  protocol.handle(SCHEME, async (request) => {
     const url = new URL(request.url)
     const relativeKey = decodeURIComponent(url.pathname.replace(/^\//, ''))
     if (!relativeKey || relativeKey.includes('..')) {
@@ -62,7 +62,14 @@ export function setupWebsamModelProtocol(): void {
     if (!existsSync(filePath)) {
       return new Response('Not found', { status: 404 })
     }
-    return net.fetch(pathToFileURL(filePath).href)
+    const response = await net.fetch(pathToFileURL(filePath).href)
+    const headers = new Headers(response.headers)
+    headers.set('Cross-Origin-Resource-Policy', 'cross-origin')
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    })
   })
 }
 

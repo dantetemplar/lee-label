@@ -15,6 +15,7 @@ import type {
   RawImageData,
   ImageEmbedding,
   MaskResult,
+  DecodeUiResult,
   PromptInput,
   EmbeddingInfo
 } from './types'
@@ -116,7 +117,7 @@ const api = {
     })
   },
 
-  async decode(prompt: PromptInput, options: DecoderOptions): Promise<MaskResult> {
+  async decode(prompt: PromptInput, options: DecoderOptions): Promise<DecodeUiResult> {
     return serialize(async () => {
       const session = getSession()
       if (!session || !cachedEmbedding) {
@@ -131,7 +132,27 @@ const api = {
         selectedIndex: result.selectedIndex,
         lowResMasks: result.lowResMasks
       }
-      return result
+
+      const selected = result.masks[result.selectedIndex] ?? result.masks[0]
+      if (!selected) {
+        throw new Error('Decoder produced no masks')
+      }
+
+      const bitmap = new Uint8Array(selected.width * selected.height)
+      for (let i = 0; i < bitmap.length; i++) {
+        bitmap[i] = selected.data[i * 4 + 3]! > 128 ? 255 : 0
+      }
+
+      return Comlink.transfer(
+        {
+          bitmap,
+          width: selected.width,
+          height: selected.height,
+          scores: [...result.scores],
+          selectedIndex: result.selectedIndex
+        },
+        [bitmap.buffer]
+      )
     })
   },
 

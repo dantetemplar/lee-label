@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Export SAM-HQ ONNX/ORT packages for one or more backbones.
-# Usage: scripts/export-sam-hq-tiny.sh [tiny|base|large|huge|all]
+# Usage: scripts/models-experiments/export-sam-hq.sh [tiny|base|large|huge|all]
 set -euo pipefail
 
 VARIANTS="${1:-all}"
 WORKDIR="${WORKDIR:-/tmp/sam-hq-export}"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 REPO_DIR="$WORKDIR/sam-hq"
 
 declare -A CKPT MODEL_TYPE MODEL_ID EMBED_DIM INTERM_N
@@ -137,15 +137,14 @@ PY
   cp "$WORKDIR/${model_id}-decoder.onnx" "$pkg/$model_id/v1/decoder.onnx"
   (cd "$pkg" && zip -r "$out_zip" "$model_id")
   ls -lh "$out_zip"
-  # Free space for next variant
+  # Keep encoder ONNX for fp16 re-optimize; free checkpoint + ORT temps
   rm -f "$ckpt_path" \
-    "$WORKDIR/${model_id}-encoder.onnx" \
     "$WORKDIR/${model_id}-encoder.ort" \
     "$WORKDIR/${model_id}-encoder.with_runtime_opt.ort" \
     "$WORKDIR/${model_id}-decoder.onnx"
   rm -rf "$pkg"
   rm -f "$WORKDIR"/${model_id}-encoder.required_operators*.config
-  echo "Done $model_id -> $out_zip"
+  echo "Done $model_id -> $out_zip (onnx kept: $WORKDIR/${model_id}-encoder.onnx)"
 }
 
 if [[ "$VARIANTS" == "all" ]]; then

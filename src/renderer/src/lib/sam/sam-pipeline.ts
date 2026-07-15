@@ -2,7 +2,7 @@ import { createSignal } from 'solid-js'
 import * as Comlink from 'comlink'
 import type { WebsamDownloadProgress } from '../../../../shared/websam-models'
 import { getModelById, MODEL_REGISTRY } from './models'
-import type { Box, MaskResult, Point, PromptInput, RawImageData } from './types'
+import type { Box, DecodeUiResult, Point, PromptInput, RawImageData } from './types'
 import {
   getWorkerApi,
   isWorkerAlive,
@@ -33,13 +33,16 @@ const [promptPoints, setPromptPoints] = createSignal<Point[]>([])
 const [promptBox, setPromptBox] = createSignal<Box | null>(null)
 
 /** Bump when encode pixel path changes so stale embeddings are discarded. */
-const ENCODE_CACHE_VERSION = 2
+const ENCODE_CACHE_VERSION = 3
 
 let encodedImageKey: string | null = null
 let decodeGeneration = 0
 let unloadGeneration = 0
+let encodeGeneration = 0
 let loadInFlight: Promise<boolean> | null = null
 let loadInFlightId: string | null = null
+let encodeInFlight: Promise<boolean> | null = null
+let encodeInFlightKey: string | null = null
 
 const [loadedModelId, setLoadedModelId] = createSignal<string | null>(null)
 
@@ -63,6 +66,9 @@ export function formatSamError(err: unknown): string {
   const raw = collectErrorText(err)
   if (/webgpu is required/i.test(raw)) return 'WebGPU is required for this model'
   if (/out of memory|oom|Invalid BindGroup|Invalid Buffer|Invalid CommandBuffer|validation (error|failed)|device lost/i.test(raw)) {
+    if (/sam3/i.test(raw)) {
+      return 'SAM 3 needs ~3.6 GB VRAM — close other GPU apps or use a smaller model'
+    }
     return 'WebGPU out of memory — try Light HQ-SAM or a smaller model'
   }
   if (/Image encoding failed/i.test(raw)) {
@@ -169,6 +175,9 @@ export const samPipeline = {
 
   /** Drop image embedding without unloading the model (e.g. when switching images). */
   invalidateEmbedding(): void {
+    encodeGeneration++
+    encodeInFlight = null
+    encodeInFlightKey = null
     encodedImageKey = null
     setEmbeddingReady(false)
     setLastEncodeMs(null)
@@ -292,43 +301,55 @@ export const samPipeline = {
     if (!(await this.ensureModelLoaded(selectedModelId()))) return false
     const cacheKey = `${ENCODE_CACHE_VERSION}:${imageKey}`
     if (encodedImageKey === cacheKey && embeddingReady()) return true
+    if (encodeInFlight && encodeInFlightKey === cacheKey) return encodeInFlight
 
-    const generation = unloadGeneration
-    setPipelineStatus('encoding')
-    setPipelineError(null)
-    setPipelineErrorPhase(null)
-    setLastEncodeMs(null)
-    setLastDecodeMs(null)
-    const startedAt = performance.now()
-    try {
-      const extracted = await imageToRawData(image)
-      if (generation !== unloadGeneration) return false
-      const data = new Uint8ClampedArray(extracted.data)
-      const raw: RawImageData = {
-        data,
-        width: extracted.width,
-        height: extracted.height
+    const unloadGen = unloadGeneration
+    const encodeGen = encodeGeneration
+    encodeInFlightKey = cacheKey
+    encodeInFlight = (async (): Promise<boolean> => {
+      setPipelineStatus('encoding')
+      setPipelineError(null)
+      setPipelineErrorPhase(null)
+      setLastEncodeMs(null)
+      setLastDecodeMs(null)
+      const startedAt = performance.now()
+      try {
+        const extracted = await imageToRawData(image)
+        if (unloadGen !== unloadGeneration || encodeGen !== encodeGeneration) return false
+        const data = new Uint8ClampedArray(extracted.data)
+        const raw: RawImageData = {
+          data,
+          width: extracted.width,
+          height: extracted.height
+        }
+        const api = getWorkerApi()
+        await withTimeout(api.encode(Comlink.transfer(raw, [raw.data.buffer])), 300_000, 'encode')
+        if (unloadGen !== unloadGeneration || encodeGen !== encodeGeneration) return false
+        encodedImageKey = cacheKey
+        setLastEncodeMs(Math.round(performance.now() - startedAt))
+        setEmbeddingReady(true)
+        setPipelineStatus('ready')
+        return true
+      } catch (err) {
+        if (unloadGen !== unloadGeneration || encodeGen !== encodeGeneration) return false
+        setEmbeddingReady(false)
+        encodedImageKey = null
+        return fail(err, 'encode')
+      } finally {
+        if (encodeInFlightKey === cacheKey) {
+          encodeInFlight = null
+          encodeInFlightKey = null
+        }
       }
-      const api = getWorkerApi()
-      await withTimeout(api.encode(Comlink.transfer(raw, [raw.data.buffer])), 300_000, 'encode')
-      if (generation !== unloadGeneration) return false
-      encodedImageKey = cacheKey
-      setLastEncodeMs(Math.round(performance.now() - startedAt))
-      setEmbeddingReady(true)
-      setPipelineStatus('ready')
-      return true
-    } catch (err) {
-      if (generation !== unloadGeneration) return false
-      setEmbeddingReady(false)
-      encodedImageKey = null
-      return fail(err, 'encode')
-    }
+    })()
+
+    return encodeInFlight
   },
 
   async decodeCurrentPrompts(
     outputWidth: number,
     outputHeight: number
-  ): Promise<MaskResult | null> {
+  ): Promise<DecodeUiResult | null> {
     const points = promptPoints()
     const box = promptBox()
     if (points.length === 0 && !box) {
@@ -365,7 +386,15 @@ export const samPipeline = {
       if (generation !== decodeGeneration || unloadGen !== unloadGeneration) return null
 
       setLastDecodeMs(Math.round(performance.now() - startedAt))
-      setMaskPreview(result.masks[result.selectedIndex] ?? null)
+      const preview = new ImageData(result.width, result.height)
+      for (let i = 0; i < result.bitmap.length; i++) {
+        const v = result.bitmap[i]!
+        preview.data[i * 4] = v
+        preview.data[i * 4 + 1] = v
+        preview.data[i * 4 + 2] = v
+        preview.data[i * 4 + 3] = v
+      }
+      setMaskPreview(preview)
       setPipelineStatus('ready')
       return result
     } catch (err) {

@@ -12,20 +12,11 @@ Built with Electron, SolidJS, and SQLite.
 - **Cross-platform** — Linux, Windows, and macOS builds are available
 - **Instant** — fast image and mask rendering with preloading and WebGL shaders
 - **Tailored UX** — you will feel the flow, thanks to well-thought-out processes and hotkeys
+- **AI-powered** — use SAM-HQ, SAM-3, or SAM-2.1 to speed up your labeling process
 
 ## Installation
 
 Download the latest release for your platform from **[GitHub Releases](https://github.com/dantetemplar/lee-label/releases)**.
-
-| Platform | Download | How to install |
-| -------- | -------- | -------------- |
-| **Linux** | `lee-label-X.Y.Z.AppImage` | `chmod +x lee-label-*.AppImage` then run it (portable, no install) |
-| **Linux** | `lee-label_X.Y.Z_amd64.deb` | `sudo dpkg -i lee-label_*.deb` |
-| **Windows** | `lee-label-X.Y.Z-setup.exe` | Run the installer and follow the prompts |
-| **macOS (Intel)** | `lee-label-X.Y.Z-x64.dmg` or `Lee Label-X.Y.Z-mac.zip` | Open the dmg (or unzip), drag **Lee Label** to Applications |
-| **macOS (Apple Silicon)** | `lee-label-X.Y.Z-arm64.dmg` or `Lee Label-X.Y.Z-arm64-mac.zip` | Open the dmg (or unzip), drag **Lee Label** to Applications |
-
-**macOS:** use the **arm64** build on Apple Silicon (M1/M2/M3) and the **x64** build on Intel Macs. If macOS blocks the app (unsigned build), right-click → Open, or allow it in **System Settings → Privacy & Security**.
 
 **Updates:** download and install the new version from Releases. Your labels and metadata stay in your image folders — nothing is stored inside the app.
 
@@ -89,7 +80,3 @@ The [Build](.github/workflows/build.yml) workflow builds installers on GitHub Ac
 Linux CI builds AppImage and deb only (snap remains available via local `pnpm build:linux`).
 
 </details>
-
-## License
-
-[MIT](LICENSE) © Ruslan Belkov

@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog, nativeImage, session } from 'electron'
 import { readdir, stat } from 'fs/promises'
 import { isAbsolute, join, resolve } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -26,6 +26,8 @@ registerWebsamModelProtocolSchemes()
 function configureGpuCommandLine(): void {
   app.commandLine.appendSwitch('ignore-gpu-blocklist')
   app.commandLine.appendSwitch('enable-unsafe-webgpu')
+  // NVIDIA Vulkan: Dawn disables shader-f16 by default; allow fp16 WebGPU models.
+  app.commandLine.appendSwitch('enable-dawn-features', 'vulkan_enable_f16_on_nvidia')
 }
 
 configureGpuCommandLine()
@@ -269,6 +271,15 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron.app')
+
+  // COOP/COEP so renderer is crossOriginIsolated → ORT WASM can use threads.
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders }
+    headers['Cross-Origin-Opener-Policy'] = ['same-origin']
+    headers['Cross-Origin-Embedder-Policy'] = ['require-corp']
+    headers['Cross-Origin-Resource-Policy'] = ['cross-origin']
+    callback({ responseHeaders: headers })
+  })
 
   app.on('browser-window-created', (_, window) => {
     if (!appIcon.isEmpty()) {

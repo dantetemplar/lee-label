@@ -1,12 +1,12 @@
 [changelog]
 body = """
 <details>
-<summary>Changelog</summary>
+<summary><h2>{% if version %}Changelog — {{ version }}{% else %}Changelog — unreleased{% endif %}</h2></summary>
 {%- for group, commits in commits | group_by(attribute="group") %}
 
 ### {{ group | striptags | trim | upper_first }}
 {% for commit in commits -%}
-- [`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/commit/{{ commit.id }}) {{ commit.raw_message | split(pat="\n") | first | trim }}
+- {{ commit.raw_message | split(pat="\n") | first | trim }} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/commit/{{ commit.id }}))
 {% endfor -%}
 {% endfor %}
 

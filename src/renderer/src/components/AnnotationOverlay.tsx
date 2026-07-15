@@ -1149,9 +1149,8 @@ const AnnotationOverlay: Component<{
   const applySamResultToSession = async (): Promise<void> => {
     const size = props.imageSize()
     if (!size) return
-    await samPipeline.decodeCurrentPrompts(size.width, size.height)
-    const raw = samPipeline.getBestMaskBitmap()
-    if (!raw) return
+    const result = await samPipeline.decodeCurrentPrompts(size.width, size.height)
+    if (!result || result.width !== size.width || result.height !== size.height) return
 
     const engine = ensureBrushEngine()
     if (!engine) return
@@ -1161,7 +1160,7 @@ const AnnotationOverlay: Component<{
       brushSession.sessionUndoPushed = true
     }
 
-    engine.loadSessionMask(raw)
+    engine.loadSessionMask(result.bitmap)
     clearTopologyAlert()
     requestOverlayRender()
   }
@@ -1698,32 +1697,27 @@ const AnnotationOverlay: Component<{
     }
   })
 
+  // Single preload path: invalidate on image change, encode once when magic-stick is ready.
   createEffect(
     on(
-      () => props.imageKey(),
-      (key) => {
-        samPipeline.clearPrompts()
-        samPipeline.invalidateEmbedding()
-        setSamDraftBox(null)
-        if (props.activeTool() !== 'magic-stick') return
-        const size = props.imageSize()
+      () =>
+        [props.imageKey(), props.activeTool(), props.imageSize()?.width ?? 0] as const,
+      ([key, tool, width], prev) => {
+        const prevKey = prev?.[0]
+        if (prevKey !== undefined && key !== prevKey) {
+          samPipeline.clearPrompts()
+          samPipeline.invalidateEmbedding()
+          setSamDraftBox(null)
+        }
+        if (tool !== 'magic-stick') return
+        if (!key || width <= 0) return
         const image = props.getCurrentImage()
-        if (!size || !key || !image || image.naturalWidth === 0) return
+        if (!image || image.naturalWidth === 0) return
         if (!isSameImageSrc(image, toLocalImageUrl(key))) return
         void ensureSamEncoded()
       }
     )
   )
-
-  createEffect(() => {
-    if (props.activeTool() !== 'magic-stick') return
-    const size = props.imageSize()
-    const key = props.imageKey()
-    const image = props.getCurrentImage()
-    if (!size || !key || !image || image.naturalWidth === 0) return
-    if (samPipeline.embeddingReady()) return
-    void ensureSamEncoded()
-  })
 
   createEffect(() => {
     if (props.activeTool() === 'rectangle') return

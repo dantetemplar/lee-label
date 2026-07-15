@@ -1,4 +1,7 @@
-import type { RawImageData } from './types'
+import type { ModelInfo, RawImageData } from './types'
+
+const LETTERBOX_SIZE = 1024
+export const SAM3_MODEL_SIZE = 1008
 
 function filePathFromImageSrc(src: string): string | null {
   try {
@@ -56,15 +59,20 @@ export async function imageToRawData(image: HTMLImageElement): Promise<RawImageD
 }
 
 /**
- * Scale image-pixel coordinates to 1024x1024 model space.
- * SAM preprocessing scales the longest edge to 1024 and zero-pads the short edge.
+ * Map image-pixel coordinates to model input space.
+ * SAM 2.x / HQ / EdgeSAM: 1024 letterbox (longest edge → 1024).
+ * SAM 3: 1008×1008 stretch (independent X/Y scale).
  */
 export function imageToModelCoords(
   imageX: number,
   imageY: number,
   imageWidth: number,
-  imageHeight: number
+  imageHeight: number,
+  family?: ModelInfo['family']
 ): [number, number] {
-  const scale = 1024 / Math.max(imageWidth, imageHeight)
+  if (family === 'sam3') {
+    return [imageX * (SAM3_MODEL_SIZE / imageWidth), imageY * (SAM3_MODEL_SIZE / imageHeight)]
+  }
+  const scale = LETTERBOX_SIZE / Math.max(imageWidth, imageHeight)
   return [imageX * scale, imageY * scale]
 }

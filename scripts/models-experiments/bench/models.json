@@ -1,0 +1,123 @@
+[
+  {
+    "id": "sam-hq-tiny",
+    "name": "Light HQ-SAM",
+    "family": "sam-hq",
+    "encoderKey": "models/sam-hq-tiny/v1/encoder.ort",
+    "decoderKey": "models/sam-hq-tiny/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp32",
+    "variant": "tiny",
+    "intermDims": [
+      1,
+      1,
+      64,
+      64,
+      160
+    ]
+  },
+  {
+    "id": "sam-hq-base",
+    "name": "HQ-SAM ViT-B",
+    "family": "sam-hq",
+    "encoderKey": "models/sam-hq-base/v1/encoder.onnx",
+    "decoderKey": "models/sam-hq-base/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp16",
+    "variant": "base",
+    "intermDims": [
+      4,
+      1,
+      64,
+      64,
+      768
+    ]
+  },
+  {
+    "id": "sam-hq-large",
+    "name": "HQ-SAM ViT-L",
+    "family": "sam-hq",
+    "encoderKey": "models/sam-hq-large/v1/encoder.onnx",
+    "decoderKey": "models/sam-hq-large/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp16",
+    "variant": "large",
+    "intermDims": [
+      4,
+      1,
+      64,
+      64,
+      1024
+    ]
+  },
+  {
+    "id": "sam2.1-tiny",
+    "name": "SAM 2.1 Tiny",
+    "family": "sam2.1",
+    "encoderKey": "models/sam2.1-tiny/v1/encoder.ort",
+    "decoderKey": "models/sam2.1-tiny/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp32",
+    "variant": "tiny"
+  },
+  {
+    "id": "sam2.1-small",
+    "name": "SAM 2.1 Small",
+    "family": "sam2.1",
+    "encoderKey": "models/sam2.1-small/v1/encoder.onnx",
+    "decoderKey": "models/sam2.1-small/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp16",
+    "variant": "small"
+  },
+  {
+    "id": "sam2.1-baseplus",
+    "name": "SAM 2.1 Base+",
+    "family": "sam2.1",
+    "encoderKey": "models/sam2.1-baseplus/v1/encoder.onnx",
+    "decoderKey": "models/sam2.1-baseplus/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp16",
+    "variant": "base+"
+  },
+  {
+    "id": "sam2.1-large",
+    "name": "SAM 2.1 Large",
+    "family": "sam2.1",
+    "encoderKey": "models/sam2.1-large/v1/encoder.onnx",
+    "decoderKey": "models/sam2.1-large/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp16",
+    "variant": "large"
+  },
+  {
+    "id": "sam3-tracker",
+    "name": "SAM 3 Tracker",
+    "family": "sam3",
+    "encoderKey": "models/sam3-tracker/v1/encoder.onnx",
+    "decoderKey": "models/sam3-tracker/v1/decoder.onnx",
+    "requiresWebGPU": true,
+    "quantization": "fp16",
+    "variant": "tracker"
+  },
+  {
+    "id": "edgesam",
+    "name": "EdgeSAM",
+    "family": "edgesam",
+    "encoderKey": "models/edgesam/v1/encoder.onnx",
+    "decoderKey": "models/edgesam/v1/decoder.onnx",
+    "requiresWebGPU": false,
+    "quantization": "fp32",
+    "variant": "3x"
+  },
+  {
+    "id": "slimsam-77",
+    "name": "SlimSAM-77",
+    "family": "sam1",
+    "encoderKey": "models/slimsam-77/v1/encoder.onnx",
+    "decoderKey": "models/slimsam-77/v1/decoder.onnx",
+    "requiresWebGPU": false,
+    "quantization": "int8",
+    "variant": "slimsam-77"
+  }
+]

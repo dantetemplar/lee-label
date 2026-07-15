@@ -24,45 +24,70 @@ export async function decodeMask(
   const { outputWidth, outputHeight } = options
   const family = session.model.family
 
-  const points: [number, number][] = []
-  const labels: number[] = []
+  const clickPoints: [number, number][] = []
+  const clickLabels: number[] = []
+  let boxCoords: [number, number, number, number] | null = null
 
   if (prompt.points && prompt.points.length > 0) {
     for (const p of prompt.points) {
-      const [sx, sy] = imageToModelCoords(p.x, p.y, outputWidth, outputHeight)
-      points.push([sx, sy])
-      labels.push(p.label)
+      const [sx, sy] = imageToModelCoords(p.x, p.y, outputWidth, outputHeight, family)
+      clickPoints.push([sx, sy])
+      clickLabels.push(p.label)
     }
   }
 
   if (prompt.box) {
-    const [x1, y1] = imageToModelCoords(prompt.box.x1, prompt.box.y1, outputWidth, outputHeight)
-    const [x2, y2] = imageToModelCoords(prompt.box.x2, prompt.box.y2, outputWidth, outputHeight)
-    points.push([x1, y1], [x2, y2])
-    labels.push(2, 3)
+    const [x1, y1] = imageToModelCoords(prompt.box.x1, prompt.box.y1, outputWidth, outputHeight, family)
+    const [x2, y2] = imageToModelCoords(prompt.box.x2, prompt.box.y2, outputWidth, outputHeight, family)
+    if (family === 'sam3') {
+      boxCoords = [x1, y1, x2, y2]
+    } else {
+      clickPoints.push([x1, y1], [x2, y2])
+      clickLabels.push(2, 3)
+    }
   }
 
-  if (points.length === 0) {
+  if (family === 'sam3') {
+    const hasClicks = clickPoints.length > 0
+    if (!hasClicks && !boxCoords) {
+      throw new Error('Decoder requires at least one point or box prompt')
+    }
+  } else if (clickPoints.length === 0) {
     throw new Error('Decoder requires at least one point or box prompt')
   }
 
-  const numPoints = points.length
+  const numPoints = clickPoints.length
+
+  const smoothPasses = options.smoothPasses ?? 0
+  const positivePoints =
+    prompt.points?.filter((p) => p.label === 1).map((p) => ({ x: p.x, y: p.y })) ?? []
 
   let rawMasks: Float32Array
   let rawScores: Float32Array
   let maskWidth: number
   let maskHeight: number
+  let maskThreshold = 0.0
 
   if (family === 'sam1' && embedding.type === 'sam1') {
-    const sam1Result = await runSam1Decoder(ort, session, embedding, points, labels, numPoints)
+    const sam1Result = await runSam1Decoder(ort, session, embedding, clickPoints, clickLabels, numPoints)
     rawMasks = sam1Result.masks
     rawScores = sam1Result.scores
     maskWidth = sam1Result.maskWidth
     maskHeight = sam1Result.maskHeight
   } else if (family === 'edgesam' && embedding.type === 'edgesam') {
-    const edgeResult = await runEdgeSamDecoder(ort, session, embedding, points, labels, numPoints)
+    const edgeResult = await runEdgeSamDecoder(ort, session, embedding, clickPoints, clickLabels, numPoints)
     rawMasks = edgeResult.masks
-    rawScores = edgeResult.scores
+    // EdgeSAM IoU token is not distilled; ONNX scores ≈ stability and still
+    // prefer huge blobs on ambiguous single points. Re-rank with area prior.
+    rawScores = rankEdgeSamMasks(
+      edgeResult.masks,
+      calculateStabilityScores(edgeResult.masks, edgeResult.maskWidth, edgeResult.maskHeight),
+      edgeResult.maskWidth,
+      edgeResult.maskHeight,
+      positivePoints,
+      outputWidth,
+      outputHeight
+    )
     maskWidth = edgeResult.maskWidth
     maskHeight = edgeResult.maskHeight
   } else if (family === 'sam-hq' && embedding.type === 'sam-hq') {
@@ -70,21 +95,21 @@ export async function decodeMask(
       ort,
       session,
       embedding,
-      points,
-      labels,
+      clickPoints,
+      clickLabels,
       numPoints,
       options.maskInput,
       outputWidth,
       outputHeight,
       options.smoothPasses ?? 0
     )
-  } else if ((family === 'sam2' || family === 'sam2.1') && embedding.type === 'sam2') {
+  } else if (family === 'sam2.1' && embedding.type === 'sam2') {
     const sam2Result = await runSam2Decoder(
       ort,
       session,
       embedding,
-      points,
-      labels,
+      clickPoints,
+      clickLabels,
       numPoints,
       options.maskInput
     )
@@ -92,13 +117,23 @@ export async function decodeMask(
     rawScores = sam2Result.scores
     maskWidth = sam2Result.maskWidth
     maskHeight = sam2Result.maskHeight
+  } else if (family === 'sam3' && embedding.type === 'sam3') {
+    const sam3Result = await runSam3Decoder(
+      ort,
+      session,
+      embedding,
+      clickPoints,
+      clickLabels,
+      boxCoords
+    )
+    rawMasks = sam3Result.masks
+    rawScores = sam3Result.scores
+    maskWidth = sam3Result.maskWidth
+    maskHeight = sam3Result.maskHeight
   } else {
     throw new Error(`Mismatched embedding type '${embedding.type}' for model family '${family}'`)
   }
 
-  const smoothPasses = options.smoothPasses ?? 0
-  const positivePoints =
-    prompt.points?.filter((p) => p.label === 1).map((p) => ({ x: p.x, y: p.y })) ?? []
   return postProcessMasks(
     rawMasks,
     rawScores,
@@ -106,9 +141,10 @@ export async function decodeMask(
     maskHeight,
     outputWidth,
     outputHeight,
-    0.0,
+    maskThreshold,
     smoothPasses,
-    positivePoints
+    positivePoints,
+    family === 'sam3' ? 'stretch' : 'letterbox'
   )
 }
 
@@ -152,8 +188,8 @@ async function runSam1Decoder(
   const maskTensor = results.pred_masks
   const dims = maskTensor.dims
   return {
-    masks: copyFloat32(maskTensor.data),
-    scores: copyFloat32(results.iou_scores.data),
+    masks: await copyTensorFloat32(maskTensor),
+    scores: await copyTensorFloat32(results.iou_scores),
     maskWidth: Number(dims[dims.length - 1]),
     maskHeight: Number(dims[dims.length - 2])
   }
@@ -194,8 +230,8 @@ async function runEdgeSamDecoder(
   const maskTensor = results.masks
   const dims = maskTensor.dims
   return {
-    masks: copyFloat32(maskTensor.data),
-    scores: copyFloat32(results.scores.data),
+    masks: await copyTensorFloat32(maskTensor),
+    scores: await copyTensorFloat32(results.scores),
     maskWidth: Number(dims[dims.length - 1]),
     maskHeight: Number(dims[dims.length - 2])
   }
@@ -244,10 +280,81 @@ async function runSam2Decoder(
   const maskTensor = results.masks
   const dims = maskTensor.dims
   return {
-    masks: copyFloat32(maskTensor.data),
-    scores: copyFloat32(results.iou_predictions.data),
+    masks: await copyTensorFloat32(maskTensor),
+    scores: await copyTensorFloat32(results.iou_predictions),
     maskWidth: Number(dims[dims.length - 1]),
     maskHeight: Number(dims[dims.length - 2])
+  }
+}
+
+async function runSam3Decoder(
+  ort: OrtModule,
+  session: OnnxSession,
+  embedding: Extract<ImageEmbedding, { type: 'sam3' }>,
+  points: [number, number][],
+  labels: number[],
+  box: [number, number, number, number] | null
+): Promise<{ masks: Float32Array; scores: Float32Array; maskWidth: number; maskHeight: number }> {
+  // Match transformers.js Sam3TrackerModel.forward:
+  // - points only → empty boxes [B,0,4]
+  // - boxes only → empty points [B,1,0,2] + empty labels [B,1,0]
+  const hasPoints = points.length > 0
+  const hasBox = box != null
+
+  let pointsFlat: Float32Array
+  let labelsFlat: BigInt64Array
+  let numPoints: number
+  let boxFlat: Float32Array
+  let numBoxes: number
+
+  if (hasPoints) {
+    numPoints = points.length
+    pointsFlat = new Float32Array(numPoints * 2)
+    for (let i = 0; i < numPoints; i++) {
+      pointsFlat[i * 2] = points[i]![0]
+      pointsFlat[i * 2 + 1] = points[i]![1]
+    }
+    labelsFlat = BigInt64Array.from(labels.map((label) => BigInt(label)))
+    boxFlat = hasBox ? new Float32Array(box) : new Float32Array(0)
+    numBoxes = hasBox ? 1 : 0
+  } else if (hasBox) {
+    numPoints = 0
+    pointsFlat = new Float32Array(0)
+    labelsFlat = new BigInt64Array(0)
+    boxFlat = new Float32Array(box)
+    numBoxes = 1
+  } else {
+    throw new Error('SAM3 decoder requires points or a box')
+  }
+
+  const feeds: Record<string, Tensor> = {
+    input_points: new ort.Tensor('float32', pointsFlat, [1, 1, numPoints, 2]),
+    input_labels: new ort.Tensor('int64', labelsFlat, [1, 1, numPoints]),
+    input_boxes: new ort.Tensor('float32', boxFlat, [1, numBoxes, 4]),
+    'image_embeddings.0': new ort.Tensor('float32', embedding.embedding0, embedding.dims0),
+    'image_embeddings.1': new ort.Tensor('float32', embedding.embedding1, embedding.dims1),
+    'image_embeddings.2': new ort.Tensor('float32', embedding.embedding2, embedding.dims2)
+  }
+
+  let results: Awaited<ReturnType<typeof session.decoderSession.run>>
+  try {
+    results = await session.decoderSession.run(feeds)
+  } catch (err) {
+    throw new Error('SAM3 decoder inference failed', { cause: err })
+  }
+
+  const maskTensor = results.pred_masks
+  const dims = maskTensor.dims
+  // pred_masks: [B, objects, num_masks, H, W]
+  const numMasks = Number(dims[dims.length - 3] ?? 1)
+  const maskHeight = Number(dims[dims.length - 2])
+  const maskWidth = Number(dims[dims.length - 1])
+  const scores = await copyTensorFloat32(results.iou_scores)
+  return {
+    masks: await copyTensorFloat32(maskTensor),
+    scores: scores.slice(0, Math.min(numMasks, scores.length)),
+    maskWidth,
+    maskHeight
   }
 }
 
@@ -301,9 +408,9 @@ async function runSamHqDecode(
   const dims = maskTensor.dims
   const maskH = Number(dims[dims.length - 2])
   const maskW = Number(dims[dims.length - 1])
-  const raw = copyFloat32(maskTensor.data)
-  const score = copyFloat32(results.iou_predictions.data)[0] ?? 0
-  const lowRes = copyFloat32(results.low_res_masks.data)
+  const raw = await copyTensorFloat32(maskTensor)
+  const score = (await copyTensorFloat32(results.iou_predictions))[0] ?? 0
+  const lowRes = await copyTensorFloat32(results.low_res_masks)
 
   const outputPixels = outputWidth * outputHeight
   const imageData = new ImageData(outputWidth, outputHeight)
@@ -361,6 +468,107 @@ function copyFloat32(data: Tensor['data']): Float32Array {
   return Float32Array.from(data as ArrayLike<number>)
 }
 
+async function copyTensorFloat32(tensor: Tensor): Promise<Float32Array> {
+  const getData = (tensor as Tensor & { getData?: () => Promise<Tensor['data']> }).getData
+  if (typeof getData === 'function') {
+    return copyFloat32(await getData.call(tensor))
+  }
+  return copyFloat32(tensor.data)
+}
+
+/**
+ * SAM / EdgeSAM stability score: IoU of masks thresholded at ±offset.
+ * EdgeSAM's exported `scores` already match this (IoU token not distilled).
+ */
+function calculateStabilityScores(
+  masks: Float32Array,
+  maskWidth: number,
+  maskHeight: number,
+  maskThreshold = 0.0,
+  thresholdOffset = 1.0
+): Float32Array {
+  const plane = maskWidth * maskHeight
+  const numMasks = Math.max(1, Math.floor(masks.length / plane))
+  const scores = new Float32Array(numMasks)
+  const hi = maskThreshold + thresholdOffset
+  const lo = maskThreshold - thresholdOffset
+  for (let m = 0; m < numMasks; m++) {
+    const off = m * plane
+    let inter = 0
+    let uni = 0
+    for (let i = 0; i < plane; i++) {
+      const v = masks[off + i]!
+      if (v > hi) inter++
+      if (v > lo) uni++
+    }
+    scores[m] = uni > 0 ? inter / uni : 0
+  }
+  return scores
+}
+
+/**
+ * EdgeSAM point prompts: drop giant masks, then among near-tied top scores
+ * prefer the larger (still-small) candidate — avoids speck + blob extremes.
+ */
+function rankEdgeSamMasks(
+  masks: Float32Array,
+  scores: Float32Array,
+  maskWidth: number,
+  maskHeight: number,
+  positivePoints: Array<{ x: number; y: number }>,
+  outputWidth: number,
+  outputHeight: number,
+  maskThreshold = 0.0
+): Float32Array {
+  if (positivePoints.length === 0) return scores
+
+  const plane = maskWidth * maskHeight
+  const numMasks = Math.max(1, Math.floor(masks.length / plane))
+  const scale = maskWidth / Math.max(outputWidth, outputHeight)
+  const maxAreaFrac = 0.05
+  const scoreSlack = 0.02
+
+  const areas = new Float32Array(numMasks)
+  const contains = new Uint8Array(numMasks)
+  for (let m = 0; m < numMasks; m++) {
+    const off = m * plane
+    let area = 0
+    for (let i = 0; i < plane; i++) {
+      if (masks[off + i]! > maskThreshold) area++
+    }
+    areas[m] = area / plane
+    let ok = true
+    for (const p of positivePoints) {
+      const mx = Math.max(0, Math.min(maskWidth - 1, Math.round(p.x * scale)))
+      const my = Math.max(0, Math.min(maskHeight - 1, Math.round(p.y * scale)))
+      if (masks[off + my * maskWidth + mx]! <= maskThreshold) {
+        ok = false
+        break
+      }
+    }
+    contains[m] = ok ? 1 : 0
+  }
+
+  const candidates: number[] = []
+  for (let m = 0; m < numMasks; m++) {
+    if (contains[m] && areas[m]! < maxAreaFrac) candidates.push(m)
+  }
+  const pool = candidates.length > 0 ? candidates : [...scores.keys()].filter((m) => contains[m])
+  if (pool.length === 0) return scores
+
+  let bestScore = -Infinity
+  for (const m of pool) bestScore = Math.max(bestScore, scores[m]!)
+  const near = pool.filter((m) => scores[m]! >= bestScore - scoreSlack)
+  let winner = near[0]!
+  for (const m of near) {
+    if (areas[m]! > areas[winner]!) winner = m
+  }
+
+  const ranked = new Float32Array(numMasks)
+  for (let m = 0; m < numMasks; m++) ranked[m] = m === winner ? 1 : 0
+  return ranked
+}
+
 function maskContainsPoints(
   mask: ImageData,
   points: Array<{ x: number; y: number }>
@@ -383,22 +591,29 @@ function postProcessMasks(
   outputHeight: number,
   threshold = 0.0,
   smoothPasses = 0,
-  positivePoints: Array<{ x: number; y: number }> = []
+  positivePoints: Array<{ x: number; y: number }> = [],
+  coordMode: 'letterbox' | 'stretch' = 'letterbox'
 ): MaskResult {
   const scores: number[] = []
   const masks: ImageData[] = []
 
   const totalPixelsPerMask = maskWidth * maskHeight
-  const numMasks = Math.max(1, Math.floor(rawMasks.length / totalPixelsPerMask))
-  const maskScaleX = maskWidth / Math.max(outputWidth, outputHeight)
-  const maskScaleY = maskHeight / Math.max(outputWidth, outputHeight)
+  const numMasks = Math.max(1, Math.min(rawScores.length, Math.floor(rawMasks.length / totalPixelsPerMask)))
+  const maskScaleX =
+    coordMode === 'stretch'
+      ? maskWidth / outputWidth
+      : maskWidth / Math.max(outputWidth, outputHeight)
+  const maskScaleY =
+    coordMode === 'stretch'
+      ? maskHeight / outputHeight
+      : maskHeight / Math.max(outputWidth, outputHeight)
 
-  // Highest IoU overall (WebSAM default). Prefer candidates that contain
-  // positive clicks when those exist — avoids "point outside mask".
+  // Highest IoU overall. Prefer candidates that contain positive clicks when
+  // those exist (same as SAM2.1 path — avoids empty click targets).
   let bestIdx = 0
   let bestScore = -Infinity
   for (let i = 0; i < numMasks; i++) {
-    const score = rawScores[i] ?? 0
+    const score = rawScores[i] ?? Number.NEGATIVE_INFINITY
     scores.push(score)
     if (score > bestScore) {
       bestScore = score

@@ -1,7 +1,7 @@
 export interface ModelInfo {
   id: string
   name: string
-  family: 'sam2.1' | 'sam2' | 'sam1' | 'sam-hq' | 'edgesam'
+  family: 'sam2.1' | 'sam1' | 'sam-hq' | 'edgesam' | 'sam3'
   variant: string
   encoderSize: number
   decoderSize: number
@@ -66,16 +66,36 @@ export interface SamHqEmbedding {
   intermDims: number[]
 }
 
+export interface Sam3Embedding {
+  type: 'sam3'
+  embedding0: Float32Array
+  embedding1: Float32Array
+  embedding2: Float32Array
+  dims0: number[]
+  dims1: number[]
+  dims2: number[]
+}
+
 export type ImageEmbedding =
   | Sam1Embedding
   | EdgeSamEmbedding
   | Sam2Embedding
   | SamHqEmbedding
+  | Sam3Embedding
 
 export interface MaskResult {
   masks: ImageData[]
   rawLogits: Float32Array
   lowResMasks: Float32Array
+  scores: number[]
+  selectedIndex: number
+}
+
+/** Lean decode payload for the UI (no multi-megabyte logit buffers). */
+export interface DecodeUiResult {
+  bitmap: Uint8Array
+  width: number
+  height: number
   scores: number[]
   selectedIndex: number
 }
@@ -87,6 +107,6 @@ export interface RawImageData {
 }
 
 export interface EmbeddingInfo {
-  type: 'sam1' | 'edgesam' | 'sam2' | 'sam-hq'
+  type: 'sam1' | 'edgesam' | 'sam2' | 'sam-hq' | 'sam3'
   ready: boolean
 }

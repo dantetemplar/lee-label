@@ -22,7 +22,13 @@
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "pnpm run build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "test": "vitest run"
+    "test": "vitest run",
+    "changelog": "git cliff --unreleased --offline",
+    "bench:sam": "node scripts/models-experiments/bench/main.mjs",
+    "bench:sam:compare": "node scripts/models-experiments/bench/main.mjs -- --all-variants",
+    "optimize:sam": "python3 scripts/models-experiments/optimize-sam-encoder.py",
+    "probe:sam3": "electron scripts/models-experiments/bench/probe-sam3.mjs",
+    "probe:picosam3": "electron scripts/models-experiments/bench/probe-picosam3.mjs"
   },
   "dependencies": {
     "@corvu/dialog": "^0.2.4",
