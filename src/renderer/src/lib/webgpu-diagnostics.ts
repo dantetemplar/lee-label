@@ -95,14 +95,16 @@ export async function runWebGpuDiagnostics(): Promise<WebGpuDiagnosticsResult> {
   }
 
   const info = adapter.info
+  const adapterType =
+    (info as GPUAdapterInfo & { adapterType?: string }).adapterType ?? 'unknown'
   const adapterLabel = formatWebGpuAdapterLabel(info)
   gpu.webgpu = {
     vendor: info.vendor,
     architecture: info.architecture,
     device: info.device,
     description: info.description,
-    adapterType: info.adapterType ?? 'unknown',
-    label: adapterLabel || `Adapter type ${info.adapterType ?? 'unknown'}`
+    adapterType,
+    label: adapterLabel || `Adapter type ${adapterType}`
   }
 
   checks.push(
@@ -114,7 +116,7 @@ export async function runWebGpuDiagnostics(): Promise<WebGpuDiagnosticsResult> {
     )
   )
 
-  if (info.adapterType === 'cpu') {
+  if (adapterType === 'cpu') {
     checks.push(
       check('adapter-type', 'Hardware adapter', 'warn', 'Software (CPU) adapter in use')
     )
@@ -124,7 +126,7 @@ export async function runWebGpuDiagnostics(): Promise<WebGpuDiagnosticsResult> {
         'adapter-type',
         'Hardware adapter',
         'pass',
-        info.adapterType ? `${info.adapterType} adapter` : 'Non-CPU adapter'
+        adapterType !== 'unknown' ? `${adapterType} adapter` : 'Non-CPU adapter'
       )
     )
   }
