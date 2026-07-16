@@ -76,7 +76,7 @@ const api = {
     openChromeGpu: (): Promise<void> => ipcRenderer.invoke('gpu:open-chrome-gpu')
   },
   project: {
-    open: (rootPath: string): Promise<{ rootPath: string } & ProjectSettings> =>
+    open: (rootPath: string): Promise<{ rootPath: string; isNew: boolean } & ProjectSettings> =>
       ipcRenderer.invoke('project:open', rootPath),
     close: (): Promise<void> => ipcRenderer.invoke('project:close'),
     update: (input: {

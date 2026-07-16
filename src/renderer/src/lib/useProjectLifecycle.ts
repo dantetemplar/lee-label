@@ -28,12 +28,12 @@ export function useProjectLifecycle(options: {
 }): {
   flushAnnotations: () => Promise<void>
   prepareNavigation: () => Promise<void>
-  openAnnotationProject: (path: string) => Promise<void>
+  openAnnotationProject: (path: string) => Promise<boolean>
   closeAnnotationProject: () => Promise<void>
-  loadFolderAtPath: (path: string) => Promise<void>
-  openFolder: () => Promise<void>
+  loadFolderAtPath: (path: string) => Promise<boolean>
+  openFolder: () => Promise<boolean>
   goToWelcomeScreen: () => Promise<void>
-  openRecentProject: (path: string, onMissing: (recent: RecentProject[]) => void) => Promise<void>
+  openRecentProject: (path: string, onMissing: (recent: RecentProject[]) => void) => Promise<boolean>
 } {
   const flushAnnotations = async (): Promise<void> => {
     await options.annotationStore.flush()
@@ -46,7 +46,7 @@ export function useProjectLifecycle(options: {
     await options.flushWorkspaceSession()
   }
 
-  const openAnnotationProject = async (path: string): Promise<void> => {
+  const openAnnotationProject = async (path: string): Promise<boolean> => {
     const project = await window.api.project.open(path)
     const [nextLabels, statuses] = await Promise.all([
       window.api.labels.list(),
@@ -62,6 +62,7 @@ export function useProjectLifecycle(options: {
     options.setImageStatuses(statuses)
     options.setActiveLabelId(nextLabels[0]?.id ?? null)
     options.setLabelError(null)
+    return project.isNew
   }
 
   const closeAnnotationProject = async (): Promise<void> => {
@@ -75,9 +76,9 @@ export function useProjectLifecycle(options: {
     options.setLabelError(null)
   }
 
-  const loadFolderAtPath = async (path: string): Promise<void> => {
+  const loadFolderAtPath = async (path: string): Promise<boolean> => {
     await closeAnnotationProject()
-    await openAnnotationProject(path)
+    const isNew = await openAnnotationProject(path)
     await options.loadWorkspaceSession()
     const tree = await window.api.files.readDirectoryTree(path)
     const recent = await window.api.recent.add(path)
@@ -91,13 +92,14 @@ export function useProjectLifecycle(options: {
       lastRelativePath !== null ? findImageByRelativePath(tree, path, lastRelativePath) : null
     const targetImage = resumeImage ?? findFirstImageFile(tree)
     if (targetImage) await options.selectFile(targetImage)
+    return isNew
   }
 
-  const openFolder = async (): Promise<void> => {
+  const openFolder = async (): Promise<boolean> => {
     await prepareNavigation()
     const path = await window.api.files.openFolder()
-    if (!path) return
-    await loadFolderAtPath(path)
+    if (!path) return false
+    return await loadFolderAtPath(path)
   }
 
   const goToWelcomeScreen = async (): Promise<void> => {
@@ -113,14 +115,14 @@ export function useProjectLifecycle(options: {
   const openRecentProject = async (
     path: string,
     onMissing: (recent: RecentProject[]) => void
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     await prepareNavigation()
     const exists = await window.api.recent.exists(path)
     if (!exists) {
       onMissing(await window.api.recent.get())
-      return
+      return false
     }
-    await loadFolderAtPath(path)
+    return await loadFolderAtPath(path)
   }
 
   return {

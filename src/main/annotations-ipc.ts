@@ -19,9 +19,9 @@ function requireOpenProject(): void {
 
 export function registerAnnotationsIpc(): void {
   ipcMain.handle('project:open', (_, rootPath: string) => {
-    projectDatabase.open(rootPath)
+    const { isNew } = projectDatabase.open(rootPath)
     const settings = projectDatabase.getProject()
-    return { rootPath, ...settings }
+    return { rootPath, ...settings, isNew }
   })
 
   ipcMain.handle('project:close', () => {

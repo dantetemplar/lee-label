@@ -29,7 +29,7 @@ import {
 import { ImagesRepository } from './images'
 import { LabelsRepository } from './labels'
 import { runMigrations } from './migrations'
-import { ensureDbDir } from './paths'
+import { ensureDbDir, projectDbExists } from './paths'
 import { SemanticMasksRepository } from './semantic-masks'
 import { ShapesRepository } from './shapes'
 import type { DbContext } from './types'
@@ -49,7 +49,8 @@ export class ProjectDatabase implements DbContext {
     this.semanticMasksRepo = new SemanticMasksRepository(this, this.imagesRepo)
   }
 
-  open(rootPath: string): void {
+  open(rootPath: string): { isNew: boolean } {
+    const isNew = !projectDbExists(rootPath)
     this.close()
     const dbPath = ensureDbDir(rootPath)
     this.db = new Database(dbPath)
@@ -64,6 +65,8 @@ export class ProjectDatabase implements DbContext {
     this.db
       .prepare('UPDATE project SET name = COALESCE(name, ?), updated_at = ? WHERE id = 1')
       .run(name, now)
+
+    return { isNew }
   }
 
   close(): void {
@@ -167,6 +170,7 @@ export class ProjectDatabase implements DbContext {
   listImageStatuses(): Record<string, ImageStatus> {
     return this.imagesRepo.listImageStatuses()
   }
+
 
   listShapes(relativePath: string): Shape[] {
     return this.shapesRepo.listShapes(relativePath)

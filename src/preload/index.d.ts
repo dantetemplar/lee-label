@@ -67,7 +67,7 @@ export interface AppAPI {
     openChromeGpu: () => Promise<void>
   }
   project: {
-    open: (rootPath: string) => Promise<{ rootPath: string } & ProjectSettings>
+    open: (rootPath: string) => Promise<{ rootPath: string; isNew: boolean } & ProjectSettings>
     close: () => Promise<void>
     update: (input: {
       name?: string

@@ -74,6 +74,9 @@ const App: Component = () => {
   const [importModalOpen, setImportModalOpen] = createSignal(false)
   const [exportModalOpen, setExportModalOpen] = createSignal(false)
   const [projectSettingsOpen, setProjectSettingsOpen] = createSignal(false)
+  const [projectSettingsMode, setProjectSettingsMode] = createSignal<'create' | 'settings'>(
+    'settings'
+  )
   const [platformInfoOpen, setPlatformInfoOpen] = createSignal(false)
   const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
   const [toolModifierHeld, setToolModifierHeld] = createSignal(false)
@@ -183,6 +186,27 @@ const App: Component = () => {
     semanticStore,
     saveOpenTextIfDirty: () => textEditor.saveOpenTextIfDirty()
   })
+
+  const openProjectSettings = (): void => {
+    setProjectSettingsMode('settings')
+    setProjectSettingsOpen(true)
+  }
+
+  const handleOpenFolder = async (): Promise<void> => {
+    const isNew = await lifecycle.openFolder()
+    if (isNew) {
+      setProjectSettingsMode('create')
+      setProjectSettingsOpen(true)
+    }
+  }
+
+  const handleOpenRecent = async (path: string): Promise<void> => {
+    const isNew = await lifecycle.openRecentProject(path, setRecentProjects)
+    if (isNew) {
+      setProjectSettingsMode('create')
+      setProjectSettingsOpen(true)
+    }
+  }
 
   onMount(() => {
     void window.api.recent.get().then(setRecentProjects)
@@ -790,9 +814,9 @@ const App: Component = () => {
           hasOpenProject={() => folderPath() !== null}
           recentProjects={recentProjects}
           onGoToWelcomeScreen={() => void lifecycle.goToWelcomeScreen()}
-          onOpenFolder={() => void lifecycle.openFolder()}
-          onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
-          onProjectSettings={() => setProjectSettingsOpen(true)}
+          onOpenFolder={() => void handleOpenFolder()}
+          onOpenRecent={(path) => void handleOpenRecent(path)}
+          onProjectSettings={openProjectSettings}
           onImportAnnotations={() => void openImportModal()}
           onExportDataset={() => void openExportModal()}
           onPlatformInfo={() => setPlatformInfoOpen(true)}
@@ -917,8 +941,8 @@ const App: Component = () => {
           <Show when={!folderPath()}>
             <WelcomeScreen
               recentProjects={recentProjects}
-              onOpenFolder={() => void lifecycle.openFolder()}
-              onOpenRecent={(path) => void lifecycle.openRecentProject(path, setRecentProjects)}
+              onOpenFolder={() => void handleOpenFolder()}
+              onOpenRecent={(path) => void handleOpenRecent(path)}
               onRemoveRecent={(path) => void handleRemoveRecent(path)}
             />
           </Show>
@@ -929,6 +953,7 @@ const App: Component = () => {
         />
         <ProjectSettingsModal
           open={projectSettingsOpen}
+          mode={projectSettingsMode}
           projectSettings={projectSettings}
           projectPath={folderPath}
           labels={labels}

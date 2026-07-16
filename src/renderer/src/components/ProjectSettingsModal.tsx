@@ -42,6 +42,7 @@ function serializeLabels(labels: Label[]): string {
 
 const ProjectSettingsModal: Component<{
   open: () => boolean
+  mode?: () => 'create' | 'settings'
   projectSettings: () => ProjectSettings
   projectPath: () => string | null
   labels: () => Label[]
@@ -294,7 +295,7 @@ const ProjectSettingsModal: Component<{
       }
     >
       <h2 id="project-settings-title" class="text-xl font-semibold">
-        Project settings
+        {props.mode?.() === 'create' ? 'Create project' : 'Project settings'}
       </h2>
       <div class="mt-6 space-y-5">
         <label class="block text-sm text-base-content/70">

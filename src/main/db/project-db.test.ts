@@ -19,7 +19,13 @@ describe.skipIf(!sqliteAvailable)('ProjectDatabase', () => {
     const db = new ProjectDatabase()
 
     try {
-      db.open(root)
+      const first = db.open(root)
+      expect(first.isNew).toBe(true)
+      db.close()
+
+      const second = db.open(root)
+      expect(second.isNew).toBe(false)
+
       const label = db.createLabel({ name: 'object' })
       const shapes = db.replaceImageShapes(
         'images/sample.png',

@@ -9,6 +9,10 @@ export function getDbPath(projectRoot: string): string {
   return join(projectRoot, DB_DIR, DB_FILENAME)
 }
 
+export function projectDbExists(projectRoot: string): boolean {
+  return existsSync(getDbPath(projectRoot))
+}
+
 export function ensureDbDir(projectRoot: string): string {
   const dbPath = getDbPath(projectRoot)
   mkdirSync(dirname(dbPath), { recursive: true })
