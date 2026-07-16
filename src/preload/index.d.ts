@@ -88,6 +88,8 @@ export interface AppAPI {
     getOrCreate: (relativePath: string, width?: number, height?: number) => Promise<ImageRecord>
     setStatus: (relativePath: string, status: ImageStatus) => Promise<ImageRecord>
     listStatuses: () => Promise<Record<string, ImageStatus>>
+    markOpened: (relativePath: string) => Promise<ImageRecord>
+    getMeta: (relativePath: string) => Promise<ImageRecord | null>
   }
   shapes: {
     list: (relativePath: string) => Promise<Shape[]>

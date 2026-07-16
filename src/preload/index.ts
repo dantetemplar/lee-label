@@ -116,7 +116,11 @@ const api = {
     ): Promise<import('../shared/annotations').ImageRecord> =>
       ipcRenderer.invoke('images:set-status', relativePath, status),
     listStatuses: (): Promise<Record<string, ImageStatus>> =>
-      ipcRenderer.invoke('images:list-statuses')
+      ipcRenderer.invoke('images:list-statuses'),
+    markOpened: (relativePath: string): Promise<import('../shared/annotations').ImageRecord> =>
+      ipcRenderer.invoke('images:mark-opened', relativePath),
+    getMeta: (relativePath: string): Promise<import('../shared/annotations').ImageRecord | null> =>
+      ipcRenderer.invoke('images:get-meta', relativePath)
   },
   shapes: {
     list: (relativePath: string): Promise<import('../shared/annotations').Shape[]> =>

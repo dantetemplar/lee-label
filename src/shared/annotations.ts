@@ -17,6 +17,9 @@ export interface ImageRecord {
   height?: number
   status: ImageStatus
   updatedAt?: string
+  firstLabeledAt?: string | null
+  doneAt?: string | null
+  openedAt?: string | null
 }
 
 export interface RectangleShape {

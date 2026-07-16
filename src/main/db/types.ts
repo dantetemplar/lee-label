@@ -21,6 +21,9 @@ export interface ImageRow {
   height: number | null
   status: ImageStatus
   updated_at: string | null
+  first_labeled_at?: string | null
+  done_at?: string | null
+  opened_at?: string | null
 }
 
 export interface ShapeRow {
@@ -59,7 +62,10 @@ export function mapImage(row: ImageRow): ImageRecord {
     width: row.width ?? undefined,
     height: row.height ?? undefined,
     status: row.status,
-    updatedAt: row.updated_at ?? undefined
+    updatedAt: row.updated_at ?? undefined,
+    firstLabeledAt: row.first_labeled_at ?? null,
+    doneAt: row.done_at ?? null,
+    openedAt: row.opened_at ?? null
   }
 }
 

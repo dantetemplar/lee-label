@@ -171,6 +171,14 @@ export class ProjectDatabase implements DbContext {
     return this.imagesRepo.listImageStatuses()
   }
 
+  markImageOpened(relativePath: string): ImageRecord {
+    return this.imagesRepo.markImageOpened(relativePath)
+  }
+
+  getImageMeta(relativePath: string): ImageRecord | null {
+    return this.imagesRepo.getImageMeta(relativePath)
+  }
+
 
   listShapes(relativePath: string): Shape[] {
     return this.shapesRepo.listShapes(relativePath)

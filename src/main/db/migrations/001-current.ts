@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS images (
   height INTEGER,
   status TEXT NOT NULL DEFAULT 'todo'
     CHECK (status IN ('todo', 'in_progress', 'done', 'skipped')),
-  updated_at TEXT
+  updated_at TEXT,
+  first_labeled_at TEXT,
+  done_at TEXT,
+  opened_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);

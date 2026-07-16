@@ -100,6 +100,16 @@ export function registerAnnotationsIpc(): void {
     return projectDatabase.listImageStatuses()
   })
 
+  ipcMain.handle('images:mark-opened', (_, relativePath: string) => {
+    requireOpenProject()
+    return projectDatabase.markImageOpened(relativePath)
+  })
+
+  ipcMain.handle('images:get-meta', (_, relativePath: string) => {
+    requireOpenProject()
+    return projectDatabase.getImageMeta(relativePath)
+  })
+
   ipcMain.handle('shapes:list', (_, relativePath: string) => {
     requireOpenProject()
     return projectDatabase.listShapes(relativePath)

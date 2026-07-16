@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js'
 import { createEffect, createSignal, on, onCleanup, onMount, Show } from 'solid-js'
-import type { ImageStatus, Label, LabelDeleteStats } from '../../shared/annotations'
+import type { ImageStatus, Label, LabelDeleteStats, ImageRecord } from '../../shared/annotations'
 import { APP_DISPLAY_NAME } from '../../shared/app-name'
 import { getFileKind, type FileKind } from '../../shared/file-types'
 import type { ImageLayers } from '../../shared/image-layers'
@@ -71,6 +71,7 @@ const App: Component = () => {
   const [labels, setLabels] = createSignal<Label[]>([])
   const [activeLabelId, setActiveLabelId] = createSignal<string | null>(null)
   const [imageStatuses, setImageStatuses] = createSignal<Record<string, ImageStatus>>({})
+  const [imageMeta, setImageMeta] = createSignal<ImageRecord | null>(null)
   const [labelError, setLabelError] = createSignal<string | null>(null)
   const [labelDeletePrompt, setLabelDeletePrompt] = createSignal<{
     label: Label
@@ -120,9 +121,15 @@ const App: Component = () => {
 
   const annotationStore = new AnnotationStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
+    void window.api.images.getMeta(relativePath).then((meta) => {
+      if (meta && meta.relativePath === currentImageRelativePath()) setImageMeta(meta)
+    })
   })
   const semanticStore = new SemanticMapStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
+    void window.api.images.getMeta(relativePath).then((meta) => {
+      if (meta && meta.relativePath === currentImageRelativePath()) setImageMeta(meta)
+    })
   })
   const workspaceSession = createWorkspaceSessionStore()
 
@@ -150,6 +157,7 @@ const App: Component = () => {
     setSelectedPath(null)
     setSelectedFile(null)
     setFileInfo(null)
+    setImageMeta(null)
     textEditor.resetForNavigation()
     annotationStore.clear()
     semanticStore.clear()
@@ -185,7 +193,11 @@ const App: Component = () => {
 
     const root = folderPath()
     if (root && getFileKind(node.name) === 'image') {
-      workspaceSession.setLastImage(toRelativePath(root, node.path))
+      const relativePath = toRelativePath(root, node.path)
+      workspaceSession.setLastImage(relativePath)
+      void window.api.images.markOpened(relativePath).then(setImageMeta)
+    } else {
+      setImageMeta(null)
     }
 
     // Image loads call saveCurrent() before replacing store state.
@@ -365,6 +377,9 @@ const App: Component = () => {
 
   const handleImageStatusChange = (relativePath: string, status: ImageStatus): void => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
+    if (relativePath === currentImageRelativePath()) {
+      void window.api.images.getMeta(relativePath).then(setImageMeta)
+    }
   }
 
   createEffect(
@@ -1009,6 +1024,12 @@ const App: Component = () => {
         <StatusBar
           info={fileInfo}
           imagePosition={() => (showDatasetNav() ? datasetNavStats().position : null)}
+          imageStatus={() => {
+            const relativePath = currentImageRelativePath()
+            if (!relativePath || selectedKind() !== 'image') return null
+            return imageStatuses()[relativePath] ?? 'todo'
+          }}
+          imageMeta={imageMeta}
         />
         <ProjectSettingsModal
           open={projectSettingsOpen}

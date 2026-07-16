@@ -14,12 +14,9 @@ export class ImagesRepository {
     if (existing) {
       if ((width !== undefined || height !== undefined) && (!existing.width || !existing.height)) {
         const now = new Date().toISOString()
-        db.prepare('UPDATE images SET width = COALESCE(?, width), height = COALESCE(?, height), updated_at = ? WHERE id = ?').run(
-          width ?? null,
-          height ?? null,
-          now,
-          existing.id
-        )
+        db.prepare(
+          'UPDATE images SET width = COALESCE(?, width), height = COALESCE(?, height), updated_at = ? WHERE id = ?'
+        ).run(width ?? null, height ?? null, now, existing.id)
         return mapImage({
           ...existing,
           width: width ?? existing.width,
@@ -43,19 +40,54 @@ export class ImagesRepository {
       width,
       height,
       status: 'todo',
-      updatedAt: now
+      updatedAt: now,
+      firstLabeledAt: null,
+      doneAt: null,
+      openedAt: null
     }
+  }
+
+  markImageOpened(relativePath: string): ImageRecord {
+    const image = this.getOrCreateImage(relativePath)
+    const now = new Date().toISOString()
+    this.ctx
+      .requireDb()
+      .prepare('UPDATE images SET opened_at = ? WHERE id = ?')
+      .run(now, image.id)
+    return { ...image, openedAt: now }
   }
 
   setImageStatus(relativePath: string, status: ImageStatus): ImageRecord {
     const image = this.getOrCreateImage(relativePath)
     const now = new Date().toISOString()
+    const firstLabeledAt =
+      (status === 'in_progress' || status === 'done') && !image.firstLabeledAt
+        ? now
+        : (image.firstLabeledAt ?? null)
+    const doneAt = status === 'done' ? now : null
+
     this.ctx
       .requireDb()
-      .prepare('UPDATE images SET status = ?, updated_at = ? WHERE id = ?')
-      .run(status, now, image.id)
+      .prepare(
+        `UPDATE images SET
+          status = ?,
+          updated_at = ?,
+          first_labeled_at = CASE
+            WHEN first_labeled_at IS NULL AND ? IS NOT NULL THEN ?
+            ELSE first_labeled_at
+          END,
+          done_at = ?
+        WHERE id = ?`
+      )
+      .run(status, now, firstLabeledAt, firstLabeledAt, doneAt, image.id)
     this.ctx.touchProject()
-    return { ...image, status, updatedAt: now }
+    return {
+      ...image,
+      status,
+      updatedAt: now,
+      firstLabeledAt: image.firstLabeledAt ?? firstLabeledAt,
+      doneAt
+    }
   }
 
   listImageStatuses(): Record<string, ImageStatus> {
@@ -68,6 +100,14 @@ export class ImagesRepository {
       result[row.relative_path] = row.status
     }
     return result
+  }
+
+  getImageMeta(relativePath: string): ImageRecord | null {
+    const row = this.ctx
+      .requireDb()
+      .prepare('SELECT * FROM images WHERE relative_path = ?')
+      .get(relativePath) as ImageRow | undefined
+    return row ? mapImage(row) : null
   }
 
   getImageId(relativePath: string): number {
