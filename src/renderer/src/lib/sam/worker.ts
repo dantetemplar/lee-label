@@ -5,6 +5,7 @@ import {
   destroySession,
   getOrt,
   getSession,
+  setWasmAssetBaseUrl,
   throwIfWebGpuRuntimeError,
   type ModelBuffers
 } from './session'
@@ -68,8 +69,13 @@ async function withWebGpuGuard<T>(context: string, fn: () => Promise<T>): Promis
 }
 
 const api = {
-  async initFromBuffers(model: ModelInfo, buffers: ModelBuffers): Promise<void> {
+  async initFromBuffers(
+    model: ModelInfo,
+    buffers: ModelBuffers,
+    wasmBaseUrl: string
+  ): Promise<void> {
     return serialize(async () => {
+      setWasmAssetBaseUrl(wasmBaseUrl)
       await destroySession()
       cachedEmbedding = null
       cachedDecodeResult = null
@@ -77,8 +83,14 @@ const api = {
     })
   },
 
-  async initFromUrls(model: ModelInfo, encoderUrl: string, decoderUrl: string): Promise<void> {
+  async initFromUrls(
+    model: ModelInfo,
+    encoderUrl: string,
+    decoderUrl: string,
+    wasmBaseUrl: string
+  ): Promise<void> {
     return serialize(async () => {
+      setWasmAssetBaseUrl(wasmBaseUrl)
       await destroySession()
       cachedEmbedding = null
       cachedDecodeResult = null

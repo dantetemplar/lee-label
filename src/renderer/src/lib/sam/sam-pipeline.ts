@@ -65,7 +65,11 @@ function collectErrorText(err: unknown): string {
 export function formatSamError(err: unknown): string {
   const raw = collectErrorText(err)
   if (/webgpu is required/i.test(raw)) return 'WebGPU is required for this model'
-  if (/out of memory|oom|Invalid BindGroup|Invalid Buffer|Invalid CommandBuffer|validation (error|failed)|device lost/i.test(raw)) {
+  if (
+    /out of memory|oom|Invalid BindGroup|Invalid Buffer|Invalid CommandBuffer|validation (error|failed)|device lost/i.test(
+      raw
+    )
+  ) {
     if (/sam3/i.test(raw)) {
       return 'SAM 3 needs ~3.6 GB VRAM — close other GPU apps or use a smaller model'
     }
@@ -79,13 +83,15 @@ export function formatSamError(err: unknown): string {
   }
   if (/timed out/i.test(raw)) return raw
   if (/Failed to fetch|Model files not found|not downloaded/i.test(raw)) return raw
-  if (/No active session|SAM worker/i.test(raw)) return 'Model worker crashed — select the model again'
+  if (/No active session|SAM worker/i.test(raw))
+    return 'Model worker crashed — select the model again'
   // Prefer the deepest / most specific segment when ORT wraps errors.
   const segments = raw
     .split(/\s*[—\n]\s*/)
     .map((s) => s.trim())
     .filter(Boolean)
-  const pick = segments.find((s) => /ERROR_MESSAGE|WebGPU|failed/i.test(s)) ?? segments.at(-1) ?? raw
+  const pick =
+    segments.find((s) => /ERROR_MESSAGE|WebGPU|failed/i.test(s)) ?? segments.at(-1) ?? raw
   return pick.length > 180 ? `${pick.slice(0, 177)}…` : pick
 }
 
@@ -271,7 +277,12 @@ export const samPipeline = {
             setLoadedModelId(null)
           }
           const api = isWorkerAlive() ? getWorkerApi() : restartWorker()
-          await withTimeout(api.initFromUrls(model, urls.encoderUrl, urls.decoderUrl), 180_000, 'init')
+          const wasmBaseUrl = new URL('./wasm/', window.location.href).href
+          await withTimeout(
+            api.initFromUrls(model, urls.encoderUrl, urls.decoderUrl, wasmBaseUrl),
+            180_000,
+            'init'
+          )
           if (generation !== unloadGeneration) return false
           setLoadedModelId(modelId)
           encodedImageKey = null

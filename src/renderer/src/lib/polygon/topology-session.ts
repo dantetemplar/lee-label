@@ -7,6 +7,7 @@ import type {
   SegmentationWorkerResult,
   TopologyIssueMask
 } from '../polygon/worker-types'
+import SegmentationWorker from '../polygon/segmentation-worker?worker&inline'
 
 export type { SegmentationWorkerResult, TopologyIssueMask }
 
@@ -79,9 +80,7 @@ export class TopologySession {
   private getWorker(): Worker {
     if (this.worker) return this.worker
 
-    this.worker = new Worker(new URL('../polygon/segmentation-worker.ts', import.meta.url), {
-      type: 'module'
-    })
+    this.worker = new SegmentationWorker()
     this.worker.onmessage = (event: MessageEvent<SegmentationWorkerResult>) => {
       const pending = this.pendingRequests.get(event.data.id)
       if (!pending) return
@@ -89,7 +88,15 @@ export class TopologySession {
       pending.resolve(event.data)
     }
     this.worker.onerror = (event) => {
-      const error = new Error(event.message || 'Mask conversion worker failed.')
+      console.error('Mask conversion worker error:', {
+        message: event.message,
+        filename: event.filename,
+        line: event.lineno,
+        column: event.colno,
+        error: event.error
+      })
+      const location = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : ''
+      const error = new Error(`${event.message || 'Mask conversion worker failed.'}${location}`)
       for (const pending of this.pendingRequests.values()) {
         pending.reject(error)
       }
@@ -107,10 +114,7 @@ export interface TopologyAlert {
   onDismiss: () => void
 }
 
-export function createTopologyAlert(
-  message: string,
-  onDismiss: () => void
-): TopologyAlert {
+export function createTopologyAlert(message: string, onDismiss: () => void): TopologyAlert {
   return { message, onDismiss }
 }
 

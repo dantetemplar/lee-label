@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink'
 import type { InferenceWorkerApi } from './worker'
+import SamWorker from './worker?worker&inline'
 
 let worker: Worker | null = null
 let proxy: Comlink.Remote<InferenceWorkerApi> | null = null
@@ -26,10 +27,18 @@ function notifyError(error: Error): void {
 }
 
 function createWorker(): { worker: Worker; proxy: Comlink.Remote<InferenceWorkerApi> } {
-  const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
+  const w = new SamWorker()
 
   w.onerror = (event) => {
-    notifyError(new Error(event.message || 'SAM worker error'))
+    console.error('SAM worker error:', {
+      message: event.message,
+      filename: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      error: event.error
+    })
+    const location = event.filename ? ` (${event.filename}:${event.lineno}:${event.colno})` : ''
+    notifyError(new Error(`${event.message || 'SAM worker error'}${location}`))
     teardown()
   }
 

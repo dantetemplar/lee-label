@@ -13,8 +13,9 @@ import {
   type WebsamModelFileUrls,
   type WebsamModelStatus
 } from '../shared/websam-models'
+import { WEBSAM_MODEL_SCHEME } from './protocols'
 
-const SCHEME = 'websam-model'
+const SCHEME = WEBSAM_MODEL_SCHEME
 const CACHE_DIR_NAME = 'Models'
 
 let activeDownloadAbort: AbortController | null = null
@@ -34,21 +35,6 @@ function isModelCached(encoderKey: string, decoderKey: string): boolean {
 
 function toProtocolUrl(relativeKey: string): string {
   return `${SCHEME}://local/${relativeKey.split('/').map(encodeURIComponent).join('/')}`
-}
-
-export function registerWebsamModelProtocolSchemes(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-        corsEnabled: true
-      }
-    }
-  ])
 }
 
 export function setupWebsamModelProtocol(): void {

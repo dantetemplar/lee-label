@@ -5,13 +5,16 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import type { FileEntry } from '../shared/types'
 import { readTextFile, writeTextFile, readBinaryFile } from './file-io'
-import { registerImageProtocolSchemes, setupImageProtocol } from './image-protocol'
+import { setupImageProtocol } from './image-protocol'
+import { setupWebsamModelProtocol, registerModelsIpc } from './models-ipc'
+import { registerPrivilegedSchemes } from './protocols'
+import { getRendererUrl, setupRendererProtocol } from './renderer-protocol'
 import {
-  registerWebsamModelProtocolSchemes,
-  setupWebsamModelProtocol,
-  registerModelsIpc
-} from './models-ipc'
-import { addRecentProject, getRecentProjects, isExistingDirectory, removeRecentProject } from './recent-projects'
+  addRecentProject,
+  getRecentProjects,
+  isExistingDirectory,
+  removeRecentProject
+} from './recent-projects'
 import { APP_DISPLAY_NAME } from '../shared/app-name'
 import { formatDisplayPath } from '../shared/paths'
 import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
@@ -19,8 +22,7 @@ import { registerImportIpc } from './import-ipc'
 import { registerExportIpc } from './export-ipc'
 import { resolveProjectPath } from './project-fs'
 
-registerImageProtocolSchemes()
-registerWebsamModelProtocolSchemes()
+registerPrivilegedSchemes()
 
 /** WebGPU flags must run synchronously before app.ready (no await above). */
 function configureGpuCommandLine(): void {
@@ -265,7 +267,7 @@ function createWindow(): void {
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadURL(getRendererUrl())
   }
 }
 
@@ -295,6 +297,7 @@ app.whenReady().then(() => {
   registerModelsIpc()
   setupImageProtocol()
   setupWebsamModelProtocol()
+  setupRendererProtocol()
   createWindow()
 
   app.on('activate', function () {
