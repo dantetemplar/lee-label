@@ -4,41 +4,29 @@ export const LABEL_SHORTCUT_CODES = [
   'Digit2',
   'Digit3',
   'Digit4',
-  'KeyQ',
-  'KeyW',
-  'KeyE',
-  'KeyR',
-  'KeyA',
-  'KeyS',
-  'KeyD',
-  'KeyF',
-  'KeyZ',
-  'KeyX',
-  'KeyC',
-  'KeyV'
+  'Digit5',
+  'Digit6',
+  'Digit7',
+  'Digit8',
+  'Digit9',
+  'Digit0'
 ] as const
 
 export type LabelShortcutCode = (typeof LABEL_SHORTCUT_CODES)[number]
 
-export const LABEL_SHORTCUT_GROUP_SIZE = 4
+export const LABEL_SHORTCUT_GROUP_SIZE = 5
 
 const FALLBACK_LABELS: Record<LabelShortcutCode, string> = {
   Digit1: '1',
   Digit2: '2',
   Digit3: '3',
   Digit4: '4',
-  KeyQ: 'q',
-  KeyW: 'w',
-  KeyE: 'e',
-  KeyR: 'r',
-  KeyA: 'a',
-  KeyS: 's',
-  KeyD: 'd',
-  KeyF: 'f',
-  KeyZ: 'z',
-  KeyX: 'x',
-  KeyC: 'c',
-  KeyV: 'v'
+  Digit5: '5',
+  Digit6: '6',
+  Digit7: '7',
+  Digit8: '8',
+  Digit9: '9',
+  Digit0: '0'
 }
 
 const CODE_INDEX = new Map<string, number>(
@@ -76,7 +64,7 @@ export async function readKeyboardLayoutLabels(
       if (value) labels.set(code, normalizeLayoutValue(value))
     }
   } catch {
-    // Keep QWERTY fallbacks when the Keyboard Map API is unavailable.
+    // Keep number-row fallbacks when the Keyboard Map API is unavailable.
   }
 
   return labels
