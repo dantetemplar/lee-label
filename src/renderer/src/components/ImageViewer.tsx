@@ -197,6 +197,7 @@ const ImageViewer: Component<{
           segmentationMode={() => project.projectSettings().segmentationMode}
           onTopologyAlertChange={handleTopologyAlertChange}
           onSessionSettled={() => project.settleBorrowedTool()}
+          onEditShape={(shape) => project.beginEditShape(shape)}
         />
       </Show>
     </div>

@@ -119,6 +119,7 @@ const AnnotationOverlay: Component<{
   segmentationMode: () => SegmentationMode
   onTopologyAlertChange?: (alert: TopologyAlert | null) => void
   onSessionSettled?: () => boolean
+  onEditShape?: (shape: WorkingShape) => void
 }> = (props) => {
   const project = useProjectContext()
   let glCanvasRef: HTMLCanvasElement | undefined
@@ -1202,6 +1203,19 @@ const AnnotationOverlay: Component<{
     await applySamResultToSession()
   }
 
+  const handleOverlayDoubleClick = (event: MouseEvent): void => {
+    if (props.activeTool() !== 'cursor') return
+    if (props.segmentationMode() !== 'instance') return
+    event.preventDefault()
+    const point = getImagePoint(event)
+    if (!point) return
+    const hit = findShapeAtPoint(props.store.shapes[0](), point.x, point.y)
+    if (!hit) return
+    props.store.selectOnly(hit.id)
+    project.setActiveLabelId(hit.labelId)
+    props.onEditShape?.(hit)
+  }
+
   const handleOverlayPointerDown = (event: PointerEvent): void => {
     if (isAltSelectMode()) {
       if (event.button !== 0) return
@@ -1797,6 +1811,7 @@ const AnnotationOverlay: Component<{
             ...layerStyle()
           }}
           onPointerDown={handleOverlayPointerDown}
+          onDblClick={handleOverlayDoubleClick}
           onPointerMove={handleOverlayPointerMove}
           onPointerUp={handleOverlayPointerUp}
           onPointerCancel={handleOverlayPointerUp}
