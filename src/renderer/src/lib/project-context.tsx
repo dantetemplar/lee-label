@@ -5,6 +5,8 @@ import type { AnnotationTool } from '../components/AnnotationToolbar'
 import type { ImageBounds } from './annotation-coords'
 import type { AnnotationStore } from './annotation-store'
 import type { SemanticMapStore } from './semantic-map-store'
+import type { ToolReturnTarget } from './tool-borrow'
+import type { WorkingShape } from './annotation-store'
 
 export type CursorSidebarTab = 'objects' | 'labels' | 'files'
 
@@ -28,6 +30,9 @@ export interface ProjectContextValue {
   focusShapeBounds: (bounds: ImageBounds) => void
   registerFocusShapeBounds: (handler: ((bounds: ImageBounds) => void) | null) => void
   requestDeleteShapes: (ids?: string[]) => void
+  settleBorrowedTool: () => boolean
+  beginEditShape: (shape: WorkingShape) => void
+  toolReturnTarget: () => ToolReturnTarget | null
 }
 
 export const ProjectContext = createContext<ProjectContextValue>()

@@ -38,6 +38,11 @@ import {
 } from './lib/pressed-keys'
 import { ProjectContext, type CursorSidebarTab } from './lib/project-context'
 import { SemanticMapStore } from './lib/semantic-map-store'
+import {
+  editToolForShapeType,
+  type ToolReturnTarget
+} from './lib/tool-borrow'
+import type { WorkingShape } from './lib/annotation-store'
 import { blurTextEditableOnEscape, isShortcutBlockedTarget } from './lib/shortcut-guards'
 import {
   countImageStatuses,
@@ -78,7 +83,8 @@ const App: Component = () => {
     'settings'
   )
   const [platformInfoOpen, setPlatformInfoOpen] = createSignal(false)
-  const [activeTool, setActiveTool] = createSignal<AnnotationTool>('cursor')
+  const [activeTool, setActiveToolState] = createSignal<AnnotationTool>('cursor')
+  const [toolReturnTarget, setToolReturnTarget] = createSignal<ToolReturnTarget | null>(null)
   const [toolModifierHeld, setToolModifierHeld] = createSignal(false)
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
@@ -87,6 +93,30 @@ const App: Component = () => {
     name: 'Explorer',
     segmentationMode: DEFAULT_SEGMENTATION_MODE
   })
+
+  const setActiveTool = (tool: AnnotationTool): void => {
+    setToolReturnTarget(null)
+    setActiveToolState(tool)
+  }
+
+  const borrowTool = (tool: AnnotationTool, returnTo: ToolReturnTarget): void => {
+    setToolReturnTarget(returnTo)
+    setActiveToolState(tool)
+  }
+
+  const settleBorrowedTool = (): boolean => {
+    const target = toolReturnTarget()
+    if (!target) return false
+    setToolReturnTarget(null)
+    setActiveToolState(target)
+    return true
+  }
+
+  const beginEditShape = (shape: WorkingShape): void => {
+    const tool = editToolForShapeType(shape.type)
+    if (!tool) return
+    borrowTool(tool, 'cursor')
+  }
 
   const annotationStore = new AnnotationStore(undefined, undefined, (relativePath, status) => {
     setImageStatuses((current) => ({ ...current, [relativePath]: status }))
@@ -581,6 +611,17 @@ const App: Component = () => {
 
       if (
         isImage &&
+        event.code === 'CapsLock' &&
+        !event.repeat &&
+        activeTool() === 'magic-stick'
+      ) {
+        event.preventDefault()
+        borrowTool('mask', 'magic-stick')
+        return
+      }
+
+      if (
+        isImage &&
         activeTool() === 'mask' &&
         (event.code === 'Equal' ||
           event.code === 'NumpadAdd' ||
@@ -818,7 +859,10 @@ const App: Component = () => {
     setCursorSidebarTab,
     focusShapeBounds,
     registerFocusShapeBounds,
-    requestDeleteShapes
+    requestDeleteShapes,
+    settleBorrowedTool,
+    beginEditShape,
+    toolReturnTarget
   }
 
   return (

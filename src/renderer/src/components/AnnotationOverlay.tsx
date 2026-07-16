@@ -63,6 +63,7 @@ import { renderSemanticOverlay, stampClassIdStroke } from '../lib/semantic-class
 import type { SemanticMapStore } from '../lib/semantic-map-store'
 import AnnotationShapeLayer from './AnnotationShapeLayer'
 import type { AnnotationTool } from './AnnotationToolbar'
+import { shouldPreserveBrushSession } from '../lib/tool-borrow'
 import { samPipeline } from '../lib/sam/sam-pipeline'
 import type { Point as SamPoint } from '../lib/sam/types'
 import { isSameImageSrc } from '../lib/image-layer-cache'
@@ -117,6 +118,7 @@ const AnnotationOverlay: Component<{
   semanticStore: SemanticMapStore | null
   segmentationMode: () => SegmentationMode
   onTopologyAlertChange?: (alert: TopologyAlert | null) => void
+  onSessionSettled?: () => boolean
 }> = (props) => {
   const project = useProjectContext()
   let glCanvasRef: HTMLCanvasElement | undefined
@@ -189,6 +191,7 @@ const AnnotationOverlay: Component<{
     const shape = props.store.createRectangle(labelId, rect)
     props.store.setShapes([...props.store.shapes[0](), shape])
     clearRectDraft()
+    props.onSessionSettled?.()
     return true
   }
 
@@ -781,6 +784,7 @@ const AnnotationOverlay: Component<{
       setEditingShapeId(null)
       resetBrushSession()
       flushOverlayRender()
+      props.onSessionSettled?.()
       return
     }
 
@@ -791,6 +795,7 @@ const AnnotationOverlay: Component<{
         props.store.clearSelection()
         setEditingShapeId(null)
         resetBrushSession()
+        props.onSessionSettled?.()
       }
       return
     }
@@ -861,6 +866,7 @@ const AnnotationOverlay: Component<{
         setSamDraftBox(null)
       }
       flushOverlayRender()
+      props.onSessionSettled?.()
     } catch (error) {
       console.error('Mask conversion failed:', error)
       showTopologyAlert('Could not convert mask to a polygon.')
@@ -906,13 +912,26 @@ const AnnotationOverlay: Component<{
           props.imageSize()?.width ?? 0,
           props.imageSize()?.height ?? 0
         ] as const,
-      () => {
+      (current, previous) => {
         lastPointerClient = null
         setHoverPoint(null)
         props.store.setHoveredShapeId(null)
-        resetBrushSession()
+
+        const previousTool = previous?.[0]
+        const nextTool = current[0]
+        const preserveSession = shouldPreserveBrushSession(previousTool, nextTool)
+
+        if (!preserveSession) {
+          resetBrushSession()
+        } else if (previousTool === 'magic-stick' && nextTool === 'mask') {
+          samPipeline.clearPrompts()
+          setSamDraftBox(null)
+        }
+
         queueMicrotask(() => {
-          loadSelectedShapeForEditing()
+          if (!preserveSession) {
+            loadSelectedShapeForEditing()
+          }
           requestOverlayRender()
           const viewport = props.viewportRef()
           const tool = props.activeTool()
@@ -1104,6 +1123,7 @@ const AnnotationOverlay: Component<{
     if (dragMode === 'resize-rect') {
       props.store.markDirty()
       stopInteraction()
+      props.onSessionSettled?.()
     }
   }
 
@@ -1577,6 +1597,7 @@ const AnnotationOverlay: Component<{
         stopInteraction()
         clearRectDraft()
         clearMarqueeDraft()
+        props.onSessionSettled?.()
         return
       }
 
@@ -1585,6 +1606,7 @@ const AnnotationOverlay: Component<{
         event.stopPropagation()
         resetBrushSession()
         loadSelectedShapeForEditing()
+        props.onSessionSettled?.()
         return
       }
 
@@ -1603,6 +1625,14 @@ const AnnotationOverlay: Component<{
           setSamDraftBox(null)
           samPipeline.clearPrompts()
           resetBrushSession()
+          return
+        }
+      }
+
+      if (props.activeTool() === 'mask' || props.activeTool() === 'rectangle') {
+        if (props.onSessionSettled?.()) {
+          event.preventDefault()
+          event.stopPropagation()
           return
         }
       }

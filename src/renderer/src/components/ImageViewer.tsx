@@ -196,6 +196,7 @@ const ImageViewer: Component<{
           semanticStore={project.semanticStore}
           segmentationMode={() => project.projectSettings().segmentationMode}
           onTopologyAlertChange={handleTopologyAlertChange}
+          onSessionSettled={() => project.settleBorrowedTool()}
         />
       </Show>
     </div>
