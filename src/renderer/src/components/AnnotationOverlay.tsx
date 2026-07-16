@@ -291,7 +291,9 @@ const AnnotationOverlay: Component<{
 
     if (tool === 'magic-stick' && props.segmentationMode() === 'instance') {
       props.store.setHoveredShapeId(null)
-      overlayRef.style.cursor = 'crosshair'
+      overlayRef.style.cursor = samPipeline.isBusy() || !samPipeline.embeddingReady()
+        ? 'wait'
+        : 'crosshair'
       return
     }
 
@@ -967,6 +969,8 @@ const AnnotationOverlay: Component<{
   createEffect(() => {
     project.pressedKeys()
     props.activeTool()
+    samPipeline.pipelineStatus()
+    samPipeline.embeddingReady()
     syncHoverFromLastPointer()
     requestOverlayRender()
   })
@@ -1748,12 +1752,21 @@ const AnnotationOverlay: Component<{
     }
   })
 
-  // Single preload path: invalidate on image change, encode once when magic-stick is ready.
+  // Preload: encode when magic-stick is active and model/image become ready.
   createEffect(
     on(
-      () =>
-        [props.imageKey(), props.activeTool(), props.imageSize()?.width ?? 0] as const,
-      ([key, tool, width], prev) => {
+      () => {
+        const image = props.getCurrentImage()
+        return [
+          props.imageKey(),
+          props.activeTool(),
+          props.imageSize()?.width ?? 0,
+          image?.naturalWidth ?? 0,
+          samPipeline.loadedModelId(),
+          samPipeline.pipelineStatus()
+        ] as const
+      },
+      ([key, tool, width, naturalWidth, loadedModel, status], prev) => {
         const prevKey = prev?.[0]
         if (prevKey !== undefined && key !== prevKey) {
           samPipeline.clearPrompts()
@@ -1761,7 +1774,10 @@ const AnnotationOverlay: Component<{
           setSamDraftBox(null)
         }
         if (tool !== 'magic-stick') return
-        if (!key || width <= 0) return
+        if (!key || width <= 0 || naturalWidth <= 0) return
+        if (status === 'error' || status === 'idle') return
+        // Wait until a model is in memory (or currently loading — encode awaits it).
+        if (!loadedModel && status !== 'loading-model') return
         const image = props.getCurrentImage()
         if (!image || image.naturalWidth === 0) return
         if (!isSameImageSrc(image, toLocalImageUrl(key))) return

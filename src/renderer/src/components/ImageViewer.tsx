@@ -7,6 +7,7 @@ import { createImageViewport } from '../lib/image-viewport'
 import { toLocalImageUrl } from '../lib/local-image-url'
 import type { TopologyAlert } from '../lib/polygon/topology-session'
 import { useProjectContext } from '../lib/project-context'
+import { samPipeline } from '../lib/sam/sam-pipeline'
 import AnnotationOverlay from './AnnotationOverlay'
 import TopologyAlertBanner from './TopologyAlertBanner'
 
@@ -49,6 +50,15 @@ const ImageViewer: Component<{
     setImageSize
   })
 
+  const magicStickBusy = createMemo((): boolean => {
+    if (project.activeTool() !== 'magic-stick') return false
+    if (project.projectSettings().segmentationMode !== 'instance') return false
+    if (samPipeline.isBusy()) return true
+    const status = samPipeline.pipelineStatus()
+    if (status === 'error' || status === 'idle') return false
+    return !samPipeline.embeddingReady()
+  })
+
   onMount(() => {
     project.registerFocusShapeBounds((bounds) => viewport.focusBounds(bounds))
     onCleanup(() => project.registerFocusShapeBounds(null))
@@ -70,9 +80,10 @@ const ImageViewer: Component<{
     if (viewport.panning()) return 'grabbing'
     if (isAltSelectMode()) return 'pointer'
     if (project.activeTool() === 'mask') return 'none'
-    if (project.activeTool() === 'rectangle' || project.activeTool() === 'magic-stick') {
-      return 'crosshair'
+    if (project.activeTool() === 'magic-stick') {
+      return magicStickBusy() ? 'wait' : 'crosshair'
     }
+    if (project.activeTool() === 'rectangle') return 'crosshair'
     return 'default'
   })
 

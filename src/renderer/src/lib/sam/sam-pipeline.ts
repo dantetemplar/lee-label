@@ -127,6 +127,21 @@ export const samPipeline = {
   promptBox,
   loadedModelId,
 
+  /** True while the model is loading or the current image is being encoded/decoded. */
+  isBusy(): boolean {
+    const status = pipelineStatus()
+    return status === 'loading-model' || status === 'encoding' || status === 'decoding'
+  },
+
+  /** Magic Stick is usable for prompts (model loaded + image embedding ready). */
+  isInteractionReady(): boolean {
+    return (
+      pipelineStatus() === 'ready' &&
+      embeddingReady() &&
+      loadedModelId() !== null
+    )
+  },
+
   async refreshCacheStatus(): Promise<void> {
     const statuses = await window.api.models.listStatus()
     const map: Record<string, boolean> = {}
