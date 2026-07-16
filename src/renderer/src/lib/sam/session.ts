@@ -1,10 +1,11 @@
 import type { InferenceSession } from 'onnxruntime-web'
+import * as ortModuleImport from 'onnxruntime-web/all'
 import type { ModelInfo } from './types'
 
 async function loadOrtModule(): Promise<typeof import('onnxruntime-web/all')> {
   // /all includes WebGPU + full WASM kernels. /webgpu's WASM fallback omits
   // ops EdgeSAM needs (e.g. Cast bool→int64), which breaks the decoder.
-  return import('onnxruntime-web/all')
+  return ortModuleImport
 }
 
 export type OrtModule = Awaited<ReturnType<typeof loadOrtModule>>
@@ -33,13 +34,19 @@ let currentSession: OnnxSession | null = null
 let webgpuAdapterReady = false
 let lastWebGpuError: Error | null = null
 let webgpuDeviceHooked: GPUDevice | null = null
+let wasmAssetBaseUrl: string | null = null
+
+export function setWasmAssetBaseUrl(url: string): void {
+  wasmAssetBaseUrl = url
+}
 
 async function configureOrt(useWebGPU: boolean): Promise<OrtModule> {
   const ort = await getOrt()
   ort.env.logLevel = 'warning'
-  // Served by ort-wasm-vite-plugin from node_modules (dev) / emitted assets (build).
-  // Must not use /public — Vite blocks ES module imports from public files.
-  ort.env.wasm.wasmPaths = `${import.meta.env.BASE_URL}wasm/`
+  // Resolved by the renderer page and passed into the inline worker. Blob worker
+  // URLs cannot be used as a base for packaged ORT module/WASM assets.
+  if (!wasmAssetBaseUrl) throw new Error('ORT WASM asset URL was not configured')
+  ort.env.wasm.wasmPaths = wasmAssetBaseUrl
 
   if (useWebGPU) {
     ort.env.wasm.numThreads = 1

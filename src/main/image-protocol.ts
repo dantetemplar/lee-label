@@ -1,22 +1,8 @@
 import { net, protocol } from 'electron'
 import { pathToFileURL } from 'url'
+import { LOCAL_IMAGE_SCHEME } from './protocols'
 
-const SCHEME = 'local-image'
-
-export function registerImageProtocolSchemes(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: SCHEME,
-      privileges: {
-        standard: true,
-        secure: true,
-        supportFetchAPI: true,
-        stream: true,
-        corsEnabled: true
-      }
-    }
-  ])
-}
+const SCHEME = LOCAL_IMAGE_SCHEME
 
 export function setupImageProtocol(): void {
   protocol.handle(SCHEME, async (request) => {
