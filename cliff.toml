@@ -12,7 +12,8 @@ body = """
 
 </details>
 """
-trim = true
+# Keep trailing newline so consumers (and older git-cliff-action) can parse the file.
+trim = false
 
 [git]
 conventional_commits = true

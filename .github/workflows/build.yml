@@ -212,8 +212,11 @@ jobs:
           git fetch --depth=1 origin "${{ github.event.repository.default_branch }}"
           git show "origin/${{ github.event.repository.default_branch }}:cliff.toml" > cliff.toml
 
+      # Pin past v4.8.0: that release still fails GITHUB_OUTPUT when the
+      # changelog has no trailing newline (common with cliff.toml trim=true).
+      # https://github.com/orhun/git-cliff-action/pull/81
       - name: Generate changelog
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@11ab60a12325cc82a96afbf3fb3907481e27ab96
         with:
           config: cliff.toml
           args: --current --strip header
