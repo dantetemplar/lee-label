@@ -6,6 +6,7 @@ import {
   normalizeBrushDiameter,
   sliderValueToBrushSize
 } from '../lib/brush/constants'
+import KeyboardHint from './KeyboardHint'
 
 const BrushSettings: Component<{
   brushSize: () => number
@@ -49,6 +50,10 @@ const BrushSettings: Component<{
             <span class="text-xs text-base-content/70">px</span>
           </span>
         </label>
+        <div class="mt-1.5 flex items-center justify-end gap-1">
+          <KeyboardHint size="sm">-</KeyboardHint>
+          <KeyboardHint size="sm">+</KeyboardHint>
+        </div>
         <label class="mt-2.5 flex cursor-pointer items-center justify-between gap-2 text-xs">
           <span class="leading-snug">Fine at max zoom</span>
           <input

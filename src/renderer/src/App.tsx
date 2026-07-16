@@ -27,7 +27,7 @@ import WelcomeScreen from './components/WelcomeScreen'
 import { getActiveStore } from './lib/annotation-backend'
 import type { ImageBounds } from './lib/annotation-coords'
 import { AnnotationStore } from './lib/annotation-store'
-import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX } from './lib/brush/constants'
+import { DEFAULT_BRUSH_DIAMETER_IMAGE_PX, nudgeBrushSize } from './lib/brush/constants'
 import { labelIndexFromCode } from './lib/label-shortcuts'
 import {
   clearPressedKeys,
@@ -578,6 +578,21 @@ const App: Component = () => {
       }
 
       if (event.ctrlKey || event.metaKey || event.altKey) return
+
+      if (
+        isImage &&
+        activeTool() === 'mask' &&
+        (event.code === 'Equal' ||
+          event.code === 'NumpadAdd' ||
+          event.code === 'Minus' ||
+          event.code === 'NumpadSubtract')
+      ) {
+        event.preventDefault()
+        const direction =
+          event.code === 'Equal' || event.code === 'NumpadAdd' ? (1 as const) : (-1 as const)
+        setBrushSize((current) => nudgeBrushSize(current, direction))
+        return
+      }
 
       if (event.code === 'Backquote') {
         if (!event.repeat) {
