@@ -4,8 +4,6 @@ export const DEFAULT_BRUSH_DIAMETER_IMAGE_PX = 40
 export const MIN_BRUSH_DIAMETER_IMAGE_PX = 1
 export const MAX_BRUSH_DIAMETER_IMAGE_PX = 200
 export const BRUSH_SIZE_SLIDER_STEPS = 1000
-/** Log-slider steps per +/- key press (~noticeable size change). */
-export const BRUSH_SIZE_KEY_STEP = 40
 
 export function brushSizeToSliderValue(size: number): number {
   const min = MIN_BRUSH_DIAMETER_IMAGE_PX
@@ -29,9 +27,13 @@ export function sliderValueToBrushSize(value: number): number {
   return Math.round(min * (max / min) ** t)
 }
 
+/** Nudge brush size by 1 image pixel. */
 export function nudgeBrushSize(size: number, direction: 1 | -1): number {
-  const next = brushSizeToSliderValue(size) + direction * BRUSH_SIZE_KEY_STEP
-  return sliderValueToBrushSize(next)
+  const current = normalizeBrushDiameter(size)
+  const next = current + direction
+  if (next < MIN_BRUSH_DIAMETER_IMAGE_PX) return MIN_BRUSH_DIAMETER_IMAGE_PX
+  if (next > MAX_BRUSH_DIAMETER_IMAGE_PX) return MAX_BRUSH_DIAMETER_IMAGE_PX
+  return next
 }
 
 export const SESSION_MASK_OPACITY = 0.6

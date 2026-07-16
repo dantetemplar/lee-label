@@ -914,13 +914,17 @@ const AnnotationOverlay: Component<{
           props.imageSize()?.height ?? 0
         ] as const,
       (current, previous) => {
-        lastPointerClient = null
-        setHoverPoint(null)
         props.store.setHoveredShapeId(null)
 
         const previousTool = previous?.[0]
         const nextTool = current[0]
         const preserveSession = shouldPreserveBrushSession(previousTool, nextTool)
+
+        // Keep pointer position across tool swaps so brush/crosshair preview stays visible.
+        if (!preserveSession && previousTool !== nextTool) {
+          // Selection/image changes still clear hover geometry; pointer client stays.
+          setHoverPoint(null)
+        }
 
         if (!preserveSession) {
           resetBrushSession()
@@ -933,6 +937,7 @@ const AnnotationOverlay: Component<{
           if (!preserveSession) {
             loadSelectedShapeForEditing()
           }
+          syncHoverFromLastPointer()
           requestOverlayRender()
           const viewport = props.viewportRef()
           const tool = props.activeTool()
@@ -1367,6 +1372,8 @@ const AnnotationOverlay: Component<{
       }
 
       if (!props.activeLabelId()) return
+      props.store.clearSelection()
+      setEditingShapeId(null)
       dragMode = 'draw-rect'
       dragStart = point
       setDraftRectMode('draw')

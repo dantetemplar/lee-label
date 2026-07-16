@@ -638,14 +638,23 @@ const App: Component = () => {
       if (
         isImage &&
         activeTool() === 'mask' &&
-        (event.code === 'Equal' ||
+        (event.key === '+' ||
+          event.key === '=' ||
+          event.key === '-' ||
+          event.code === 'Equal' ||
           event.code === 'NumpadAdd' ||
           event.code === 'Minus' ||
-          event.code === 'NumpadSubtract')
+          event.code === 'NumpadSubtract') &&
+        event.key !== '_'
       ) {
         event.preventDefault()
-        const direction =
-          event.code === 'Equal' || event.code === 'NumpadAdd' ? (1 as const) : (-1 as const)
+        const direction: 1 | -1 =
+          event.key === '+' ||
+          event.key === '=' ||
+          event.code === 'Equal' ||
+          event.code === 'NumpadAdd'
+            ? 1
+            : -1
         setBrushSize((current) => nudgeBrushSize(current, direction))
         return
       }
@@ -691,7 +700,7 @@ const App: Component = () => {
                 return
               }
               const label = labels()[labelIndex]
-              if (label) setActiveLabelId(label.id)
+              if (label) selectLabel(label.id)
             })
             return
           }
@@ -699,7 +708,7 @@ const App: Component = () => {
           const label = labels()[labelIndex]
           if (label) {
             event.preventDefault()
-            setActiveLabelId(label.id)
+            selectLabel(label.id)
           }
         }
       }
@@ -855,6 +864,17 @@ const App: Component = () => {
     }
   }
 
+  const selectLabel = (labelId: string): void => {
+    setActiveLabelId(labelId)
+    const tool = activeTool()
+    if (
+      (tool === 'rectangle' || tool === 'mask' || tool === 'magic-stick') &&
+      annotationStore.hasSelection()
+    ) {
+      annotationStore.setLabelForSelected(labelId)
+    }
+  }
+
   const projectContextValue = {
     annotationStore,
     semanticStore,
@@ -924,7 +944,7 @@ const App: Component = () => {
                     onTreeFocusChange={handleTreeFocusChange}
                     labels={labels}
                     activeLabelId={activeLabelId}
-                    onSelectLabel={setActiveLabelId}
+                    onSelectLabel={selectLabel}
                     onCreateLabel={handleCreateLabel}
                     onUpdateLabel={handleUpdateLabel}
                     onDeleteLabel={handleRequestDeleteLabel}
@@ -955,7 +975,7 @@ const App: Component = () => {
                 <LabelPanel
                   labels={labels}
                   activeLabelId={activeLabelId}
-                  onSelect={setActiveLabelId}
+                  onSelect={selectLabel}
                   onCreate={handleCreateLabel}
                   onUpdate={handleUpdateLabel}
                   onDelete={handleRequestDeleteLabel}

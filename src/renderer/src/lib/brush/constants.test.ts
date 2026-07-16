@@ -6,11 +6,9 @@ import {
 } from './constants'
 
 describe('nudgeBrushSize', () => {
-  it('increases and decreases size', () => {
-    const up = nudgeBrushSize(40, 1)
-    const down = nudgeBrushSize(40, -1)
-    expect(up).toBeGreaterThan(40)
-    expect(down).toBeLessThan(40)
+  it('changes size by 1px', () => {
+    expect(nudgeBrushSize(40, 1)).toBe(41)
+    expect(nudgeBrushSize(40, -1)).toBe(39)
   })
 
   it('clamps at min and max', () => {

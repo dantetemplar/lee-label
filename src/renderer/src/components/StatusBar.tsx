@@ -1,5 +1,6 @@
 import type { Component } from 'solid-js'
-import { Show } from 'solid-js'
+import { Show, createSignal, onCleanup } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import type { ImageRecord, ImageStatus } from '../../../shared/annotations'
 import { formatTimestamp, timeToDoneLabel } from '../lib/image-timing'
 import type { FileInfo } from './FileViewer'
@@ -24,18 +25,27 @@ const StatusBar: Component<{
   imageStatus?: () => ImageStatus | null
   imageMeta?: () => ImageRecord | null
 }> = (props) => {
+  const [tipPos, setTipPos] = createSignal<{ x: number; y: number } | null>(null)
+
   const isImage = (): boolean => {
     const info = props.info()
     return Boolean(info?.width && info?.height)
   }
 
-  const tooltipText = (): string => {
-    const meta = props.imageMeta?.()
-    const timeToDone = timeToDoneLabel(meta?.firstLabeledAt, meta?.doneAt)
-    const doneAt = formatTimestamp(meta?.doneAt)
-    const openedAt = formatTimestamp(meta?.openedAt)
-    return `Time to done: ${timeToDone}\nDone at: ${doneAt}\nOpened: ${openedAt}`
+  const showTip = (event: { currentTarget: EventTarget | null }): void => {
+    const el = event.currentTarget
+    if (!(el instanceof HTMLElement)) return
+    const rect = el.getBoundingClientRect()
+    setTipPos({ x: rect.left + rect.width / 2, y: rect.top })
   }
+
+  const hideTip = (): void => {
+    setTipPos(null)
+  }
+
+  onCleanup(() => {
+    setTipPos(null)
+  })
 
   return (
     <footer class="flex h-[var(--statusbar-height)] min-h-[var(--statusbar-height)] w-full shrink-0 items-center justify-between gap-2 border-base-300 bg-base-200 px-3 text-xs text-base-content/60 border-t">
@@ -46,15 +56,19 @@ const StatusBar: Component<{
             <span class="inline-flex items-center gap-1.5 whitespace-nowrap px-2">
               <Show when={props.imageStatus?.()}>
                 {(status) => (
-                  <span
-                    class="tooltip tooltip-top tooltip-left before:whitespace-pre-line"
-                    data-tip={tooltipText()}
+                  <button
+                    type="button"
+                    class="inline-flex h-4 w-4 items-center justify-center rounded-sm"
+                    aria-label={`Status: ${status()}`}
+                    onMouseEnter={showTip}
+                    onMouseLeave={hideTip}
+                    onFocus={showTip}
+                    onBlur={hideTip}
                   >
                     <span
                       class={`inline-block h-2 w-2 shrink-0 rounded-full ${statusDotClass(status())}`}
-                      aria-label={`Status: ${status()}`}
                     />
-                  </span>
+                  </button>
                 )}
               </Show>
               <span>{info().dirty ? `${info().name} •` : info().name}</span>
@@ -83,6 +97,26 @@ const StatusBar: Component<{
             </Show>
           </div>
         )}
+      </Show>
+      <Show when={tipPos()}>
+        {(pos) => {
+          const meta = (): ImageRecord | null | undefined => props.imageMeta?.()
+          return (
+            <Portal>
+              <div
+                class="pointer-events-none fixed z-9999 -translate-x-1/2 -translate-y-full rounded-box border border-base-300 bg-base-100 px-2 py-1.5 text-left text-[11px] leading-relaxed text-base-content shadow-sm"
+                style={{
+                  left: `${pos().x}px`,
+                  top: `${pos().y - 6}px`
+                }}
+              >
+                <div>Time to done: {timeToDoneLabel(meta()?.firstLabeledAt, meta()?.doneAt)}</div>
+                <div>Done at: {formatTimestamp(meta()?.doneAt)}</div>
+                <div>Opened: {formatTimestamp(meta()?.openedAt)}</div>
+              </div>
+            </Portal>
+          )
+        }}
       </Show>
     </footer>
   )
