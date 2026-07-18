@@ -1,9 +1,4 @@
-import {
-  BsFileEarmark,
-  BsFileEarmarkImage,
-  BsFileEarmarkText,
-  BsSearch
-} from 'solid-icons/bs'
+import { BsFileEarmark, BsFileEarmarkImage, BsFileEarmarkText, BsSearch } from 'solid-icons/bs'
 import type { Component } from 'solid-js'
 import { For, Show, createEffect, createMemo, createSignal, on } from 'solid-js'
 import type { FileEntry } from '../../../shared/types'
@@ -162,7 +157,9 @@ const FileSearchPopover: Component<{
         <div ref={resultsRef} id="file-search-results" class="mt-2 max-h-64 overflow-y-auto">
           <Show
             when={query().trim().length > 0}
-            fallback={<div class="px-2 py-3 text-sm text-base-content/50">Type to search project files</div>}
+            fallback={
+              <div class="px-2 py-3 text-sm text-base-content/50">Type to search project files</div>
+            }
           >
             <Show
               when={results().length > 0}
@@ -194,7 +191,9 @@ const FileSearchPopover: Component<{
                             <SearchFileIcon name={file.name} />
                           </span>
                           <span class="min-w-0 flex-1">
-                            <span class="block truncate text-sm text-base-content">{file.name}</span>
+                            <span class="block truncate text-sm text-base-content">
+                              {file.name}
+                            </span>
                             <span class="block truncate text-xs text-base-content/45">
                               {relativePath()}
                             </span>

@@ -44,11 +44,9 @@ function letterboxFloat(image, size, mean, std) {
   const nw = Math.round(image.width * scale)
   const nh = Math.round(image.height * scale)
   const src = new OffscreenCanvas(image.width, image.height)
-  src.getContext('2d').putImageData(
-    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
-    0,
-    0
-  )
+  src
+    .getContext('2d')
+    .putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   const dst = new OffscreenCanvas(size, size)
   const ctx = dst.getContext('2d')
   ctx.drawImage(src, 0, 0, nw, nh)
@@ -63,11 +61,9 @@ function letterboxFloat(image, size, mean, std) {
 
 function stretchFloat(image, size, mean, std) {
   const src = new OffscreenCanvas(image.width, image.height)
-  src.getContext('2d').putImageData(
-    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
-    0,
-    0
-  )
+  src
+    .getContext('2d')
+    .putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   const dst = new OffscreenCanvas(size, size)
   dst.getContext('2d').drawImage(src, 0, 0, size, size)
   const px = dst.getContext('2d').getImageData(0, 0, size, size).data
@@ -78,7 +74,6 @@ function stretchFloat(image, size, mean, std) {
   }
   return out
 }
-
 
 function inferInterm(len) {
   const cands = [
@@ -94,7 +89,6 @@ function toModelXY(nx, ny, W, H, family, scale) {
   if (family === 'sam3') return [nx * 1008, ny * 1008]
   return [nx * W * scale, ny * H * scale]
 }
-
 
 function stabilityScores(masks, mh, mw, maskThreshold = 0.0, thresholdOffset = 1.0) {
   const plane = mh * mw
@@ -117,7 +111,16 @@ function stabilityScores(masks, mh, mw, maskThreshold = 0.0, thresholdOffset = 1
 }
 
 /** Harness prompts use normalized [0,1] image coords; letterbox long-side mapping. */
-function rankEdgeSamHarness(masks, scores, mh, mw, positivePoints, outputW, outputH, maskThreshold = 0.0) {
+function rankEdgeSamHarness(
+  masks,
+  scores,
+  mh,
+  mw,
+  positivePoints,
+  outputW,
+  outputH,
+  maskThreshold = 0.0
+) {
   const plane = mh * mw
   const n = Math.max(1, Math.floor(masks.length / plane))
   const long = Math.max(outputW, outputH)
@@ -166,7 +169,7 @@ function scoreResult(masks, scores, mh, mw, gtMask, H, W, threshold = 0, mode = 
     ious.push(iouBinary(up, gtMask, threshold))
   }
   const best = scores.length ? scores.indexOf(Math.max(...scores)) : -1
-  const bestIou = best >= 0 ? ious[best] ?? 0 : 0
+  const bestIou = best >= 0 ? (ious[best] ?? 0) : 0
   const maxIou = ious.length ? Math.max(...ious) : 0
   return { scores: [...scores].slice(0, n), ious, areas, best, bestIou, maxIou }
 }
@@ -264,9 +267,7 @@ async function decodePrompt(model, dec, emb, image, prompt, useGpu) {
     const e2 = await copyT(eout['image_embeddings.2'])
     const hasPts = points.length > 0
     const hasBox = boxXyxy != null
-    const pointsFlat = hasPts
-      ? new Float32Array(points.flatMap((p) => p))
-      : new Float32Array(0)
+    const pointsFlat = hasPts ? new Float32Array(points.flatMap((p) => p)) : new Float32Array(0)
     const labelsFlat = hasPts
       ? BigInt64Array.from(labels.map((l) => BigInt(l)))
       : new BigInt64Array(0)
@@ -451,7 +452,6 @@ window.__runHarness = async function runHarness() {
       `gt bbox=[${gt.bbox.x1.toFixed(3)},${gt.bbox.y1.toFixed(3)},${gt.bbox.x2.toFixed(3)},${gt.bbox.y2.toFixed(3)}] area=${(gtArea * 100).toFixed(3)}%`
     )
 
-
     const ep = useGpu ? [{ name: 'webgpu', preferredLayout: 'NCHW' }] : ['wasm']
     const encOpts = {
       executionProviders: ep,
@@ -486,8 +486,7 @@ window.__runHarness = async function runHarness() {
           decOut.threshold,
           mode
         )
-        const note =
-          scored.bestIou >= 0.5 ? 'good✓' : scored.bestIou >= 0.2 ? 'mid' : 'bad✗'
+        const note = scored.bestIou >= 0.5 ? 'good✓' : scored.bestIou >= 0.2 ? 'mid' : 'bad✗'
         result.prompts[name] = {
           ok: true,
           decodeMs: performance.now() - t2,

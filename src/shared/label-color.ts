@@ -81,7 +81,7 @@ export function hexToRgbNormalized(hex: string): [number, number, number] {
 
 /** Neon HSV→RGB: full saturation, high value, good for translucent mask overlays. */
 function brightColorFromHash(hash: number, attempt = 0): Rgb {
-  const hue = ((hash / 0xffffff + attempt * GOLDEN_RATIO) % 1 + 1) % 1
+  const hue = (((hash / 0xffffff + attempt * GOLDEN_RATIO) % 1) + 1) % 1
   return hsvToRgb(hue, 1, 1)
 }
 

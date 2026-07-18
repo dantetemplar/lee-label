@@ -118,7 +118,10 @@ for (const id of models) {
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 const outPath = join(OUT, `harness-${stamp}.json`)
 writeFileSync(outPath, JSON.stringify({ fixture: 'test-image', results }, null, 2))
-writeFileSync(join(OUT, 'harness-latest.json'), JSON.stringify({ fixture: 'test-image', results }, null, 2))
+writeFileSync(
+  join(OUT, 'harness-latest.json'),
+  JSON.stringify({ fixture: 'test-image', results }, null, 2)
+)
 
 console.log('\n| model | backend | box IoU | +/- IoU | + IoU | encode | peak |')
 console.log('|---|---|---:|---:|---:|---:|---:|')

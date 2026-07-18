@@ -95,20 +95,21 @@ const api = {
       cachedEmbedding = null
       cachedDecodeResult = null
 
-      const [encoderRes, decoderRes] = await Promise.all([fetch(encoderUrl), fetch(decoderUrl)])
-      if (!encoderRes.ok) {
-        throw new Error(`Failed to fetch encoder: ${encoderRes.status}`)
-      }
-      if (!decoderRes.ok) {
-        throw new Error(`Failed to fetch decoder: ${decoderRes.status}`)
+      const responses = await Promise.all([fetch(encoderUrl), fetch(decoderUrl)])
+      for (const res of responses) {
+        if (!res.ok) throw new Error(`Failed to fetch model asset: ${res.status}`)
       }
 
       const [encoderBuffer, decoderBuffer] = await Promise.all([
-        encoderRes.arrayBuffer(),
-        decoderRes.arrayBuffer()
+        responses[0]!.arrayBuffer(),
+        responses[1]!.arrayBuffer()
       ])
+
       try {
-        await createSession(model, { encoderBuffer, decoderBuffer })
+        await createSession(model, {
+          encoderBuffer,
+          decoderBuffer
+        })
       } catch (err) {
         throw new Error(`Failed to load model "${model.name}"`, { cause: err })
       }

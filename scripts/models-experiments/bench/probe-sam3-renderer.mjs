@@ -29,7 +29,11 @@ function makeTestImage(size = 512) {
 function preprocess(image) {
   const src = new OffscreenCanvas(image.width, image.height)
   const sctx = src.getContext('2d')
-  sctx.putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
+  sctx.putImageData(
+    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
+    0,
+    0
+  )
   const dst = new OffscreenCanvas(MODEL_SIZE, MODEL_SIZE)
   const dctx = dst.getContext('2d')
   dctx.drawImage(src, 0, 0, MODEL_SIZE, MODEL_SIZE)
@@ -105,7 +109,9 @@ async function loadFixtureOrSynthetic() {
         click: { x: c.width * 0.32, y: c.height * 0.4 }
       }
       bmp.close()
-      log(`fixture ${c.width}x${c.height} click=(${image.click.x.toFixed(0)},${image.click.y.toFixed(0)})`)
+      log(
+        `fixture ${c.width}x${c.height} click=(${image.click.x.toFixed(0)},${image.click.y.toFixed(0)})`
+      )
       return image
     }
   } catch {
@@ -179,7 +185,8 @@ window.__runSam3 = async function runSam3() {
     if (useGpuEnc) await hookWebGpuErrors()
 
     // Sequential: encode first; for gpu-seq* do not create decoder until encoder released.
-    const createDecoderEarly = mode === 'gpu-both-fp16' || mode === 'wasm-both' || mode === 'hybrid-wasm-enc'
+    const createDecoderEarly =
+      mode === 'gpu-both-fp16' || mode === 'wasm-both' || mode === 'hybrid-wasm-enc'
     if (createDecoderEarly) {
       log(`create decoder (${useGpuDec ? 'webgpu' : 'wasm'})…`)
       decoder = await ort.InferenceSession.create(decoderBuffer, decOpts)

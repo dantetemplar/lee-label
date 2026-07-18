@@ -54,21 +54,14 @@ const ControlHintChip: Component<{
   keys: string[]
 }> = (props) => {
   const keyboardKeys = (): string[] => props.keys.filter((key) => !parseMouseHintKey(key))
-  const mouseKeys = (): string[] =>
-    props.keys.filter((key) => parseMouseHintKey(key) !== null)
+  const mouseKeys = (): string[] => props.keys.filter((key) => parseMouseHintKey(key) !== null)
 
   if (keyboardKeys().length > 0 && mouseKeys().length > 0) {
     const title = formatHintChordTitle(props.keys)
     return (
-      <span
-        class="inline-flex items-center gap-0.5"
-        title={title}
-        aria-label={title}
-      >
+      <span class="inline-flex items-center gap-0.5" title={title} aria-label={title}>
         <KeyboardChordChip keys={keyboardKeys()} />
-        <For each={mouseKeys()}>
-          {(key) => <MouseButtonHint hint={parseMouseHintKey(key)!} />}
-        </For>
+        <For each={mouseKeys()}>{(key) => <MouseButtonHint hint={parseMouseHintKey(key)!} />}</For>
       </span>
     )
   }

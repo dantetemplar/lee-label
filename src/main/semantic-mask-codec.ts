@@ -16,12 +16,16 @@ export function encodeClassMap(data: Uint16Array, width: number, height: number)
   return Buffer.from(encoded)
 }
 
-export function decodeClassMap(
-  buffer: Buffer
-): { data: Uint16Array; width: number; height: number } {
+export function decodeClassMap(buffer: Buffer): {
+  data: Uint16Array
+  width: number
+  height: number
+} {
   const png = decode(buffer)
   if (png.depth !== 16 || png.channels !== 1) {
-    throw new Error(`Expected 16-bit grayscale PNG, got depth=${png.depth} channels=${png.channels}`)
+    throw new Error(
+      `Expected 16-bit grayscale PNG, got depth=${png.depth} channels=${png.channels}`
+    )
   }
 
   const width = png.width

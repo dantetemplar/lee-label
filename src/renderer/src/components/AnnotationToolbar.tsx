@@ -37,10 +37,16 @@ const TOOLS: {
     hint: '~1',
     shortcut: 'Backquote 1'
   },
-  { id: 'mask', label: 'Segmentation Mask Brush', icon: BrushToolIcon, hint: '~2', shortcut: 'Backquote 2' },
+  {
+    id: 'mask',
+    label: 'Segmentation Mask Brush',
+    icon: BrushToolIcon,
+    hint: '~2',
+    shortcut: 'Backquote 2'
+  },
   {
     id: 'magic-stick',
-    label: 'Magic Segmentation with points and bboxes exemplars',
+    label: 'Magic Segmentation with points and bboxes',
     icon: MagicStickToolIcon,
     hint: '~3',
     shortcut: 'Backquote 3'

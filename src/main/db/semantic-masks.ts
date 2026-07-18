@@ -14,9 +14,7 @@ export class SemanticMasksRepository {
     const row = this.ctx
       .requireDb()
       .prepare('SELECT width, height, format, data FROM semantic_masks WHERE image_id = ?')
-      .get(imageId) as
-      | { width: number; height: number; format: 'png16'; data: Buffer }
-      | undefined
+      .get(imageId) as { width: number; height: number; format: 'png16'; data: Buffer } | undefined
     if (!row) return null
 
     const buffer = row.data

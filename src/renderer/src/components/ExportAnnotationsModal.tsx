@@ -367,7 +367,12 @@ const ExportAnnotationsModal: Component<{
         </div>
 
         <div class="mt-8 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost" disabled={busy()} onClick={() => props.onClose()}>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            disabled={busy()}
+            onClick={() => props.onClose()}
+          >
             Cancel
           </button>
           <button
@@ -490,9 +495,7 @@ const ExportAnnotationsModal: Component<{
               <p>
                 {value().cancelled ? 'Export cancelled. Wrote' : 'Exported'}{' '}
                 {value().exportedLabelFiles} label file(s), {value().exportedShapes} shape(s)
-                <Show when={value().exportedImages > 0}>
-                  , {value().exportedImages} image(s)
-                </Show>
+                <Show when={value().exportedImages > 0}>, {value().exportedImages} image(s)</Show>
                 <Show when={value().wroteClassesTxt}>, classes.txt</Show>.
               </p>
               <Show when={value().warnings.length > 0}>

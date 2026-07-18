@@ -6,8 +6,7 @@ import { getRecentProjectFullLabel } from '../lib/recent-project-path'
 import { clearStickyHover } from '../lib/clear-sticky-hover'
 import AppLogo from './AppLogo'
 
-const menuPanelClass =
-  'rounded-md border border-base-300 bg-base-200 py-1.5 shadow-lg'
+const menuPanelClass = 'rounded-md border border-base-300 bg-base-200 py-1.5 shadow-lg'
 
 const menuItemClass =
   'flex w-full items-center gap-2.5 px-3.5 py-1.5 text-left text-[13px] leading-none text-base-content/88 hover:bg-base-300 disabled:pointer-events-none disabled:opacity-40'
@@ -176,7 +175,9 @@ const TitleBar: Component<{
                               props.onOpenRecent(project.path)
                             }}
                           >
-                            <span class="min-w-0 truncate">{getRecentProjectFullLabel(project)}</span>
+                            <span class="min-w-0 truncate">
+                              {getRecentProjectFullLabel(project)}
+                            </span>
                           </button>
                         )}
                       </For>

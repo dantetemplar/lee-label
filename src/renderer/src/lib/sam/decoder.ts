@@ -37,8 +37,20 @@ export async function decodeMask(
   }
 
   if (prompt.box) {
-    const [x1, y1] = imageToModelCoords(prompt.box.x1, prompt.box.y1, outputWidth, outputHeight, family)
-    const [x2, y2] = imageToModelCoords(prompt.box.x2, prompt.box.y2, outputWidth, outputHeight, family)
+    const [x1, y1] = imageToModelCoords(
+      prompt.box.x1,
+      prompt.box.y1,
+      outputWidth,
+      outputHeight,
+      family
+    )
+    const [x2, y2] = imageToModelCoords(
+      prompt.box.x2,
+      prompt.box.y2,
+      outputWidth,
+      outputHeight,
+      family
+    )
     if (family === 'sam3') {
       boxCoords = [x1, y1, x2, y2]
     } else {
@@ -69,13 +81,27 @@ export async function decodeMask(
   let maskThreshold = 0.0
 
   if (family === 'sam1' && embedding.type === 'sam1') {
-    const sam1Result = await runSam1Decoder(ort, session, embedding, clickPoints, clickLabels, numPoints)
+    const sam1Result = await runSam1Decoder(
+      ort,
+      session,
+      embedding,
+      clickPoints,
+      clickLabels,
+      numPoints
+    )
     rawMasks = sam1Result.masks
     rawScores = sam1Result.scores
     maskWidth = sam1Result.maskWidth
     maskHeight = sam1Result.maskHeight
   } else if (family === 'edgesam' && embedding.type === 'edgesam') {
-    const edgeResult = await runEdgeSamDecoder(ort, session, embedding, clickPoints, clickLabels, numPoints)
+    const edgeResult = await runEdgeSamDecoder(
+      ort,
+      session,
+      embedding,
+      clickPoints,
+      clickLabels,
+      numPoints
+    )
     rawMasks = edgeResult.masks
     // EdgeSAM IoU token is not distilled; ONNX scores ≈ stability and still
     // prefer huge blobs on ambiguous single points. Re-rank with area prior.
@@ -569,10 +595,7 @@ function rankEdgeSamMasks(
   return ranked
 }
 
-function maskContainsPoints(
-  mask: ImageData,
-  points: Array<{ x: number; y: number }>
-): boolean {
+function maskContainsPoints(mask: ImageData, points: Array<{ x: number; y: number }>): boolean {
   if (points.length === 0) return true
   for (const point of points) {
     const x = Math.max(0, Math.min(mask.width - 1, Math.round(point.x)))
@@ -598,7 +621,10 @@ function postProcessMasks(
   const masks: ImageData[] = []
 
   const totalPixelsPerMask = maskWidth * maskHeight
-  const numMasks = Math.max(1, Math.min(rawScores.length, Math.floor(rawMasks.length / totalPixelsPerMask)))
+  const numMasks = Math.max(
+    1,
+    Math.min(rawScores.length, Math.floor(rawMasks.length / totalPixelsPerMask))
+  )
   const maskScaleX =
     coordMode === 'stretch'
       ? maskWidth / outputWidth

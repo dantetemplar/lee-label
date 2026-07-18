@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto'
-import type { CreateLabelInput, Label, LabelDeleteStats, UpdateLabelInput } from '../../shared/annotations'
+import type {
+  CreateLabelInput,
+  Label,
+  LabelDeleteStats,
+  UpdateLabelInput
+} from '../../shared/annotations'
 import { getLabelColor } from '../../shared/label-color'
 import type { DbContext, LabelRow } from './types'
 import { mapLabel } from './types'
@@ -17,18 +22,22 @@ export class LabelsRepository {
 
   createLabel(input: CreateLabelInput): Label {
     const db = this.ctx.requireDb()
-    const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM labels').get() as {
+    const maxOrder = db
+      .prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM labels')
+      .get() as {
       max_order: number
     }
-    const maxClassId = db.prepare('SELECT COALESCE(MAX(class_id), 0) AS max_class_id FROM labels').get() as {
+    const maxClassId = db
+      .prepare('SELECT COALESCE(MAX(class_id), 0) AS max_class_id FROM labels')
+      .get() as {
       max_class_id: number
     }
     if (maxClassId.max_class_id >= 65535) {
       throw new Error('Maximum number of labels (65535) reached')
     }
-    const existingColors = (db.prepare('SELECT color FROM labels').all() as { color: string }[]).map(
-      (row) => row.color
-    )
+    const existingColors = (
+      db.prepare('SELECT color FROM labels').all() as { color: string }[]
+    ).map((row) => row.color)
     const id = randomUUID()
     const label: Label = {
       id,
@@ -47,7 +56,8 @@ export class LabelsRepository {
 
   updateLabel(input: UpdateLabelInput): Label {
     const db = this.ctx.requireDb()
-    const existing = db.prepare('SELECT * FROM labels WHERE id = ?').get(input.id) as LabelRow | undefined
+    const existing = db.prepare('SELECT * FROM labels WHERE id = ?').get(input.id) as
+      LabelRow | undefined
     if (!existing) throw new Error('Label not found')
 
     db.prepare('UPDATE labels SET name = ?, color = ?, shortcut = ? WHERE id = ?').run(
@@ -57,12 +67,18 @@ export class LabelsRepository {
       input.id
     )
     this.ctx.touchProject()
-    return mapLabel({ ...existing, name: input.name, color: input.color, shortcut: input.shortcut ?? null })
+    return mapLabel({
+      ...existing,
+      name: input.name,
+      color: input.color,
+      shortcut: input.shortcut ?? null
+    })
   }
 
   deleteLabel(id: string): void {
     const db = this.ctx.requireDb()
-    const existing = db.prepare('SELECT id FROM labels WHERE id = ?').get(id) as { id: string } | undefined
+    const existing = db.prepare('SELECT id FROM labels WHERE id = ?').get(id) as
+      { id: string } | undefined
     if (!existing) throw new Error('Label not found')
 
     const deleteShapes = db.prepare('DELETE FROM shapes WHERE label_id = ?')
@@ -78,7 +94,8 @@ export class LabelsRepository {
 
   getLabelDeleteStats(id: string): LabelDeleteStats {
     const db = this.ctx.requireDb()
-    const existing = db.prepare('SELECT id FROM labels WHERE id = ?').get(id) as { id: string } | undefined
+    const existing = db.prepare('SELECT id FROM labels WHERE id = ?').get(id) as
+      { id: string } | undefined
     if (!existing) throw new Error('Label not found')
 
     const row = db

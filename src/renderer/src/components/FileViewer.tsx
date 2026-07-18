@@ -62,9 +62,10 @@ const FileViewer: Component<{
 }> = (props) => {
   const project = useProjectContext()
   const [imageError, setImageError] = createSignal(false)
-  const [imageDimensions, setImageDimensions] = createSignal<{ width: number; height: number } | null>(
-    null
-  )
+  const [imageDimensions, setImageDimensions] = createSignal<{
+    width: number
+    height: number
+  } | null>(null)
 
   createEffect(() => {
     props.imageLayers()

@@ -1,9 +1,4 @@
-import type {
-  ImageRecord,
-  ImageStatus,
-  Label,
-  Shape
-} from '../../shared/annotations'
+import type { ImageRecord, ImageStatus, Label, Shape } from '../../shared/annotations'
 
 export interface LabelRow {
   id: string

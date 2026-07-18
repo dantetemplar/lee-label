@@ -77,11 +77,7 @@ export interface Sam3Embedding {
 }
 
 export type ImageEmbedding =
-  | Sam1Embedding
-  | EdgeSamEmbedding
-  | Sam2Embedding
-  | SamHqEmbedding
-  | Sam3Embedding
+  Sam1Embedding | EdgeSamEmbedding | Sam2Embedding | SamHqEmbedding | Sam3Embedding
 
 export interface MaskResult {
   masks: ImageData[]

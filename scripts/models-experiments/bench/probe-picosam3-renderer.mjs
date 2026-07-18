@@ -51,7 +51,8 @@ function upsampleMask(prob96, roiW, roiH, x1, y1, H, W, thr = 0.5) {
       const v01 = prob96[y0 * 96 + x1s]
       const v10 = prob96[y1s * 96 + x0]
       const v11 = prob96[y1s * 96 + x1s]
-      const v = v00 * (1 - fx) * (1 - fy) + v01 * fx * (1 - fy) + v10 * (1 - fx) * fy + v11 * fx * fy
+      const v =
+        v00 * (1 - fx) * (1 - fy) + v01 * fx * (1 - fy) + v10 * (1 - fx) * fy + v11 * fx * fy
       if (v > thr) out[(y1 + y) * W + (x1 + x)] = 1
     }
   }

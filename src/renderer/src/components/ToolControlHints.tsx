@@ -32,18 +32,13 @@ const ToolControlHints: Component<{
                 </span>
               </Show>
               <span>{hint.label}</span>
-              <Show
-                when={hint.sequential}
-                fallback={<ControlHintChip keys={hint.keys} />}
-              >
+              <Show when={hint.sequential} fallback={<ControlHintChip keys={hint.keys} />}>
                 <span class="inline-flex items-center gap-0.5">
                   <For each={hint.keys}>
                     {(key) => (
                       <Show
                         when={key !== 'or'}
-                        fallback={
-                          <span class="px-0.5 text-base-content/45">or</span>
-                        }
+                        fallback={<span class="px-0.5 text-base-content/45">or</span>}
                       >
                         <ControlHintChip keys={[key]} />
                       </Show>

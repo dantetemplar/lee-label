@@ -25,7 +25,8 @@ export function readStoredProjectName(rootPath: string): string | null {
 
   const db = new Database(dbPath, { readonly: true })
   try {
-    const row = db.prepare('SELECT name FROM project WHERE id = 1').get() as { name: string | null } | undefined
+    const row = db.prepare('SELECT name FROM project WHERE id = 1').get() as
+      { name: string | null } | undefined
     const name = row?.name?.trim()
     return name || null
   } finally {

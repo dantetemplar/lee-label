@@ -54,12 +54,10 @@ const AnnotationShapeLayer: Component<{
     props.store.shapes[0]().filter((shape): shape is RectangleShape => shape.type === 'rectangle')
   )
   const polygons = createMemo(() =>
-    props.store
-      .shapes[0]()
-      .filter(
-        (shape): shape is PolygonShape =>
-          shape.type === 'polygon' && shape.id !== props.hiddenShapeId()
-      )
+    props.store.shapes[0]().filter(
+      (shape): shape is PolygonShape =>
+        shape.type === 'polygon' && shape.id !== props.hiddenShapeId()
+    )
   )
   const eraserMarkedIds = createMemo(() => {
     const draft = props.draftRect()
@@ -134,10 +132,7 @@ const AnnotationShapeLayer: Component<{
           return (
             <polygon
               points={polygonPointsToSvg(polygon.points)}
-              fill={hexToRgba(
-                label()?.color ?? '#ffffff',
-                shapeFillOpacity(selected(), hovered())
-              )}
+              fill={hexToRgba(label()?.color ?? '#ffffff', shapeFillOpacity(selected(), hovered()))}
               stroke={label()?.color ?? '#ffffff'}
               stroke-width={selected() ? 2.5 : 1.5}
             />

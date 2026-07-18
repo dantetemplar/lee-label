@@ -126,11 +126,7 @@ async function decode(session, family, model, embedding, image, click) {
       point_labels: new ort.Tensor('float32', labels, [1, 1]),
       mask_input: new ort.Tensor('float32', emptyMask, [1, 1, 256, 256]),
       has_mask_input: new ort.Tensor('float32', new Float32Array([0]), [1]),
-      orig_im_size: new ort.Tensor(
-        'float32',
-        new Float32Array([image.height, image.width]),
-        [2]
-      )
+      orig_im_size: new ort.Tensor('float32', new Float32Array([image.height, image.width]), [2])
     })
     const mask = await copyTensorData(results.masks)
     const score = (await copyTensorData(results.iou_predictions))[0] ?? 0
@@ -374,9 +370,13 @@ async function runBench(modelId) {
     await configureOrt(useWebGPU)
     if (useWebGPU && navigator.gpu) {
       try {
-        const adapter = ort.env.webgpu?.adapter || (await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }))
+        const adapter =
+          ort.env.webgpu?.adapter ||
+          (await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }))
         const feats = adapter?.features ? [...adapter.features] : []
-        log(`WebGPU shader-f16=${feats.includes('shader-f16')} features=${feats.join(',') || '(empty)'}`)
+        log(
+          `WebGPU shader-f16=${feats.includes('shader-f16')} features=${feats.join(',') || '(empty)'}`
+        )
         result.shaderF16 = feats.includes('shader-f16')
       } catch (e) {
         log(`WebGPU feature probe failed: ${e}`)

@@ -1,7 +1,4 @@
-import {
-  forEachBrushStrokeCenter,
-  forEachPixelBrushPixel
-} from './brush/brush-shapes'
+import { forEachBrushStrokeCenter, forEachPixelBrushPixel } from './brush/brush-shapes'
 
 export function computeMaskBounds(
   data: Uint8Array,
@@ -81,9 +78,7 @@ export function pointInCapsule(
   const abY = to.y - from.y
   const abLen2 = abX * abX + abY * abY
   const h =
-    abLen2 < 1e-6
-      ? 0
-      : Math.max(0, Math.min(1, ((x - from.x) * abX + (y - from.y) * abY) / abLen2))
+    abLen2 < 1e-6 ? 0 : Math.max(0, Math.min(1, ((x - from.x) * abX + (y - from.y) * abY) / abLen2))
   const closestX = from.x + h * abX
   const closestY = from.y + h * abY
   const dx = x - closestX
@@ -99,9 +94,15 @@ export function eraseCapsuleFromMaskData(
   radius: number
 ): boolean {
   const minLocalX = Math.max(0, Math.floor(Math.min(from.x, to.x) - radius - bounds.x))
-  const maxLocalX = Math.min(bounds.width - 1, Math.ceil(Math.max(from.x, to.x) + radius - bounds.x))
+  const maxLocalX = Math.min(
+    bounds.width - 1,
+    Math.ceil(Math.max(from.x, to.x) + radius - bounds.x)
+  )
   const minLocalY = Math.max(0, Math.floor(Math.min(from.y, to.y) - radius - bounds.y))
-  const maxLocalY = Math.min(bounds.height - 1, Math.ceil(Math.max(from.y, to.y) + radius - bounds.y))
+  const maxLocalY = Math.min(
+    bounds.height - 1,
+    Math.ceil(Math.max(from.y, to.y) + radius - bounds.y)
+  )
 
   if (minLocalX > maxLocalX || minLocalY > maxLocalY) return false
 
@@ -148,12 +149,16 @@ export function erasePixelBrushStrokeFromMaskData(
   return changed
 }
 
-export function tightenMaskBitmap<T extends { bounds: { x: number; y: number; width: number; height: number }; data: Uint8Array }>(
-  shape: T,
-  imageWidth: number,
-  imageHeight: number
-): T | null {
-  const full = expandMaskBitmap(shape.data, shape.bounds.width, shape.bounds, imageWidth, imageHeight)
+export function tightenMaskBitmap<
+  T extends { bounds: { x: number; y: number; width: number; height: number }; data: Uint8Array }
+>(shape: T, imageWidth: number, imageHeight: number): T | null {
+  const full = expandMaskBitmap(
+    shape.data,
+    shape.bounds.width,
+    shape.bounds,
+    imageWidth,
+    imageHeight
+  )
   const bounds = computeMaskBounds(full, imageWidth, imageHeight)
   if (!bounds) return null
 

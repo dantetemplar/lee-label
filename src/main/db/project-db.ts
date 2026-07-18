@@ -94,10 +94,7 @@ export class ProjectDatabase implements DbContext {
     }
   }
 
-  updateProject(input: {
-    name?: string
-    segmentationMode?: SegmentationMode
-  }): ProjectSettings {
+  updateProject(input: { name?: string; segmentationMode?: SegmentationMode }): ProjectSettings {
     const db = this.requireDb()
     const now = new Date().toISOString()
 
@@ -179,7 +176,6 @@ export class ProjectDatabase implements DbContext {
     return this.imagesRepo.getImageMeta(relativePath)
   }
 
-
   listShapes(relativePath: string): Shape[] {
     return this.shapesRepo.listShapes(relativePath)
   }
@@ -234,9 +230,8 @@ export class ProjectDatabase implements DbContext {
   }
 
   private getSetting<T>(key: string, fallback: T): T {
-    const row = this.requireDb()
-      .prepare('SELECT value FROM settings WHERE key = ?')
-      .get(key) as { value: string } | undefined
+    const row = this.requireDb().prepare('SELECT value FROM settings WHERE key = ?').get(key) as
+      { value: string } | undefined
     if (!row) return fallback
     try {
       return JSON.parse(row.value) as T

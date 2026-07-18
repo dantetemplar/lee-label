@@ -246,11 +246,7 @@ export function findHoleComponents(
   return holes
 }
 
-export function findHolePixels(
-  data: Uint8Array,
-  width: number,
-  height: number
-): Point2D[] {
+export function findHolePixels(data: Uint8Array, width: number, height: number): Point2D[] {
   const holes = findHoleComponents(data, width, height, 1)
   const pixels: Point2D[] = []
   for (const hole of holes) {
@@ -280,11 +276,7 @@ function findStartPixel(data: Uint8Array, width: number, height: number): Point2
   return null
 }
 
-function traceOuterBoundary(
-  data: Uint8Array,
-  width: number,
-  height: number
-): Point2D[] {
+function traceOuterBoundary(data: Uint8Array, width: number, height: number): Point2D[] {
   const start = findStartPixel(data, width, height)
   if (!start) return []
 
@@ -313,7 +305,10 @@ function traceOuterBoundary(
 
     if (!found) break
     steps++
-  } while ((current.x !== start.x || current.y !== start.y || boundary.length < 3) && steps < maxSteps)
+  } while (
+    (current.x !== start.x || current.y !== start.y || boundary.length < 3) &&
+    steps < maxSteps
+  )
 
   if (boundary.length >= 2) {
     const first = boundary[0]
@@ -328,11 +323,7 @@ function pointKey(point: Point2D): string {
   return `${point.x},${point.y}`
 }
 
-export function traceGridBoundary(
-  data: Uint8Array,
-  width: number,
-  height: number
-): Point2D[] {
+export function traceGridBoundary(data: Uint8Array, width: number, height: number): Point2D[] {
   const next = new Map<string, Point2D>()
 
   for (let y = 0; y < height; y++) {
@@ -380,11 +371,7 @@ export function traceGridBoundary(
   return ring
 }
 
-export function extractExternalContour(
-  data: Uint8Array,
-  width: number,
-  height: number
-): Point2D[] {
+export function extractExternalContour(data: Uint8Array, width: number, height: number): Point2D[] {
   const pixelChain = traceOuterBoundary(data, width, height)
   if (pixelChain.length >= 3) return pixelChain
 
@@ -394,11 +381,7 @@ export function extractExternalContour(
   return pixelChain
 }
 
-export function extractGridContour(
-  data: Uint8Array,
-  width: number,
-  height: number
-): Point2D[] {
+export function extractGridContour(data: Uint8Array, width: number, height: number): Point2D[] {
   const gridRing = traceGridBoundary(data, width, height)
   if (gridRing.length >= 3) return gridRing
   return traceOuterBoundary(data, width, height)

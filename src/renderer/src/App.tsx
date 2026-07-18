@@ -38,10 +38,7 @@ import {
 } from './lib/pressed-keys'
 import { ProjectContext, type CursorSidebarTab } from './lib/project-context'
 import { SemanticMapStore } from './lib/semantic-map-store'
-import {
-  editToolForShapeType,
-  type ToolReturnTarget
-} from './lib/tool-borrow'
+import { editToolForShapeType, type ToolReturnTarget } from './lib/tool-borrow'
 import type { WorkingShape } from './lib/annotation-store'
 import { blurTextEditableOnEscape, isShortcutBlockedTarget } from './lib/shortcut-guards'
 import {
@@ -624,12 +621,7 @@ const App: Component = () => {
 
       if (event.ctrlKey || event.metaKey || event.altKey) return
 
-      if (
-        isImage &&
-        event.code === 'CapsLock' &&
-        !event.repeat &&
-        activeTool() === 'magic-stick'
-      ) {
+      if (isImage && event.code === 'CapsLock' && !event.repeat && activeTool() === 'magic-stick') {
         event.preventDefault()
         borrowTool('mask', 'magic-stick')
         return
@@ -690,7 +682,12 @@ const App: Component = () => {
       if (tool === 'rectangle' || tool === 'mask' || tool === 'magic-stick') {
         const labelIndex = labelIndexFromCode(event.code)
         if (labelIndex !== null) {
-          if (event.code === 'Digit1' || event.code === 'Digit2' || event.code === 'Digit3') {
+          if (
+            event.code === 'Digit1' ||
+            event.code === 'Digit2' ||
+            event.code === 'Digit3' ||
+            event.code === 'Digit4'
+          ) {
             queueMicrotask(() => {
               if (
                 toolModifierChordUsed ||

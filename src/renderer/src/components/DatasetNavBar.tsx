@@ -272,7 +272,11 @@ const DatasetNavBar: Component<{
             wide
             onClick={props.onPlay}
           >
-            <NextUnfinishedIcon class="w-auto" style={{ height: `${NAV_ICON_SIZE}px` }} aria-hidden="true" />
+            <NextUnfinishedIcon
+              class="w-auto"
+              style={{ height: `${NAV_ICON_SIZE}px` }}
+              aria-hidden="true"
+            />
           </TransportButton>
           <TransportButton
             title="Next image ]"
@@ -339,7 +343,10 @@ const DatasetNavBar: Component<{
             onClick={props.onSkip}
           >
             <StatusIconSlot>
-              <Show when={status() === 'skipped'} fallback={<BsBan size={NAV_ICON_SIZE} aria-hidden="true" />}>
+              <Show
+                when={status() === 'skipped'}
+                fallback={<BsBan size={NAV_ICON_SIZE} aria-hidden="true" />}
+              >
                 <BsBanFill size={NAV_ICON_SIZE} aria-hidden="true" />
               </Show>
             </StatusIconSlot>
@@ -353,7 +360,10 @@ const DatasetNavBar: Component<{
             onClick={props.onDone}
           >
             <StatusIconSlot>
-              <Show when={status() === 'done'} fallback={<BsCheckCircle size={NAV_ICON_SIZE} aria-hidden="true" />}>
+              <Show
+                when={status() === 'done'}
+                fallback={<BsCheckCircle size={NAV_ICON_SIZE} aria-hidden="true" />}
+              >
                 <BsCheckCircleFill size={NAV_ICON_SIZE} aria-hidden="true" />
               </Show>
             </StatusIconSlot>

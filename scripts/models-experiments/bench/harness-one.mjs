@@ -18,7 +18,8 @@ const IMAGE = join(ROOT, 'test-image.png')
 const GT_TXT = join(ROOT, 'test-image.txt')
 
 const modelId = process.argv.find((a) => a.startsWith('--model='))?.slice('--model='.length)
-const backend = process.argv.find((a) => a.startsWith('--backend='))?.slice('--backend='.length) || 'webgpu'
+const backend =
+  process.argv.find((a) => a.startsWith('--backend='))?.slice('--backend='.length) || 'webgpu'
 const modelsDir =
   process.argv.find((a) => a.startsWith('--models-dir='))?.slice('--models-dir='.length) ||
   join(process.env.HOME || '', '.config/Lee Label/Models')
@@ -81,7 +82,9 @@ app.whenReady().then(async () => {
     if (rel === 'models/encoder') return net.fetch(pathToFileURL(encPath).href)
     if (rel === 'models/decoder') return net.fetch(pathToFileURL(decPath).href)
     if (rel === 'models/language_mask.bin') {
-      return net.fetch(pathToFileURL(join(modelsDir, `models/${modelId}/v1/language_mask.bin`)).href)
+      return net.fetch(
+        pathToFileURL(join(modelsDir, `models/${modelId}/v1/language_mask.bin`)).href
+      )
     }
     if (rel === 'models/language_features.bin') {
       return net.fetch(

@@ -141,6 +141,7 @@ const MagicStickSettings: Component = () => {
                 const models = MODEL_REGISTRY.filter((m) =>
                   (family.families as readonly string[]).includes(m.family)
                 )
+                if (models.length === 0) return null
                 const backend = models.every((m) => m.requiresWebGPU)
                   ? 'WebGPU'
                   : models.every((m) => !m.requiresWebGPU)
@@ -179,9 +180,7 @@ const MagicStickSettings: Component = () => {
             return (
               <div class="flex flex-col gap-1.5">
                 <div class="flex items-start justify-between gap-2">
-                  <span class="min-w-0 text-xs text-base-content/60">
-                    {model().description}
-                  </span>
+                  <span class="min-w-0 text-xs text-base-content/60">{model().description}</span>
                   <Show
                     when={cached()}
                     fallback={

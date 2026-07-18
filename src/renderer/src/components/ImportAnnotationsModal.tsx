@@ -316,7 +316,10 @@ const ImportAnnotationsModal: Component<{
     setPreview(null)
     setResult(null)
 
-    void Promise.all([window.api.import.yoloUltralyticsPreview(nextOptions), window.api.labels.list()])
+    void Promise.all([
+      window.api.import.yoloUltralyticsPreview(nextOptions),
+      window.api.labels.list()
+    ])
       .then(([nextPreview, projectLabels]) => {
         setExistingLabelNames(new Set(projectLabels.map((label) => label.name.toLowerCase())))
         setLabelNameEdits({})
@@ -399,8 +402,8 @@ const ImportAnnotationsModal: Component<{
 
       <Show when={step() === 'setup'}>
         <p class="text-base-content/70 mt-2 text-sm">
-          Import YOLO Ultralytics label files (`.txt`) and match them to images in the open project by
-          filename. Preview before writing to the database.
+          Import YOLO Ultralytics label files (`.txt`) and match them to images in the open project
+          by filename. Preview before writing to the database.
         </p>
 
         <div class="mt-6 space-y-5">
@@ -601,7 +604,12 @@ const ImportAnnotationsModal: Component<{
         </div>
 
         <div class="mt-8 flex justify-end gap-2">
-          <button type="button" class="btn btn-ghost" disabled={busy()} onClick={() => props.onClose()}>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            disabled={busy()}
+            onClick={() => props.onClose()}
+          >
             Cancel
           </button>
           <button
@@ -621,167 +629,169 @@ const ImportAnnotationsModal: Component<{
       <Show when={step() === 'preview' && preview() !== null}>
         <Show when={preview()}>
           {(previewValue) => (
-          <>
-            <p class="text-base-content/70 mt-2 text-sm">
-              Review matched annotations before importing. Nothing has been written yet.
-            </p>
-
-            <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
-                <div class="text-base-content/60 text-xs">Matched images</div>
-                <div class="text-lg font-semibold">{previewValue().matchedImages}</div>
-              </div>
-              <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
-                <div class="text-base-content/60 text-xs">Unmatched</div>
-                <div class="text-lg font-semibold">{previewValue().unmatchedImages}</div>
-              </div>
-              <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
-                <div class="text-base-content/60 text-xs">Shapes</div>
-                <div class="text-lg font-semibold">{previewValue().totalShapes}</div>
-              </div>
-              <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
-                <div class="text-base-content/60 text-xs">New labels</div>
-                <div class="text-lg font-semibold">{newLabelCount()}</div>
-              </div>
-            </div>
-
-            <Show when={previewValue().missingImages > 0 || previewValue().skippedLabelFiles > 0}>
+            <>
               <p class="text-base-content/70 mt-2 text-sm">
-                <Show when={previewValue().missingImages > 0}>
-                  {previewValue().missingImages} label file(s) had no matching project image.
-                </Show>{' '}
-                <Show when={previewValue().skippedLabelFiles > 0}>
-                  {previewValue().skippedLabelFiles} file(s) skipped (unreadable image size).
-                </Show>
+                Review matched annotations before importing. Nothing has been written yet.
               </p>
-            </Show>
 
-            <div class="mt-4">
-              <div class="mb-2 text-sm text-base-content/70">Labels</div>
-              <div class="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
-                <Index each={previewValue().labels}>
-                  {(label) => (
-                    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-base-200 px-2 py-1">
-                      <span
-                        class="inline-block size-2.5 shrink-0 rounded-sm"
-                        style={{ 'background-color': label().color }}
-                      />
-                      <input
-                        type="text"
-                        class="input input-xs input-bordered h-6 w-[9rem] max-w-[9rem] cursor-text select-text bg-base-100 px-2 text-sm leading-none"
-                        value={labelDisplayName(label().classId, label().name)}
-                        disabled={busy()}
-                        title="Click to rename"
-                        aria-label={`Rename class ${label().classId}`}
-                        onInput={(event) => renameLabel(label().classId, event.currentTarget.value)}
-                        onMouseDown={(event) => event.stopPropagation()}
-                      />
-                      <span class="text-xs opacity-50">{label().shapeCount}</span>
-                      <Show when={labelIsNew(label().classId, label().name)}>
-                        <span class="text-xs text-success opacity-80">new</span>
-                      </Show>
-                    </span>
-                  )}
-                </Index>
-                <Show when={previewValue().labels.length === 0}>
-                  <span class="text-base-content/50 text-sm">No labels found in label files.</span>
-                </Show>
+              <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
+                  <div class="text-base-content/60 text-xs">Matched images</div>
+                  <div class="text-lg font-semibold">{previewValue().matchedImages}</div>
+                </div>
+                <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
+                  <div class="text-base-content/60 text-xs">Unmatched</div>
+                  <div class="text-lg font-semibold">{previewValue().unmatchedImages}</div>
+                </div>
+                <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
+                  <div class="text-base-content/60 text-xs">Shapes</div>
+                  <div class="text-lg font-semibold">{previewValue().totalShapes}</div>
+                </div>
+                <div class="rounded-lg border border-base-300 bg-base-200 px-3 py-2">
+                  <div class="text-base-content/60 text-xs">New labels</div>
+                  <div class="text-lg font-semibold">{newLabelCount()}</div>
+                </div>
               </div>
-            </div>
 
-            <div class="mt-4 flex flex-col gap-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0 text-sm text-base-content/70">
-                  <Show
-                    when={currentSample()}
-                    fallback={<span>No annotated samples to preview</span>}
-                  >
-                    {(sample) => (
-                      <span class="truncate" title={sample().relativePath}>
-                        {sample().relativePath}
-                        <span class="opacity-50">
-                          {' '}
-                          · {sample().shapes.length} shape(s) · {sampleIndex() + 1}/
-                          {previewValue().samples.length}
-                          {' '}
-                          · scroll to zoom, drag to pan
-                        </span>
+              <Show when={previewValue().missingImages > 0 || previewValue().skippedLabelFiles > 0}>
+                <p class="text-base-content/70 mt-2 text-sm">
+                  <Show when={previewValue().missingImages > 0}>
+                    {previewValue().missingImages} label file(s) had no matching project image.
+                  </Show>{' '}
+                  <Show when={previewValue().skippedLabelFiles > 0}>
+                    {previewValue().skippedLabelFiles} file(s) skipped (unreadable image size).
+                  </Show>
+                </p>
+              </Show>
+
+              <div class="mt-4">
+                <div class="mb-2 text-sm text-base-content/70">Labels</div>
+                <div class="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                  <Index each={previewValue().labels}>
+                    {(label) => (
+                      <span class="inline-flex h-8 items-center gap-1.5 rounded-lg bg-base-200 px-2 py-1">
+                        <span
+                          class="inline-block size-2.5 shrink-0 rounded-sm"
+                          style={{ 'background-color': label().color }}
+                        />
+                        <input
+                          type="text"
+                          class="input input-xs input-bordered h-6 w-[9rem] max-w-[9rem] cursor-text select-text bg-base-100 px-2 text-sm leading-none"
+                          value={labelDisplayName(label().classId, label().name)}
+                          disabled={busy()}
+                          title="Click to rename"
+                          aria-label={`Rename class ${label().classId}`}
+                          onInput={(event) =>
+                            renameLabel(label().classId, event.currentTarget.value)
+                          }
+                          onMouseDown={(event) => event.stopPropagation()}
+                        />
+                        <span class="text-xs opacity-50">{label().shapeCount}</span>
+                        <Show when={labelIsNew(label().classId, label().name)}>
+                          <span class="text-xs text-success opacity-80">new</span>
+                        </Show>
                       </span>
                     )}
+                  </Index>
+                  <Show when={previewValue().labels.length === 0}>
+                    <span class="text-base-content/50 text-sm">
+                      No labels found in label files.
+                    </span>
                   </Show>
-                </div>
-                <div class="flex shrink-0 gap-1">
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-sm btn-square"
-                    disabled={busy() || sampleIndex() <= 0}
-                    aria-label="Previous sample"
-                    onClick={() => setSampleIndex((index) => Math.max(0, index - 1))}
-                  >
-                    <BsChevronLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-ghost btn-sm btn-square"
-                    disabled={
-                      busy() || sampleIndex() >= Math.max(0, previewValue().samples.length - 1)
-                    }
-                    aria-label="Next sample"
-                    onClick={() =>
-                      setSampleIndex((index) =>
-                        Math.min(previewValue().samples.length - 1, index + 1)
-                      )
-                    }
-                  >
-                    <BsChevronRight size={14} />
-                  </button>
                 </div>
               </div>
 
-              <Show when={currentSample()}>
-                {(sample) => <PreviewCanvas sample={sample} labelsByClass={labelsByClass} />}
-              </Show>
-            </div>
+              <div class="mt-4 flex flex-col gap-3">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="min-w-0 text-sm text-base-content/70">
+                    <Show
+                      when={currentSample()}
+                      fallback={<span>No annotated samples to preview</span>}
+                    >
+                      {(sample) => (
+                        <span class="truncate" title={sample().relativePath}>
+                          {sample().relativePath}
+                          <span class="opacity-50">
+                            {' '}
+                            · {sample().shapes.length} shape(s) · {sampleIndex() + 1}/
+                            {previewValue().samples.length} · scroll to zoom, drag to pan
+                          </span>
+                        </span>
+                      )}
+                    </Show>
+                  </div>
+                  <div class="flex shrink-0 gap-1">
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm btn-square"
+                      disabled={busy() || sampleIndex() <= 0}
+                      aria-label="Previous sample"
+                      onClick={() => setSampleIndex((index) => Math.max(0, index - 1))}
+                    >
+                      <BsChevronLeft size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm btn-square"
+                      disabled={
+                        busy() || sampleIndex() >= Math.max(0, previewValue().samples.length - 1)
+                      }
+                      aria-label="Next sample"
+                      onClick={() =>
+                        setSampleIndex((index) =>
+                          Math.min(previewValue().samples.length - 1, index + 1)
+                        )
+                      }
+                    >
+                      <BsChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
 
-            <Show when={previewValue().warnings.length > 0}>
-              <ul class="text-base-content/60 mt-3 max-h-20 list-disc space-y-1 overflow-y-auto pl-4 text-xs">
-                <For each={previewValue().warnings}>{(warning) => <li>{warning}</li>}</For>
-              </ul>
-            </Show>
-
-            <Show when={error()}>
-              <p class="mt-3 text-sm text-error">{error()}</p>
-            </Show>
-
-            <div class="mt-6 flex justify-end gap-2">
-              <button
-                type="button"
-                class="btn btn-ghost"
-                disabled={busy()}
-                onClick={() => {
-                  setStep('setup')
-                  setError(null)
-                }}
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                class="btn btn-primary"
-                disabled={
-                  busy() ||
-                  (previewValue().matchedImages === 0 &&
-                    (unmatchedAction() === 'leave' || previewValue().unmatchedImages === 0))
-                }
-                onClick={handleImport}
-              >
-                <Show when={busy()} fallback="Import">
-                  <span class="loading loading-spinner loading-sm" />
-                  Importing…
+                <Show when={currentSample()}>
+                  {(sample) => <PreviewCanvas sample={sample} labelsByClass={labelsByClass} />}
                 </Show>
-              </button>
-            </div>
-          </>
+              </div>
+
+              <Show when={previewValue().warnings.length > 0}>
+                <ul class="text-base-content/60 mt-3 max-h-20 list-disc space-y-1 overflow-y-auto pl-4 text-xs">
+                  <For each={previewValue().warnings}>{(warning) => <li>{warning}</li>}</For>
+                </ul>
+              </Show>
+
+              <Show when={error()}>
+                <p class="mt-3 text-sm text-error">{error()}</p>
+              </Show>
+
+              <div class="mt-6 flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  disabled={busy()}
+                  onClick={() => {
+                    setStep('setup')
+                    setError(null)
+                  }}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  disabled={
+                    busy() ||
+                    (previewValue().matchedImages === 0 &&
+                      (unmatchedAction() === 'leave' || previewValue().unmatchedImages === 0))
+                  }
+                  onClick={handleImport}
+                >
+                  <Show when={busy()} fallback="Import">
+                    <span class="loading loading-spinner loading-sm" />
+                    Importing…
+                  </Show>
+                </button>
+              </div>
+            </>
           )}
         </Show>
       </Show>

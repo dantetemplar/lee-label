@@ -368,9 +368,7 @@ export class AnnotationStore extends PersistedImageStore {
     const shapes = this.shapes[0]()
     if (!shapes.some((shape) => shape.id === id)) return
     this.pushUndo()
-    this.shapes[1](
-      shapes.map((shape) => (shape.id === id ? { ...shape, labelId } : shape))
-    )
+    this.shapes[1](shapes.map((shape) => (shape.id === id ? { ...shape, labelId } : shape)))
     this.markDirty()
   }
 
@@ -379,9 +377,7 @@ export class AnnotationStore extends PersistedImageStore {
     if (selected.size === 0) return
     this.pushUndo()
     this.shapes[1](
-      this.shapes[0]().map((shape) =>
-        selected.has(shape.id) ? { ...shape, labelId } : shape
-      )
+      this.shapes[0]().map((shape) => (selected.has(shape.id) ? { ...shape, labelId } : shape))
     )
     this.markDirty()
   }

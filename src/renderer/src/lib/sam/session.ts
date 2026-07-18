@@ -139,7 +139,12 @@ async function createSessionPair(
     await hookWebGpuDeviceErrors(ort)
   }
 
-  currentSession = { encoderSession, decoderSession, model, backend }
+  currentSession = {
+    encoderSession,
+    decoderSession,
+    model,
+    backend
+  }
   return currentSession
 }
 

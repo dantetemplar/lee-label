@@ -88,28 +88,28 @@ const WelcomeScreen: Component<{
                 {(project) => {
                   const { title, folderSuffix } = getRecentProjectTitleParts(project)
                   return (
-                  <li>
-                    <button
-                      type="button"
-                      class="btn btn-ghost flex h-auto min-h-0 w-full items-center justify-between gap-3 px-0 text-[13px] font-normal focus-visible:bg-base-300"
-                      title={getRecentProjectFullLabel(project)}
-                      onClick={() => {
-                        setRecentMenu(null)
-                        props.onOpenRecent(project.path)
-                      }}
-                      onContextMenu={(event) => handleRecentContextMenu(project, event)}
-                    >
-                      <span class="max-w-[50%] min-w-0 truncate font-medium text-base-content/82">
-                        {title}
-                        <Show when={folderSuffix}>
-                          <span class="font-normal text-base-content/48">{folderSuffix}</span>
-                        </Show>
-                      </span>
-                      <span class="max-w-[55%] min-w-0 truncate text-right text-xs text-base-content/48">
-                        {truncatePathStart(getRecentProjectParentLabel(project))}
-                      </span>
-                    </button>
-                  </li>
+                    <li>
+                      <button
+                        type="button"
+                        class="btn btn-ghost flex h-auto min-h-0 w-full items-center justify-between gap-3 px-0 text-[13px] font-normal focus-visible:bg-base-300"
+                        title={getRecentProjectFullLabel(project)}
+                        onClick={() => {
+                          setRecentMenu(null)
+                          props.onOpenRecent(project.path)
+                        }}
+                        onContextMenu={(event) => handleRecentContextMenu(project, event)}
+                      >
+                        <span class="max-w-[50%] min-w-0 truncate font-medium text-base-content/82">
+                          {title}
+                          <Show when={folderSuffix}>
+                            <span class="font-normal text-base-content/48">{folderSuffix}</span>
+                          </Show>
+                        </span>
+                        <span class="max-w-[55%] min-w-0 truncate text-right text-xs text-base-content/48">
+                          {truncatePathStart(getRecentProjectParentLabel(project))}
+                        </span>
+                      </button>
+                    </li>
                   )
                 }}
               </For>

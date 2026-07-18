@@ -36,8 +36,7 @@ const { values: args } = parseArgs({
 
 const VARIANTS = ['baseline', 'gpu-io', 'graph-capture', 'opt-all']
 const VARIANT_LIST = args['all-variants'] ? VARIANTS : [String(args.variant || 'baseline')]
-const MODELS_DIR =
-  args['models-dir'] || join(process.env.HOME || '', '.config/Lee Label/Models')
+const MODELS_DIR = args['models-dir'] || join(process.env.HOME || '', '.config/Lee Label/Models')
 const TIMEOUT_MS = Number(args.timeout) || 180_000
 
 const registry = JSON.parse(readFileSync(join(__dirname, 'models.json'), 'utf8'))
@@ -131,13 +130,14 @@ for (const variant of VARIANT_LIST) {
     results.push(r)
     allResults.push(r)
     const status = r.ok ? 'OK' : 'FAIL'
-    const vram = r.vram?.peakMiB != null ? `peak ${Number(r.vram.peakMiB).toFixed(0)} MiB (Δ${Number(r.vram.deltaMiB).toFixed(0)})` : 'VRAM n/a'
+    const vram =
+      r.vram?.peakMiB != null
+        ? `peak ${Number(r.vram.peakMiB).toFixed(0)} MiB (Δ${Number(r.vram.deltaMiB).toFixed(0)})`
+        : 'VRAM n/a'
     console.log(
       `  ${status} load=${fmt(r.loadMs)} encode=${fmt(r.encodeMs)} seg=${fmt(r.segmentMs)} ${vram}` +
         (r.error ? ` err=${r.error}` : '') +
-        (r.ok
-          ? ` score=${fmt(r.score, 3)} cover=${(r.centerCoverage * 100).toFixed(1)}%`
-          : '')
+        (r.ok ? ` score=${fmt(r.score, 3)} cover=${(r.centerCoverage * 100).toFixed(1)}%` : '')
     )
   }
 
@@ -156,7 +156,9 @@ if (VARIANT_LIST.length > 1) {
   const byModel = new Map()
   for (const r of allResults) {
     const row = byModel.get(r.id) || { id: r.id }
-    row[r.variant] = r.ok ? `${fmt(r.encodeMs)}ms Δ${fmt(r.vram?.deltaMiB)}` : `FAIL: ${r.error?.slice(0, 40)}`
+    row[r.variant] = r.ok
+      ? `${fmt(r.encodeMs)}ms Δ${fmt(r.vram?.deltaMiB)}`
+      : `FAIL: ${r.error?.slice(0, 40)}`
     byModel.set(r.id, row)
   }
   for (const row of byModel.values()) {
@@ -178,7 +180,9 @@ async function queryGpu() {
 }
 
 function printTable(results) {
-  console.log('| model | ok | load ms | encode ms | segment ms | peak MiB | ΔVRAM | score | center% |')
+  console.log(
+    '| model | ok | load ms | encode ms | segment ms | peak MiB | ΔVRAM | score | center% |'
+  )
   console.log('|---|---|---:|---:|---:|---:|---:|---:|---:|')
   for (const r of results) {
     console.log(

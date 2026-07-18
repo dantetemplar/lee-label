@@ -1,6 +1,10 @@
 import type { Point2D } from '../../../../shared/geometry'
 import type { CapsuleSegment, StampMode } from '../brush/brush-engine'
-import { forEachBrushStrokeCenter, forEachPixelBrushPixel, usesPixelBrushShape } from '../brush/brush-shapes'
+import {
+  forEachBrushStrokeCenter,
+  forEachPixelBrushPixel,
+  usesPixelBrushShape
+} from '../brush/brush-shapes'
 import type { TopologyIssueMask } from '../polygon/worker-types'
 
 export interface BrushSessionState {
@@ -117,7 +121,10 @@ export function applyManualIssueGuesses(
               ? 0
               : Math.min(
                   1,
-                  Math.max(0, ((x - segment.from.x) * dx + (y - segment.from.y) * dy) / lengthSquared)
+                  Math.max(
+                    0,
+                    ((x - segment.from.x) * dx + (y - segment.from.y) * dy) / lengthSquared
+                  )
                 )
           const closestX = segment.from.x + projection * dx
           const closestY = segment.from.y + projection * dy

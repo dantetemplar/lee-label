@@ -34,7 +34,13 @@ body {
 }
 
 /* Subtle focus — no heavy DaisyUI rings on click; light hint for keyboard nav */
-.app :is(.btn, button:not([data-tree-item]):not([data-color-swatch]), input:not([type='range']), textarea):focus {
+.app
+  :is(
+    .btn,
+    button:not([data-tree-item]):not([data-color-swatch]),
+    input:not([type='range']),
+    textarea
+  ):focus {
   outline: none;
   box-shadow: none;
 }

@@ -1,19 +1,15 @@
+import { ACTIVE_STROKE_OPACITY, COMMITTED_MASK_OPACITY, SESSION_MASK_OPACITY } from './constants'
 import {
-  ACTIVE_STROKE_OPACITY,
-  COMMITTED_MASK_OPACITY,
-  SESSION_MASK_OPACITY
-} from './constants'
-import {
-    CAPSULE_FRAGMENT,
-    CAPSULE_VERTEX,
-    COMPOSITE_FRAGMENT,
-    COMPOSITE_VERTEX,
-    PIXEL_BRUSH_FRAGMENT,
-    PIXEL_BRUSH_VERTEX,
-    PLACED_MASK_FRAGMENT,
-    PLACED_MASK_VERTEX,
-    PREVIEW_FRAGMENT,
-    PREVIEW_VERTEX
+  CAPSULE_FRAGMENT,
+  CAPSULE_VERTEX,
+  COMPOSITE_FRAGMENT,
+  COMPOSITE_VERTEX,
+  PIXEL_BRUSH_FRAGMENT,
+  PIXEL_BRUSH_VERTEX,
+  PLACED_MASK_FRAGMENT,
+  PLACED_MASK_VERTEX,
+  PREVIEW_FRAGMENT,
+  PREVIEW_VERTEX
 } from './shaders'
 import { expandPixelBrushStrokeBounds, forEachBrushStrokeCenter } from './brush-shapes'
 import { computeMaskBounds, cropMaskBitmap } from '../mask-bitmap'
@@ -164,10 +160,7 @@ function uploadMaskDataTexture(
   return texture
 }
 
-function createFramebuffer(
-  gl: WebGL2RenderingContext,
-  texture: WebGLTexture
-): WebGLFramebuffer {
+function createFramebuffer(gl: WebGL2RenderingContext, texture: WebGLTexture): WebGLFramebuffer {
   const framebuffer = gl.createFramebuffer()
   if (!framebuffer) throw new Error('Failed to create framebuffer')
   gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer)
@@ -351,8 +344,14 @@ export class BrushEngine {
       this.compositeProgram,
       'uTopologyIssueMask'
     )!
-    this.compositeSessionMaskColor = gl.getUniformLocation(this.compositeProgram, 'uSessionMaskColor')!
-    this.compositeActiveMaskColor = gl.getUniformLocation(this.compositeProgram, 'uActiveMaskColor')!
+    this.compositeSessionMaskColor = gl.getUniformLocation(
+      this.compositeProgram,
+      'uSessionMaskColor'
+    )!
+    this.compositeActiveMaskColor = gl.getUniformLocation(
+      this.compositeProgram,
+      'uActiveMaskColor'
+    )!
     this.compositeActiveOutsideMaskColor = gl.getUniformLocation(
       this.compositeProgram,
       'uActiveOutsideMaskColor'
@@ -364,7 +363,10 @@ export class BrushEngine {
     this.previewCenterPx = gl.getUniformLocation(this.previewProgram, 'uCenterPx')!
     this.previewRadiusPx = gl.getUniformLocation(this.previewProgram, 'uRadiusPx')!
     this.previewStrokeWidthPx = gl.getUniformLocation(this.previewProgram, 'uStrokeWidthPx')!
-    this.previewInnerStrokeWidthPx = gl.getUniformLocation(this.previewProgram, 'uInnerStrokeWidthPx')!
+    this.previewInnerStrokeWidthPx = gl.getUniformLocation(
+      this.previewProgram,
+      'uInnerStrokeWidthPx'
+    )!
     this.previewOuterOpacity = gl.getUniformLocation(this.previewProgram, 'uOuterOpacity')!
     this.previewInnerOpacity = gl.getUniformLocation(this.previewProgram, 'uInnerOpacity')!
     this.previewFilled = gl.getUniformLocation(this.previewProgram, 'uFilledPreview')!
@@ -391,7 +393,12 @@ export class BrushEngine {
     this.maskReadFormat = session.format
     this.sessionTexture = session.texture
     this.activeTexture = active.texture
-    this.topologyIssueTexture = uploadMaskDataTexture(gl, new Uint8Array(width * height), width, height)
+    this.topologyIssueTexture = uploadMaskDataTexture(
+      gl,
+      new Uint8Array(width * height),
+      width,
+      height
+    )
     this.sessionFramebuffer = createFramebuffer(gl, this.sessionTexture)
     this.activeFramebuffer = createFramebuffer(gl, this.activeTexture)
 
@@ -734,7 +741,15 @@ export class BrushEngine {
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sessionFramebuffer)
     const previousPackAlignment = gl.getParameter(gl.PACK_ALIGNMENT) as number
     gl.pixelStorei(gl.PACK_ALIGNMENT, 1)
-    gl.readPixels(minX, height - maxY - 1, regionW, regionH, this.maskReadFormat, gl.UNSIGNED_BYTE, pixels)
+    gl.readPixels(
+      minX,
+      height - maxY - 1,
+      regionW,
+      regionH,
+      this.maskReadFormat,
+      gl.UNSIGNED_BYTE,
+      pixels
+    )
     gl.pixelStorei(gl.PACK_ALIGNMENT, previousPackAlignment)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 

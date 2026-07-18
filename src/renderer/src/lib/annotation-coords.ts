@@ -74,12 +74,7 @@ export function hitTestRectangle(
   y: number,
   rect: { x: number; y: number; width: number; height: number }
 ): boolean {
-  return (
-    x >= rect.x &&
-    x <= rect.x + rect.width &&
-    y >= rect.y &&
-    y <= rect.y + rect.height
-  )
+  return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height
 }
 
 export function rectangleCornerPoints(rect: {
@@ -127,12 +122,7 @@ export function rectanglesIntersect(
   a: { x: number; y: number; width: number; height: number },
   b: { x: number; y: number; width: number; height: number }
 ): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  )
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
 
 export function hitTestRectangleCorner(
@@ -163,11 +153,7 @@ export function hitTestMaskBounds(
   return hitTestRectangle(x, y, bounds)
 }
 
-export function hitTestPolygon(
-  x: number,
-  y: number,
-  points: { x: number; y: number }[]
-): boolean {
+export function hitTestPolygon(x: number, y: number, points: { x: number; y: number }[]): boolean {
   if (points.length < 3) return false
   let inside = false
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
@@ -231,12 +217,7 @@ export function shapeBounds(shape: {
 }
 
 export function boundsIntersect(a: ImageBounds, b: ImageBounds): boolean {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  )
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
 }
 
 /** True when image-space bounds lie fully inside the viewport (with optional screen padding). */

@@ -201,10 +201,9 @@ function loadShapesByImageId(): Map<number, Shape[]> {
 }
 
 function countShapes(): number {
-  const row = projectDatabase
-    .requireDb()
-    .prepare('SELECT COUNT(*) AS count FROM shapes')
-    .get() as { count: number }
+  const row = projectDatabase.requireDb().prepare('SELECT COUNT(*) AS count FROM shapes').get() as {
+    count: number
+  }
   return row.count
 }
 
@@ -278,10 +277,13 @@ export async function exportYoloUltralytics(
   const projectRoot = projectDatabase.getRootPath()
   if (!projectRoot) throw new Error('No project is open')
 
-  const labels = projectDatabase.listLabels().slice().sort((a, b) => {
-    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
-    return a.classId - b.classId
-  })
+  const labels = projectDatabase
+    .listLabels()
+    .slice()
+    .sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+      return a.classId - b.classId
+    })
   const classIndexByLabelId = new Map(labels.map((label, index) => [label.id, index] as const))
 
   const imageRows = listExportImageRows()

@@ -72,12 +72,7 @@ workerScope.onmessage = (event: MessageEvent<SegmentationWorkerRequest>): void =
     mask = repairMaskTopology(mask, width, height)
   }
 
-  const polygon = maskToPolygon(
-    mask,
-    width,
-    height,
-    simplification ?? POLYGON_SIMPLIFICATION
-  )
+  const polygon = maskToPolygon(mask, width, height, simplification ?? POLYGON_SIMPLIFICATION)
   const offsetPolygon =
     polygon && (offsetX !== 0 || offsetY !== 0)
       ? polygon.map((point) => ({ x: point.x + offsetX, y: point.y + offsetY }))

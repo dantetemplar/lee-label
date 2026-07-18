@@ -5,7 +5,11 @@ import { toLocalImageUrl } from './local-image-url'
 export const LAYERS = ['prev', 'current', 'next'] as const
 export type LayerRole = (typeof LAYERS)[number]
 
-export const EMPTY_PATHS: Record<LayerRole, string | null> = { prev: null, current: null, next: null }
+export const EMPTY_PATHS: Record<LayerRole, string | null> = {
+  prev: null,
+  current: null,
+  next: null
+}
 export const EMPTY_READY: Record<LayerRole, boolean> = { prev: false, current: false, next: false }
 export const EMPTY_SIZES: Record<LayerRole, { width: number; height: number } | null> = {
   prev: null,
@@ -179,7 +183,12 @@ export function createImageLayerCache(options: ImageLayerCacheOptions): ImageLay
     }
 
     if (!findLayerWithPath(layers.currentPath)) {
-      const target = pickLoadTarget(new Set([layers.currentPath]), 'current', layerPaths(), visibleRole())
+      const target = pickLoadTarget(
+        new Set([layers.currentPath]),
+        'current',
+        layerPaths(),
+        visibleRole()
+      )
       setLayerPath(target, layers.currentPath)
     }
   }

@@ -171,12 +171,7 @@ const PlatformInfoModal: Component<{
           <h3 class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase">
             Runtime
           </h3>
-          <Show
-            when={runtime()}
-            fallback={
-              <div class="skeleton h-20 w-full rounded-lg" />
-            }
-          >
+          <Show when={runtime()} fallback={<div class="skeleton h-20 w-full rounded-lg" />}>
             {(info) => (
               <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
                 <dt class="text-base-content/60">Electron</dt>
@@ -198,12 +193,7 @@ const PlatformInfoModal: Component<{
           <h3 class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase">
             Active GPU
           </h3>
-          <Show
-            when={gpuUsage()}
-            fallback={
-              <div class="skeleton h-16 w-full rounded-lg" />
-            }
-          >
+          <Show when={gpuUsage()} fallback={<div class="skeleton h-16 w-full rounded-lg" />}>
             {(usage) => (
               <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
                 <dt class="text-base-content/60">WebGPU</dt>
@@ -249,9 +239,7 @@ const PlatformInfoModal: Component<{
           </h3>
           <Show
             when={gpuRows().length > 0}
-            fallback={
-              <div class="skeleton h-24 w-full rounded-lg" />
-            }
+            fallback={<div class="skeleton h-24 w-full rounded-lg" />}
           >
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
               <For each={gpuRows()}>
@@ -272,17 +260,13 @@ const PlatformInfoModal: Component<{
           </h3>
           <Show
             when={checks().length > 0}
-            fallback={
-              <div class="skeleton h-32 w-full rounded-lg" />
-            }
+            fallback={<div class="skeleton h-32 w-full rounded-lg" />}
           >
             <ul class="divide-y divide-base-content/10 rounded-lg border border-base-content/10">
               <For each={checks()}>
                 {(item) => (
                   <li class="flex items-start gap-3 px-3 py-2.5">
-                    <span
-                      class={`badge badge-sm shrink-0 ${statusBadgeClass[item.status]}`}
-                    >
+                    <span class={`badge badge-sm shrink-0 ${statusBadgeClass[item.status]}`}>
                       {statusLabel[item.status]}
                     </span>
                     <div class="min-w-0">

@@ -135,11 +135,7 @@ export const samPipeline = {
 
   /** Magic Stick is usable for prompts (model loaded + image embedding ready). */
   isInteractionReady(): boolean {
-    return (
-      pipelineStatus() === 'ready' &&
-      embeddingReady() &&
-      loadedModelId() !== null
-    )
+    return pipelineStatus() === 'ready' && embeddingReady() && loadedModelId() !== null
   },
 
   async refreshCacheStatus(): Promise<void> {
@@ -323,9 +319,10 @@ export const samPipeline = {
     return loadInFlight
   },
 
-  async encodeImage(image: HTMLImageElement, imageKey: string): Promise<boolean> {
-    if (!(await this.ensureModelLoaded(selectedModelId()))) return false
-    const cacheKey = `${ENCODE_CACHE_VERSION}:${imageKey}`
+  async encodeImage(image: HTMLImageElement, imageKey: string, modelId?: string): Promise<boolean> {
+    const id = modelId ?? selectedModelId()
+    if (!(await this.ensureModelLoaded(id))) return false
+    const cacheKey = `${ENCODE_CACHE_VERSION}:${id}:${imageKey}`
     if (encodedImageKey === cacheKey && embeddingReady()) return true
     if (encodeInFlight && encodeInFlightKey === cacheKey) return encodeInFlight
 

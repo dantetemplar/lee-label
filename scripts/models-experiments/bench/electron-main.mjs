@@ -21,8 +21,7 @@ const { values: args } = parseArgs({
   strict: false
 })
 
-const MODELS_DIR =
-  args['models-dir'] || join(process.env.HOME || '', '.config/Lee Label/Models')
+const MODELS_DIR = args['models-dir'] || join(process.env.HOME || '', '.config/Lee Label/Models')
 const VARIANT = String(args.variant || 'baseline')
 const ONLY_MODEL = args.model ? String(args.model) : null
 const TIMEOUT_MS = Number(args.timeout) || 180_000
@@ -95,7 +94,12 @@ function loadModelMeta() {
   const enc = existsSync(encOrt) ? encOrt : encOnnx
   const dec = join(MODELS_DIR, model.decoderKey)
   if (!existsSync(enc) || !existsSync(dec)) throw new Error(`Missing files for ${ONLY_MODEL}`)
-  return { ...model, encoderKey: enc.endsWith('.onnx') ? model.encoderKey.replace(/\.ort$/, '.onnx') : model.encoderKey }
+  return {
+    ...model,
+    encoderKey: enc.endsWith('.onnx')
+      ? model.encoderKey.replace(/\.ort$/, '.onnx')
+      : model.encoderKey
+  }
 }
 
 app.commandLine.appendSwitch('enable-features', 'Vulkan,WebGPU')

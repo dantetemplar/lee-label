@@ -37,11 +37,9 @@ function letterboxFloat(image, size, mean, std) {
   const nw = Math.round(image.width * scale)
   const nh = Math.round(image.height * scale)
   const src = new OffscreenCanvas(image.width, image.height)
-  src.getContext('2d').putImageData(
-    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
-    0,
-    0
-  )
+  src
+    .getContext('2d')
+    .putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   const dst = new OffscreenCanvas(size, size)
   const ctx = dst.getContext('2d')
   ctx.drawImage(src, 0, 0, nw, nh)
@@ -56,11 +54,9 @@ function letterboxFloat(image, size, mean, std) {
 
 function stretchFloat(image, size, mean, std) {
   const src = new OffscreenCanvas(image.width, image.height)
-  src.getContext('2d').putImageData(
-    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
-    0,
-    0
-  )
+  src
+    .getContext('2d')
+    .putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   const dst = new OffscreenCanvas(size, size)
   dst.getContext('2d').drawImage(src, 0, 0, size, size)
   const px = dst.getContext('2d').getImageData(0, 0, size, size).data
@@ -71,7 +67,6 @@ function stretchFloat(image, size, mean, std) {
   }
   return out
 }
-
 
 function areasFromMasks(masks, num, mh, mw, threshold = 0) {
   const areas = []
@@ -123,7 +118,9 @@ window.__runPcb = async function runPcb() {
 
     const encBuf = await (await fetch('bench://app/models/encoder')).arrayBuffer()
     const decBuf = await (await fetch('bench://app/models/decoder')).arrayBuffer()
-    log(`${model.id} enc=${(encBuf.byteLength / 1e6).toFixed(0)}MB dec=${(decBuf.byteLength / 1e6).toFixed(1)}MB`)
+    log(
+      `${model.id} enc=${(encBuf.byteLength / 1e6).toFixed(0)}MB dec=${(decBuf.byteLength / 1e6).toFixed(1)}MB`
+    )
 
     const imgRes = await fetch('bench://app/fixture.png')
     const bmp = await createImageBitmap(await imgRes.blob())
@@ -216,11 +213,7 @@ window.__runPcb = async function runPcb() {
         point_labels: new ort.Tensor('float32', new Float32Array([1]), [1, 1]),
         mask_input: new ort.Tensor('float32', new Float32Array(256 * 256), [1, 1, 256, 256]),
         has_mask_input: new ort.Tensor('float32', new Float32Array([0]), [1]),
-        orig_im_size: new ort.Tensor(
-          'float32',
-          new Float32Array([image.height, image.width]),
-          [2]
-        )
+        orig_im_size: new ort.Tensor('float32', new Float32Array([image.height, image.width]), [2])
       })
       await idle(useGpu)
       result.decodeMs = performance.now() - t1 - result.encodeMs

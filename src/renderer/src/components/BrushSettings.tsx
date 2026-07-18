@@ -21,7 +21,9 @@ const BrushSettings: Component<{
 
   return (
     <section class="shrink-0 border-b border-base-content/10">
-      <div class="px-3 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">BRUSH</div>
+      <div class="px-3 pt-2.5 pb-2 text-[11px] font-semibold tracking-wide text-base-content/60">
+        BRUSH
+      </div>
       <div class="px-3 pb-3">
         <label class="grid grid-cols-[auto_1fr_auto] items-center gap-2 text-xs">
           <span class="min-w-7">Size</span>

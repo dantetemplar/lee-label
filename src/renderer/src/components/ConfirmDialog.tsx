@@ -28,7 +28,11 @@ const ConfirmDialog: Component<{
       panelClass="max-w-md p-5"
     >
       <div class="flex items-start gap-3">
-        <BsExclamationCircleFill class="text-warning mt-0.5 shrink-0" size={22} aria-hidden="true" />
+        <BsExclamationCircleFill
+          class="text-warning mt-0.5 shrink-0"
+          size={22}
+          aria-hidden="true"
+        />
         <div class="min-w-0">
           <h2 id={titleId} class="text-base font-semibold leading-snug">
             {props.title()}

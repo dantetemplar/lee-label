@@ -1,12 +1,7 @@
 import { randomUUID } from 'crypto'
 import { readdir, readFile, stat } from 'fs/promises'
 import { basename, extname, join, relative } from 'path'
-import type {
-  Label,
-  SavePolygonInput,
-  SaveRectangleInput,
-  Shape
-} from '../../shared/annotations'
+import type { Label, SavePolygonInput, SaveRectangleInput, Shape } from '../../shared/annotations'
 import { IMAGE_EXTENSIONS } from '../../shared/file-types'
 import type {
   YoloImportOptions,
@@ -19,11 +14,7 @@ import type {
 import { getLabelColor } from '../../shared/label-color'
 import { projectDatabase } from '../db/project-db'
 import { readImageSize } from './image-size'
-import {
-  parseClassNames,
-  parseYoloDetectionLine,
-  parseYoloSegmentationLine
-} from './yolo-parse'
+import { parseClassNames, parseYoloDetectionLine, parseYoloSegmentationLine } from './yolo-parse'
 
 const PREVIEW_SAMPLE_LIMIT = 24
 const SCAN_CONCURRENCY = 32
@@ -480,9 +471,7 @@ export async function previewYoloUltralytics(
   }
 }
 
-export async function importYoloUltralytics(
-  options: YoloImportOptions
-): Promise<YoloImportResult> {
+export async function importYoloUltralytics(options: YoloImportOptions): Promise<YoloImportResult> {
   const scan = await scanYoloImport(options)
   const labelsByName = new Map(
     projectDatabase.listLabels().map((label) => [label.name.toLowerCase(), label] as const)

@@ -29,9 +29,7 @@ const FALLBACK_LABELS: Record<LabelShortcutCode, string> = {
   Digit0: '0'
 }
 
-const CODE_INDEX = new Map<string, number>(
-  LABEL_SHORTCUT_CODES.map((code, index) => [code, index])
-)
+const CODE_INDEX = new Map<string, number>(LABEL_SHORTCUT_CODES.map((code, index) => [code, index]))
 
 export function fallbackShortcutLabel(code: string): string {
   return FALLBACK_LABELS[code as LabelShortcutCode] ?? code

@@ -84,9 +84,7 @@ export function getToolControlHints(
 
   if (tool === 'cursor') {
     toolHints =
-      segmentationMode === 'instance'
-        ? [...VIEW_HINTS, ...CURSOR_INSTANCE_HINTS]
-        : VIEW_HINTS
+      segmentationMode === 'instance' ? [...VIEW_HINTS, ...CURSOR_INSTANCE_HINTS] : VIEW_HINTS
   } else if (tool === 'rectangle' && segmentationMode === 'instance') {
     toolHints = [...VIEW_HINTS, ...RECTANGLE_HINTS]
   } else if (tool === 'mask') {

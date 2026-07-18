@@ -143,8 +143,7 @@ export const WEBSAM_MODEL_REGISTRY: WebsamModelInfo[] = [
     encoderSize: 893 * MB,
     decoderSize: 22 * MB,
     totalSize: 915 * MB,
-    description:
-      'SAM 3 tracker (1008², ~3.6 GB VRAM). Prefer SAM 2.1 for fine PCB parts',
+    description: 'SAM 3 tracker (1008², ~3.6 GB VRAM). Prefer SAM 2.1 for fine PCB parts',
     encoderKey: 'models/sam3-tracker/v1/encoder.onnx',
     decoderKey: 'models/sam3-tracker/v1/decoder.onnx',
     quantization: 'fp16',
@@ -207,7 +206,6 @@ export function formatModelBytes(bytes: number): string {
   if (bytes < MB) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / MB).toFixed(0)} MB`
 }
-
 
 export interface WebsamModelStatus {
   id: string

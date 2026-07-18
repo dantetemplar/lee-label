@@ -67,7 +67,7 @@ export function rasterizePolygon(polygon, width, height) {
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
       const [xi, yi] = pts[i]
       const [xj, yj] = pts[j]
-      if ((yi > y) !== (yj > y)) {
+      if (yi > y !== yj > y) {
         xs.push(xi + ((y - yi) * (xj - xi)) / (yj - yi))
       }
     }

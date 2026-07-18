@@ -142,10 +142,12 @@ const ProjectSettingsModal: Component<{
     const label: Label = {
       id: `${DRAFT_LABEL_PREFIX}${crypto.randomUUID()}`,
       name: trimmed,
-      color: color?.trim() || getLabelColor(
-        trimmed,
-        draftLabels().map((item) => item.color)
-      ),
+      color:
+        color?.trim() ||
+        getLabelColor(
+          trimmed,
+          draftLabels().map((item) => item.color)
+        ),
       classId: 0,
       sortOrder: draftLabels().length
     }
@@ -157,17 +159,13 @@ const ProjectSettingsModal: Component<{
     setLabelError(null)
     const trimmed = label.name.trim()
     if (!trimmed) return
-    if (
-      draftLabels().some((item) => item.id !== label.id && item.name === trimmed)
-    ) {
+    if (draftLabels().some((item) => item.id !== label.id && item.name === trimmed)) {
       setLabelError('A label with this name already exists')
       return
     }
 
     setDraftLabels((current) =>
-      current.map((item) =>
-        item.id === label.id ? { ...label, name: trimmed } : item
-      )
+      current.map((item) => (item.id === label.id ? { ...label, name: trimmed } : item))
     )
   }
 
@@ -390,7 +388,12 @@ const ProjectSettingsModal: Component<{
         </Show>
       </div>
       <div class="mt-8 flex justify-end gap-2">
-        <button type="button" class="btn btn-ghost" disabled={saving()} onClick={() => props.onClose()}>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          disabled={saving()}
+          onClick={() => props.onClose()}
+        >
           Cancel
         </button>
         <button

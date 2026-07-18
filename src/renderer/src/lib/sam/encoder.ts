@@ -224,7 +224,10 @@ function copyFloat32(data: ArrayBufferView | unknown): Float32Array {
   return Float32Array.from(data as ArrayLike<number>)
 }
 
-async function copyTensorFloat32(tensor: { data: unknown; getData?: () => Promise<unknown> }): Promise<Float32Array> {
+async function copyTensorFloat32(tensor: {
+  data: unknown
+  getData?: () => Promise<unknown>
+}): Promise<Float32Array> {
   if (typeof tensor.getData === 'function') {
     return copyFloat32(await tensor.getData())
   }
@@ -238,10 +241,7 @@ const SAM_HQ_INTERM_DIMS: number[][] = [
   [4, 1, 64, 64, 1280]
 ]
 
-export function resolveSamHqIntermDims(
-  preferred: number[] | undefined,
-  length: number
-): number[] {
+export function resolveSamHqIntermDims(preferred: number[] | undefined, length: number): number[] {
   if (preferred && preferred.reduce((a, b) => a * b, 1) === length) {
     return preferred
   }

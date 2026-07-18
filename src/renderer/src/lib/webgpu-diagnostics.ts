@@ -1,4 +1,8 @@
-import type { DiagnosticCheck, GpuUsageInfo, WebGpuDiagnosticsResult } from '../../../shared/runtime-diagnostics'
+import type {
+  DiagnosticCheck,
+  GpuUsageInfo,
+  WebGpuDiagnosticsResult
+} from '../../../shared/runtime-diagnostics'
 
 function check(
   id: string,
@@ -15,9 +19,7 @@ function formatWebGpuAdapterLabel(info: {
   device: string
   description: string
 }): string {
-  return [info.vendor, info.architecture, info.device, info.description]
-    .filter(Boolean)
-    .join(' · ')
+  return [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(' · ')
 }
 
 function readWebGl2Usage(): GpuUsageInfo['webgl2'] {
@@ -95,8 +97,7 @@ export async function runWebGpuDiagnostics(): Promise<WebGpuDiagnosticsResult> {
   }
 
   const info = adapter.info
-  const adapterType =
-    (info as GPUAdapterInfo & { adapterType?: string }).adapterType ?? 'unknown'
+  const adapterType = (info as GPUAdapterInfo & { adapterType?: string }).adapterType ?? 'unknown'
   const adapterLabel = formatWebGpuAdapterLabel(info)
   gpu.webgpu = {
     vendor: info.vendor,
@@ -107,19 +108,10 @@ export async function runWebGpuDiagnostics(): Promise<WebGpuDiagnosticsResult> {
     label: adapterLabel || `Adapter type ${adapterType}`
   }
 
-  checks.push(
-    check(
-      'adapter',
-      'requestAdapter()',
-      'pass',
-      gpu.webgpu.label
-    )
-  )
+  checks.push(check('adapter', 'requestAdapter()', 'pass', gpu.webgpu.label))
 
   if (adapterType === 'cpu') {
-    checks.push(
-      check('adapter-type', 'Hardware adapter', 'warn', 'Software (CPU) adapter in use')
-    )
+    checks.push(check('adapter-type', 'Hardware adapter', 'warn', 'Software (CPU) adapter in use'))
   } else {
     checks.push(
       check(
@@ -161,9 +153,7 @@ export async function runWebGpuDiagnostics(): Promise<WebGpuDiagnosticsResult> {
 
 function buildWebGlChecks(webgl2: GpuUsageInfo['webgl2']): DiagnosticCheck[] {
   if (!webgl2) {
-    return [
-      check('webgl2', 'WebGL2 (brush engine)', 'fail', 'WebGL2 context unavailable')
-    ]
+    return [check('webgl2', 'WebGL2 (brush engine)', 'fail', 'WebGL2 context unavailable')]
   }
 
   const detail =

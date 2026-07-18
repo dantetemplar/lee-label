@@ -29,8 +29,11 @@ function modelFilePath(relativeKey: string): string {
   return join(getModelsCacheRoot(), relativeKey)
 }
 
-function isModelCached(encoderKey: string, decoderKey: string): boolean {
-  return existsSync(modelFilePath(encoderKey)) && existsSync(modelFilePath(decoderKey))
+function isModelCached(encoderKey: string, decoderKey: string, extraKeys: string[] = []): boolean {
+  if (!existsSync(modelFilePath(encoderKey)) || !existsSync(modelFilePath(decoderKey))) {
+    return false
+  }
+  return extraKeys.every((key) => existsSync(modelFilePath(key)))
 }
 
 function toProtocolUrl(relativeKey: string): string {

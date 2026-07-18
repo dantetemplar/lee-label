@@ -23,8 +23,7 @@ function saveRectangle(
 
   const now = new Date().toISOString()
   const existing = db.prepare('SELECT created_at FROM shapes WHERE id = ?').get(input.id) as
-    | { created_at: string }
-    | undefined
+    { created_at: string } | undefined
   const createdAt = existing?.created_at ?? now
 
   db.prepare(
@@ -83,8 +82,7 @@ function savePolygon(
 
   const now = new Date().toISOString()
   const existing = db.prepare('SELECT created_at FROM shapes WHERE id = ?').get(input.id) as
-    | { created_at: string }
-    | undefined
+    { created_at: string } | undefined
   const createdAt = existing?.created_at ?? now
   const ringsJson = JSON.stringify([{ points: input.points }])
 
@@ -133,8 +131,7 @@ function saveMask(
 
   const now = new Date().toISOString()
   const existing = db.prepare('SELECT created_at FROM shapes WHERE id = ?').get(input.id) as
-    | { created_at: string }
-    | undefined
+    { created_at: string } | undefined
   const createdAt = existing?.created_at ?? now
 
   const width = Math.round(input.bounds.width)
@@ -217,7 +214,9 @@ export class ShapesRepository {
         .requireDb()
         .prepare('SELECT rings_json FROM polygon_data WHERE shape_id = ?')
         .get(row.id) as { rings_json: string } | undefined
-      const rings = polygonRow ? (JSON.parse(polygonRow.rings_json) as { points: { x: number; y: number }[] }[]) : []
+      const rings = polygonRow
+        ? (JSON.parse(polygonRow.rings_json) as { points: { x: number; y: number }[] }[])
+        : []
       return mapShape(row, rings[0]?.points ?? [])
     })
   }
@@ -226,9 +225,7 @@ export class ShapesRepository {
     const row = this.ctx
       .requireDb()
       .prepare('SELECT width, height, format, data FROM mask_data WHERE shape_id = ?')
-      .get(shapeId) as
-      | { width: number; height: number; format: 'bitmap'; data: Buffer }
-      | undefined
+      .get(shapeId) as { width: number; height: number; format: 'bitmap'; data: Buffer } | undefined
     if (!row) return null
 
     const buffer = row.data
@@ -264,9 +261,9 @@ export class ShapesRepository {
     ])
 
     const tx = db.transaction(() => {
-      const existing = db
-        .prepare('SELECT id FROM shapes WHERE image_id = ?')
-        .all(imageId) as { id: string }[]
+      const existing = db.prepare('SELECT id FROM shapes WHERE image_id = ?').all(imageId) as {
+        id: string
+      }[]
       for (const row of existing) {
         if (!keepIds.has(row.id)) {
           db.prepare('DELETE FROM shapes WHERE id = ?').run(row.id)
@@ -277,7 +274,12 @@ export class ShapesRepository {
         saveRectangle(this.ctx, this.images, { ...rect, relativePath, imageWidth, imageHeight })
       }
       for (const mask of masks) {
-        saveMask(this.ctx, this.images, { ...mask.input, relativePath, imageWidth, imageHeight }, mask.data)
+        saveMask(
+          this.ctx,
+          this.images,
+          { ...mask.input, relativePath, imageWidth, imageHeight },
+          mask.data
+        )
       }
       for (const polygon of polygons) {
         savePolygon(this.ctx, this.images, { ...polygon, relativePath, imageWidth, imageHeight })

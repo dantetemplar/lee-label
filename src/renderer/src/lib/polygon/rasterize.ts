@@ -2,11 +2,7 @@ import type { Point2D } from '../../../../shared/geometry'
 import { hitTestPolygon } from '../annotation-coords'
 
 /** Rasterize a simple polygon into a full-image binary mask (255 = inside). */
-export function rasterizePolygon(
-  points: Point2D[],
-  width: number,
-  height: number
-): Uint8Array {
+export function rasterizePolygon(points: Point2D[], width: number, height: number): Uint8Array {
   const mask = new Uint8Array(width * height)
   if (points.length < 3 || width <= 0 || height <= 0) return mask
 

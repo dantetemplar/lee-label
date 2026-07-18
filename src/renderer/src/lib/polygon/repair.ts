@@ -1,14 +1,7 @@
-import {
-  extractLabeledComponentMask,
-  labelConnectedComponents
-} from './contour-trace'
+import { extractLabeledComponentMask, labelConnectedComponents } from './contour-trace'
 import { binarizeMask } from './validate'
 
-export function repairMaskTopology(
-  data: Uint8Array,
-  width: number,
-  height: number
-): Uint8Array {
+export function repairMaskTopology(data: Uint8Array, width: number, height: number): Uint8Array {
   const binary = binarizeMask(data)
   const { labels, components } = labelConnectedComponents(binary, width, height)
   if (components.length === 0) return new Uint8Array(data.length)

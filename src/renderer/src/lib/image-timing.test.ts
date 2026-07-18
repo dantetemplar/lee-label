@@ -9,9 +9,7 @@ describe('image-timing', () => {
   })
 
   it('computes time to done', () => {
-    expect(
-      timeToDoneLabel('2026-01-01T00:00:00.000Z', '2026-01-01T00:01:30.000Z')
-    ).toBe('1m 30s')
+    expect(timeToDoneLabel('2026-01-01T00:00:00.000Z', '2026-01-01T00:01:30.000Z')).toBe('1m 30s')
     expect(timeToDoneLabel(null, '2026-01-01T00:01:30.000Z')).toBe('—')
   })
 })

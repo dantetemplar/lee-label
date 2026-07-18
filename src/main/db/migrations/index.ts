@@ -1,14 +1,15 @@
 import type Database from 'better-sqlite3'
 import { MIGRATION_CURRENT } from './001-current'
 import { MIGRATION_002_IMAGE_TIMINGS } from './002-image-timings'
-import { DEFAULT_SEGMENTATION_MODE, SETTINGS_KEY_SEGMENTATION_MODE } from '../../../shared/segmentation'
+import {
+  DEFAULT_SEGMENTATION_MODE,
+  SETTINGS_KEY_SEGMENTATION_MODE
+} from '../../../shared/segmentation'
 
 const CURRENT_VERSION = 2
 
 function seedSettings(db: Database.Database): void {
-  const insert = db.prepare(
-    'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
-  )
+  const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   insert.run(SETTINGS_KEY_SEGMENTATION_MODE, DEFAULT_SEGMENTATION_MODE)
 }
 
@@ -21,8 +22,7 @@ export function runMigrations(db: Database.Database): void {
   db.exec(MIGRATION_CURRENT)
 
   const row = db.prepare('SELECT MAX(version) AS version FROM schema_meta').get() as
-    | { version: number | null }
-    | undefined
+    { version: number | null } | undefined
   let currentVersion = row?.version ?? 0
 
   if (currentVersion === 0) {
@@ -49,6 +49,8 @@ export function runMigrations(db: Database.Database): void {
   }
 
   if (currentVersion > CURRENT_VERSION) {
-    throw new Error(`Database schema version ${currentVersion} is newer than supported ${CURRENT_VERSION}`)
+    throw new Error(
+      `Database schema version ${currentVersion} is newer than supported ${CURRENT_VERSION}`
+    )
   }
 }

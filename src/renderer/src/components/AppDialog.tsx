@@ -74,24 +74,24 @@ const AppDialog: Component<{
           queueMicrotask(() => parentPanel.focus({ preventScroll: true }))
         }}
       >
-      <Show when={props.open()}>
-        <Dialog.Portal>
-          <Dialog.Overlay class="app fixed inset-0 z-50 bg-base-content/20" />
-          <div class="app pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
-            <Dialog.Content
-              ref={panelEl}
-              tabIndex={-1}
-              class={`pointer-events-auto relative z-10 w-full rounded-xl border border-base-content/10 bg-base-100 shadow-xl outline-none ${props.panelClass ?? 'max-w-md p-5'}`}
-              aria-labelledby={props.labelledBy}
-              aria-describedby={props.describedBy}
-              onKeyDown={handleContentKeyDown}
-            >
-              {props.children}
-              {props.nested}
-            </Dialog.Content>
-          </div>
-        </Dialog.Portal>
-      </Show>
+        <Show when={props.open()}>
+          <Dialog.Portal>
+            <Dialog.Overlay class="app fixed inset-0 z-50 bg-base-content/20" />
+            <div class="app pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+              <Dialog.Content
+                ref={panelEl}
+                tabIndex={-1}
+                class={`pointer-events-auto relative z-10 w-full rounded-xl border border-base-content/10 bg-base-100 shadow-xl outline-none ${props.panelClass ?? 'max-w-md p-5'}`}
+                aria-labelledby={props.labelledBy}
+                aria-describedby={props.describedBy}
+                onKeyDown={handleContentKeyDown}
+              >
+                {props.children}
+                {props.nested}
+              </Dialog.Content>
+            </div>
+          </Dialog.Portal>
+        </Show>
       </Dialog>
     </ParentDialogPanelContext.Provider>
   )

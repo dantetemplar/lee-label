@@ -46,9 +46,8 @@ const api = {
   files: {
     openFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:open-folder'),
     saveFolder: (): Promise<string | null> => ipcRenderer.invoke('dialog:save-folder'),
-    openFile: (
-      filters?: { name: string; extensions: string[] }[]
-    ): Promise<string | null> => ipcRenderer.invoke('dialog:open-file', filters),
+    openFile: (filters?: { name: string; extensions: string[] }[]): Promise<string | null> =>
+      ipcRenderer.invoke('dialog:open-file', filters),
     readDirectoryTree: (path: string): Promise<FileEntry[]> =>
       ipcRenderer.invoke('fs:read-directory-tree', path),
     readTextFile: (path: string): Promise<string> => ipcRenderer.invoke('fs:read-text-file', path),
@@ -64,7 +63,8 @@ const api = {
     exists: (path: string): Promise<boolean> => ipcRenderer.invoke('recent:exists', path)
   },
   paths: {
-    formatDisplay: (path: string): Promise<string> => ipcRenderer.invoke('paths:format-display', path)
+    formatDisplay: (path: string): Promise<string> =>
+      ipcRenderer.invoke('paths:format-display', path)
   },
   runtime: {
     getInfo: (): Promise<import('../shared/runtime-diagnostics').RuntimeInfo> =>
@@ -91,16 +91,13 @@ const api = {
       ipcRenderer.invoke('project:set-workspace-session', session)
   },
   labels: {
-    list: (): Promise<import('../shared/annotations').Label[]> =>
-      ipcRenderer.invoke('labels:list'),
+    list: (): Promise<import('../shared/annotations').Label[]> => ipcRenderer.invoke('labels:list'),
     create: (input: CreateLabelInput): Promise<import('../shared/annotations').Label> =>
       ipcRenderer.invoke('labels:create', input),
     update: (input: UpdateLabelInput): Promise<import('../shared/annotations').Label> =>
       ipcRenderer.invoke('labels:update', input),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('labels:delete', id),
-    getDeleteStats: (
-      id: string
-    ): Promise<import('../shared/annotations').LabelDeleteStats> =>
+    getDeleteStats: (id: string): Promise<import('../shared/annotations').LabelDeleteStats> =>
       ipcRenderer.invoke('labels:get-delete-stats', id)
   },
   images: {

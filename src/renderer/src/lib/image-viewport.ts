@@ -241,11 +241,7 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
     const viewportHeight = viewport.clientHeight
     const innerWidth = Math.max(1, viewportWidth - padding * 2)
     const innerHeight = Math.max(1, viewportHeight - padding * 2)
-    const targetScale = Math.min(
-      innerWidth / bounds.width,
-      innerHeight / bounds.height,
-      maxScale()
-    )
+    const targetScale = Math.min(innerWidth / bounds.width, innerHeight / bounds.height, maxScale())
     const nextScale = Math.max(minScale(), targetScale)
     const centerX = bounds.x + bounds.width / 2
     const centerY = bounds.y + bounds.height / 2

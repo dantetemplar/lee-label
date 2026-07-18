@@ -50,10 +50,7 @@ export class ImagesRepository {
   markImageOpened(relativePath: string): ImageRecord {
     const image = this.getOrCreateImage(relativePath)
     const now = new Date().toISOString()
-    this.ctx
-      .requireDb()
-      .prepare('UPDATE images SET opened_at = ? WHERE id = ?')
-      .run(now, image.id)
+    this.ctx.requireDb().prepare('UPDATE images SET opened_at = ? WHERE id = ?').run(now, image.id)
     return { ...image, openedAt: now }
   }
 
@@ -91,10 +88,10 @@ export class ImagesRepository {
   }
 
   listImageStatuses(): Record<string, ImageStatus> {
-    const rows = this.ctx
-      .requireDb()
-      .prepare('SELECT relative_path, status FROM images')
-      .all() as { relative_path: string; status: ImageStatus }[]
+    const rows = this.ctx.requireDb().prepare('SELECT relative_path, status FROM images').all() as {
+      relative_path: string
+      status: ImageStatus
+    }[]
     const result: Record<string, ImageStatus> = {}
     for (const row of rows) {
       result[row.relative_path] = row.status
@@ -114,15 +111,13 @@ export class ImagesRepository {
     return this.getOrCreateImage(relativePath).id
   }
 
-  updateImageDimensions(
-    imageId: number,
-    imageWidth?: number,
-    imageHeight?: number
-  ): void {
+  updateImageDimensions(imageId: number, imageWidth?: number, imageHeight?: number): void {
     if (imageWidth === undefined && imageHeight === undefined) return
     this.ctx
       .requireDb()
-      .prepare('UPDATE images SET width = COALESCE(?, width), height = COALESCE(?, height) WHERE id = ?')
+      .prepare(
+        'UPDATE images SET width = COALESCE(?, width), height = COALESCE(?, height) WHERE id = ?'
+      )
       .run(imageWidth ?? null, imageHeight ?? null, imageId)
   }
 }

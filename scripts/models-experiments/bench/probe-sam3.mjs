@@ -21,14 +21,21 @@ const ENC_Q4 = join(SAM3, 'encoder.q4.onnx')
 const DEC = existsSync(join(JAM, 'tracker-prompt-encoder-mask-decoder.onnx'))
   ? join(JAM, 'tracker-prompt-encoder-mask-decoder.onnx')
   : join(SAM3, 'decoder.fp32.onnx')
-const APP_ENC = join(process.env.HOME || '', '.config/Lee Label/Models/models/sam3-tracker/v1/encoder.onnx')
-const APP_DEC = join(process.env.HOME || '', '.config/Lee Label/Models/models/sam3-tracker/v1/decoder.onnx')
+const APP_ENC = join(
+  process.env.HOME || '',
+  '.config/Lee Label/Models/models/sam3-tracker/v1/encoder.onnx'
+)
+const APP_DEC = join(
+  process.env.HOME || '',
+  '.config/Lee Label/Models/models/sam3-tracker/v1/decoder.onnx'
+)
 const FIXTURE = join(
   process.env.HOME || '',
   '.cursor/projects/home-dante-Projects-lee-label/assets/image-2d4c69f9-0dbf-46e4-af36-ab3b5e98fc1f.png'
 )
 const TIMEOUT_MS = 600_000
-const MODE = process.argv.find((a) => a.startsWith('--mode='))?.slice('--mode='.length) || 'gpu-both-fp16'
+const MODE =
+  process.argv.find((a) => a.startsWith('--mode='))?.slice('--mode='.length) || 'gpu-both-fp16'
 
 const encFp16 = existsSync(ENC_FP16) ? ENC_FP16 : APP_ENC
 const encQ4 = existsSync(ENC_Q4) ? ENC_Q4 : null

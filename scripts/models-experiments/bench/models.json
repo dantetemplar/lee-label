@@ -8,13 +8,7 @@
     "requiresWebGPU": true,
     "quantization": "fp32",
     "variant": "tiny",
-    "intermDims": [
-      1,
-      1,
-      64,
-      64,
-      160
-    ]
+    "intermDims": [1, 1, 64, 64, 160]
   },
   {
     "id": "sam-hq-base",
@@ -25,13 +19,7 @@
     "requiresWebGPU": true,
     "quantization": "fp16",
     "variant": "base",
-    "intermDims": [
-      4,
-      1,
-      64,
-      64,
-      768
-    ]
+    "intermDims": [4, 1, 64, 64, 768]
   },
   {
     "id": "sam-hq-large",
@@ -42,13 +30,7 @@
     "requiresWebGPU": true,
     "quantization": "fp16",
     "variant": "large",
-    "intermDims": [
-      4,
-      1,
-      64,
-      64,
-      1024
-    ]
+    "intermDims": [4, 1, 64, 64, 1024]
   },
   {
     "id": "sam2.1-tiny",

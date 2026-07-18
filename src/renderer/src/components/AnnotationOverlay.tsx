@@ -291,9 +291,8 @@ const AnnotationOverlay: Component<{
 
     if (tool === 'magic-stick' && props.segmentationMode() === 'instance') {
       props.store.setHoveredShapeId(null)
-      overlayRef.style.cursor = samPipeline.isBusy() || !samPipeline.embeddingReady()
-        ? 'wait'
-        : 'crosshair'
+      overlayRef.style.cursor =
+        samPipeline.isBusy() || !samPipeline.embeddingReady() ? 'wait' : 'crosshair'
       return
     }
 
@@ -542,10 +541,7 @@ const AnnotationOverlay: Component<{
     setEditingShapeId(null)
 
     const tool = props.activeTool()
-    if (
-      (tool !== 'mask' && tool !== 'magic-stick') ||
-      props.segmentationMode() !== 'instance'
-    ) {
+    if ((tool !== 'mask' && tool !== 'magic-stick') || props.segmentationMode() !== 'instance') {
       return
     }
 
@@ -1195,12 +1191,12 @@ const AnnotationOverlay: Component<{
     requestOverlayRender()
   }
 
-  const ensureSamEncoded = async (): Promise<boolean> => {
+  const ensureSamEncoded = async (modelId?: string): Promise<boolean> => {
     const image = props.getCurrentImage()
     const key = props.imageKey()
     if (!image || !key || image.naturalWidth === 0) return false
     if (!isSameImageSrc(image, toLocalImageUrl(key))) return false
-    return samPipeline.encodeImage(image, key)
+    return samPipeline.encodeImage(image, key, modelId)
   }
 
   const addSamPointAndDecode = async (point: Point2D, label: 0 | 1): Promise<void> => {
@@ -1727,10 +1723,7 @@ const AnnotationOverlay: Component<{
 
   createEffect(() => {
     const tool = props.activeTool()
-    if (
-      (tool !== 'mask' && tool !== 'magic-stick') ||
-      props.segmentationMode() !== 'instance'
-    ) {
+    if ((tool !== 'mask' && tool !== 'magic-stick') || props.segmentationMode() !== 'instance') {
       return
     }
 
@@ -1778,6 +1771,8 @@ const AnnotationOverlay: Component<{
         if (status === 'error' || status === 'idle') return
         // Wait until a model is in memory (or currently loading — encode awaits it).
         if (!loadedModel && status !== 'loading-model') return
+        const expectedId = samPipeline.selectedModelId()
+        if (loadedModel && loadedModel !== expectedId) return
         const image = props.getCurrentImage()
         if (!image || image.naturalWidth === 0) return
         if (!isSameImageSrc(image, toLocalImageUrl(key))) return

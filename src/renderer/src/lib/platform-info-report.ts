@@ -44,22 +44,15 @@ function formatRuntime(info: RuntimeInfo | null): string[] {
   ]
 }
 
-function formatGpuFeatures(
-  features: GpuFeatureStatus | null,
-  keys: readonly string[]
-): string[] {
+function formatGpuFeatures(features: GpuFeatureStatus | null, keys: readonly string[]): string[] {
   if (!features) return ['(not loaded)']
-  const rows = keys
-    .filter((key) => features[key])
-    .map((key) => `${key}: ${features[key]}`)
+  const rows = keys.filter((key) => features[key]).map((key) => `${key}: ${features[key]}`)
   return rows.length > 0 ? rows : ['(none reported)']
 }
 
 function formatChecks(checks: DiagnosticCheck[]): string[] {
   if (checks.length === 0) return ['(not loaded)']
-  return checks.map(
-    (check) => `[${check.status.toUpperCase()}] ${check.label} — ${check.detail}`
-  )
+  return checks.map((check) => `[${check.status.toUpperCase()}] ${check.label} — ${check.detail}`)
 }
 
 export function formatPlatformInfoReport(input: {
@@ -77,10 +70,7 @@ export function formatPlatformInfoReport(input: {
     '',
     section('Runtime', formatRuntime(input.runtime)),
     section('Active GPU', formatGpuUsage(input.gpuUsage)),
-    section(
-      'Chromium GPU features',
-      formatGpuFeatures(input.gpuFeatures, input.gpuFeatureKeys)
-    ),
+    section('Chromium GPU features', formatGpuFeatures(input.gpuFeatures, input.gpuFeatureKeys)),
     section('Checks', formatChecks(input.checks))
   ]
     .filter(Boolean)

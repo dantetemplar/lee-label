@@ -1,5 +1,11 @@
 import * as ort from 'bench://app/ort/ort.all.min.mjs'
-import { parseGtPolygon, derivePrompts, rasterizePolygon, iouBinary, maskToImage } from 'bench://app/harness-gt.mjs'
+import {
+  parseGtPolygon,
+  derivePrompts,
+  rasterizePolygon,
+  iouBinary,
+  maskToImage
+} from 'bench://app/harness-gt.mjs'
 
 const logEl = document.getElementById('log')
 function log(msg) {
@@ -40,11 +46,9 @@ function letterbox(image, size = 1024) {
   const nw = Math.round(image.width * scale)
   const nh = Math.round(image.height * scale)
   const src = new OffscreenCanvas(image.width, image.height)
-  src.getContext('2d').putImageData(
-    new ImageData(new Uint8ClampedArray(image.data), image.width, image.height),
-    0,
-    0
-  )
+  src
+    .getContext('2d')
+    .putImageData(new ImageData(new Uint8ClampedArray(image.data), image.width, image.height), 0, 0)
   const dst = new OffscreenCanvas(size, size)
   dst.getContext('2d').drawImage(src, 0, 0, nw, nh)
   const px = dst.getContext('2d').getImageData(0, 0, size, size).data
@@ -154,7 +158,9 @@ window.__run = async function run() {
       const d = await decode(dec, emb, feed.pts, feed.labs, useGpu)
       const s = score(d.masks, d.scores, d.mh, d.mw, gtMask, H, W)
       out.cases[name] = { ok: true, bestIou: s.bestIou, scores: s.scores }
-      log(`${name}: iou=${s.bestIou.toFixed(3)} scores=[${s.scores.map((v) => v.toFixed(3)).join(',')}]`)
+      log(
+        `${name}: iou=${s.bestIou.toFixed(3)} scores=[${s.scores.map((v) => v.toFixed(3)).join(',')}]`
+      )
     }
 
     // Fresh decoder: cold box only (no prior warmup) with NCHW

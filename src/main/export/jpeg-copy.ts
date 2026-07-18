@@ -6,8 +6,5 @@ export async function writeJpegCopy(
   quality: number
 ): Promise<void> {
   const q = Math.min(100, Math.max(1, Math.round(quality)))
-  await sharp(sourcePath)
-    .withMetadata()
-    .jpeg({ quality: q, mozjpeg: false })
-    .toFile(destPath)
+  await sharp(sourcePath).withMetadata().jpeg({ quality: q, mozjpeg: false }).toFile(destPath)
 }

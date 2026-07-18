@@ -98,7 +98,10 @@ for (const id of models) {
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
 const outPath = join(OUT, `pcb-probe-${stamp}.json`)
 writeFileSync(outPath, JSON.stringify({ fixture: 'pcb-capacitor-0.32,0.40', results }, null, 2))
-writeFileSync(join(OUT, 'pcb-probe-latest.json'), JSON.stringify({ fixture: 'pcb-capacitor-0.32,0.40', results }, null, 2))
+writeFileSync(
+  join(OUT, 'pcb-probe-latest.json'),
+  JSON.stringify({ fixture: 'pcb-capacitor-0.32,0.40', results }, null, 2)
+)
 
 console.log('\n| model | ok | backend | best | areas | encode ms | peak MiB | note |')
 console.log('|---|---|---|---:|---|---:|---:|---|')

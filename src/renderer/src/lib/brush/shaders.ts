@@ -282,4 +282,3 @@ void main() {
   outColor = vec4(uMaskColor * uOpacity, uOpacity);
 }
 `
-

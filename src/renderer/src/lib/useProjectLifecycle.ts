@@ -33,7 +33,10 @@ export function useProjectLifecycle(options: {
   loadFolderAtPath: (path: string) => Promise<boolean>
   openFolder: () => Promise<boolean>
   goToWelcomeScreen: () => Promise<void>
-  openRecentProject: (path: string, onMissing: (recent: RecentProject[]) => void) => Promise<boolean>
+  openRecentProject: (
+    path: string,
+    onMissing: (recent: RecentProject[]) => void
+  ) => Promise<boolean>
 } {
   const flushAnnotations = async (): Promise<void> => {
     await options.annotationStore.flush()

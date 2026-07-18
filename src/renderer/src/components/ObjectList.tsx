@@ -165,9 +165,7 @@ const ObjectList: Component<{ embedded?: boolean }> = (props) => {
             <button
               type="button"
               class="btn btn-ghost btn-xs h-5 min-h-0! min-w-0 flex-1 justify-start px-1 py-0! text-[10px] font-normal leading-none text-base-content/55"
-              onClick={(event) =>
-                openLabelMenu(event, '__bulk__', event.currentTarget, true)
-              }
+              onClick={(event) => openLabelMenu(event, '__bulk__', event.currentTarget, true)}
             >
               Change label…
             </button>

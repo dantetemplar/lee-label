@@ -95,12 +95,7 @@ export function analyzeMaskTopology(
 
   const largest = components[0]
   const largestMask = extractLabeledComponentMask(labels, width, height, largest.label)
-  const holeRegions = findHoleComponents(
-    largestMask,
-    width,
-    height,
-    MIN_TOPOLOGY_HOLE_PIXELS
-  )
+  const holeRegions = findHoleComponents(largestMask, width, height, MIN_TOPOLOGY_HOLE_PIXELS)
 
   const islands: MaskTopologyIssue[] = []
   for (let i = 1; i < components.length; i++) {

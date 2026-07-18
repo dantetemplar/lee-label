@@ -21,9 +21,10 @@ export function getRecentProjectFullLabel(project: RecentProject): string {
   return `${parent}/${project.folderName}`
 }
 
-export function getRecentProjectTitleParts(
-  project: RecentProject
-): { title: string; folderSuffix: string | null } {
+export function getRecentProjectTitleParts(project: RecentProject): {
+  title: string
+  folderSuffix: string | null
+} {
   if (project.name === project.folderName) {
     return { title: project.name, folderSuffix: null }
   }

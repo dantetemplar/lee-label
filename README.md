@@ -1,6 +1,6 @@
 # Lee Label
 
-**The no-nonsense, local-first image labeling app that feels instant ✨** 
+**The no-nonsense, local-first image labeling app that feels instant ✨**
 
 Open a folder. Label. Done. No accounts, no cloud upload, no SaaS — your images stay on your machine.
 
@@ -25,16 +25,16 @@ Download the latest release for your platform from **[GitHub Releases](https://g
 
 **Stack**
 
-| Layer    | Tech                                      |
-| -------- | ----------------------------------------- |
-| Desktop  | Electron + electron-vite                  |
-| UI       | SolidJS, Tailwind CSS, daisyUI            |
-| Storage  | SQLite (`better-sqlite3`)                 |
+| Layer   | Tech                           |
+| ------- | ------------------------------ |
+| Desktop | Electron + electron-vite       |
+| UI      | SolidJS, Tailwind CSS, daisyUI |
+| Storage | SQLite (`better-sqlite3`)      |
 
+_Required_
 
-*Required*
-* [Node.js](https://nodejs.org/)
-* [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/)
+- [pnpm](https://pnpm.io/)
 
 Install dependencies:
 
@@ -49,6 +49,7 @@ pnpm dev
 ```
 
 ### Quality checks
+
 ```bash
 pnpm format && pnpm lint --fix && pnpm typecheck
 pnpm test
