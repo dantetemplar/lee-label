@@ -9,3 +9,13 @@ onlyBuiltDependencies:
   - electron-winstaller
   - esbuild
   - sharp
+# Install sharp/@img optional binaries for both arches so electron-builder
+# can package --x64 and --arm64 from a single CI runner (e.g. macos-arm64).
+supportedArchitectures:
+  os:
+    - current
+  cpu:
+    - x64
+    - arm64
+  libc:
+    - current

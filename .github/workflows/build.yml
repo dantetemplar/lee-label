@@ -111,6 +111,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify sharp multi-arch binaries (macOS)
+        if: matrix.platform == 'mac'
+        run: |
+          sharp_img="$(find node_modules/.pnpm -path '*/sharp@*/node_modules/@img' -type d | head -1)"
+          test -n "$sharp_img"
+          test -d "$sharp_img/sharp-darwin-arm64"
+          test -d "$sharp_img/sharp-darwin-x64"
+          test -d "$sharp_img/sharp-libvips-darwin-arm64"
+          test -d "$sharp_img/sharp-libvips-darwin-x64"
+          ls -la "$sharp_img"
+
       - name: Typecheck and test
         run: pnpm run typecheck && pnpm test
 

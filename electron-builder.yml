@@ -11,8 +11,11 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 asarUnpack:
   - resources/**
-  - '**/node_modules/sharp/**'
-  - '**/node_modules/@img/**'
+  # sharp loads native @img binaries via dlopen; must stay outside asar
+  # https://sharp.pixelplumbing.com/install#electron
+  - '**/node_modules/sharp/**/*'
+  - '**/node_modules/@img/**/*'
+  - '**/node_modules/better-sqlite3/**/*'
 win:
   executableName: lee-label
 nsis:
@@ -48,4 +51,6 @@ linux:
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
-npmRebuild: false
+# Rebuild native deps (better-sqlite3) per target arch when packaging
+# --x64/--arm64. sharp uses prebuilt @img packages (see supportedArchitectures).
+npmRebuild: true
