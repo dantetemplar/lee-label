@@ -24,8 +24,10 @@ import type {
   WebsamModelFileUrls,
   WebsamModelStatus
 } from '../shared/websam-models'
+import type { AppMenuAction, AppMenuState } from '../shared/menu'
 
 const api = {
+  platform: process.platform as NodeJS.Platform,
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     toggleMaximize: (): Promise<boolean> => ipcRenderer.invoke('window:toggle-maximize'),
@@ -36,6 +38,16 @@ const api = {
         callback(maximized)
       ipcRenderer.on('window:maximized-changed', handler)
       return () => ipcRenderer.removeListener('window:maximized-changed', handler)
+    }
+  },
+  menu: {
+    setState: (state: Partial<AppMenuState>): Promise<void> =>
+      ipcRenderer.invoke('menu:set-state', state),
+    onAction: (callback: (action: AppMenuAction, payload?: string) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, action: AppMenuAction, payload?: string): void =>
+        callback(action, payload)
+      ipcRenderer.on('menu:action', handler)
+      return () => ipcRenderer.removeListener('menu:action', handler)
     }
   },
   shell: {

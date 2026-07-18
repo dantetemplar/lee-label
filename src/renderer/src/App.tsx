@@ -56,6 +56,9 @@ import {
 import { useProjectLifecycle } from './lib/useProjectLifecycle'
 import { useTextFileEditor } from './lib/useTextFileEditor'
 import { createWorkspaceSessionStore } from './lib/workspace-session-store'
+import { getRecentProjectFullLabel } from './lib/recent-project-path'
+
+const isMac = window.api.platform === 'darwin'
 
 const App: Component = () => {
   const [folderPath, setFolderPath] = createSignal<string | null>(null)
@@ -249,10 +252,53 @@ const App: Component = () => {
 
   onMount(() => {
     void window.api.recent.get().then(setRecentProjects)
+
+    if (!isMac) return
+    const cleanup = window.api.menu.onAction((action, payload) => {
+      switch (action) {
+        case 'go-to-welcome':
+          void lifecycle.goToWelcomeScreen()
+          break
+        case 'open-folder':
+          void handleOpenFolder()
+          break
+        case 'open-recent':
+          if (payload) void handleOpenRecent(payload)
+          break
+        case 'project-settings':
+          openProjectSettings()
+          break
+        case 'import-annotations':
+          void openImportModal()
+          break
+        case 'export-dataset':
+          void openExportModal()
+          break
+        case 'platform-info':
+          setPlatformInfoOpen(true)
+          break
+      }
+    })
+    onCleanup(cleanup)
   })
 
   onCleanup(() => {
     void workspaceSession.flush()
+  })
+
+  createEffect(() => {
+    document.title = folderPath() ? folderName() : APP_DISPLAY_NAME
+  })
+
+  createEffect(() => {
+    if (!isMac) return
+    void window.api.menu.setState({
+      hasOpenProject: folderPath() !== null,
+      recentProjects: recentProjects().map((project) => ({
+        path: project.path,
+        label: getRecentProjectFullLabel(project)
+      }))
+    })
   })
 
   const selectedKind = (): FileKind | null => {
@@ -900,18 +946,20 @@ const App: Component = () => {
   return (
     <ProjectContext.Provider value={projectContextValue}>
       <div class="app flex h-screen flex-col bg-base-100 text-base-content">
-        <TitleBar
-          title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
-          hasOpenProject={() => folderPath() !== null}
-          recentProjects={recentProjects}
-          onGoToWelcomeScreen={() => void lifecycle.goToWelcomeScreen()}
-          onOpenFolder={() => void handleOpenFolder()}
-          onOpenRecent={(path) => void handleOpenRecent(path)}
-          onProjectSettings={openProjectSettings}
-          onImportAnnotations={() => void openImportModal()}
-          onExportDataset={() => void openExportModal()}
-          onPlatformInfo={() => setPlatformInfoOpen(true)}
-        />
+        <Show when={!isMac}>
+          <TitleBar
+            title={() => (folderPath() ? folderName() : APP_DISPLAY_NAME)}
+            hasOpenProject={() => folderPath() !== null}
+            recentProjects={recentProjects}
+            onGoToWelcomeScreen={() => void lifecycle.goToWelcomeScreen()}
+            onOpenFolder={() => void handleOpenFolder()}
+            onOpenRecent={(path) => void handleOpenRecent(path)}
+            onProjectSettings={openProjectSettings}
+            onImportAnnotations={() => void openImportModal()}
+            onExportDataset={() => void openExportModal()}
+            onPlatformInfo={() => setPlatformInfoOpen(true)}
+          />
+        </Show>
         <div class="flex min-h-0 flex-1">
           <Show when={folderPath()}>
             <Show

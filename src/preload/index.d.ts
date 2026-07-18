@@ -28,14 +28,20 @@ import type {
   WebsamModelFileUrls,
   WebsamModelStatus
 } from '../shared/websam-models'
+import type { AppMenuAction, AppMenuState } from '../shared/menu'
 
 export interface AppAPI {
+  platform: NodeJS.Platform
   window: {
     minimize: () => Promise<void>
     toggleMaximize: () => Promise<boolean>
     close: () => Promise<void>
     isMaximized: () => Promise<boolean>
     onMaximizedChange: (callback: (maximized: boolean) => void) => () => void
+  }
+  menu: {
+    setState: (state: Partial<AppMenuState>) => Promise<void>
+    onAction: (callback: (action: AppMenuAction, payload?: string) => void) => () => void
   }
   shell: {
     openExternal: (url: string) => Promise<void>

@@ -16,8 +16,10 @@ import {
   removeRecentProject
 } from './recent-projects'
 import { APP_DISPLAY_NAME } from '../shared/app-name'
+import type { AppMenuState } from '../shared/menu'
 import { formatDisplayPath } from '../shared/paths'
 import { closeProjectDatabase, registerAnnotationsIpc } from './annotations-ipc'
+import { setAppMenuState, setupApplicationMenu } from './app-menu'
 import { registerImportIpc } from './import-ipc'
 import { registerExportIpc } from './export-ipc'
 import { resolveProjectPath } from './project-fs'
@@ -197,6 +199,10 @@ function registerIpc(): void {
   ipcMain.handle('gpu:open-chrome-gpu', () => {
     openChromeGpuWindow()
   })
+
+  ipcMain.handle('menu:set-state', (_, state: Partial<AppMenuState>) => {
+    setAppMenuState(state)
+  })
 }
 
 function attachRendererConsole(webContents: BrowserWindow['webContents']): void {
@@ -224,20 +230,23 @@ function attachRendererConsole(webContents: BrowserWindow['webContents']): void 
 }
 
 function createWindow(): void {
+  const isMac = process.platform === 'darwin'
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 640,
     minHeight: 480,
     show: false,
-    frame: false,
+    title: APP_DISPLAY_NAME,
     autoHideMenuBar: true,
     backgroundColor: '#ffffff',
     icon: appIcon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
-    }
+    },
+    // macOS: native title bar + system menu bar. Other platforms: custom HTML title bar.
+    ...(isMac ? {} : { frame: false })
   })
 
   if (!appIcon.isEmpty()) {
@@ -273,6 +282,7 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.electron.app')
+  setupApplicationMenu()
 
   // COOP/COEP so renderer is crossOriginIsolated → ORT WASM can use threads.
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
