@@ -42,6 +42,13 @@ Install dependencies:
 pnpm install
 ```
 
+If Electron’s binary is missing (`Error: Electron uninstall`), download it:
+
+```bash
+pnpm rebuild electron
+node node_modules/electron/install.js
+```
+
 Run the development server:
 
 ```bash
