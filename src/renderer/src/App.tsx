@@ -3,6 +3,7 @@ import { createEffect, createSignal, on, onCleanup, onMount, Show } from 'solid-
 import type { ImageStatus, Label, LabelDeleteStats, ImageRecord } from '../../shared/annotations'
 import { APP_DISPLAY_NAME } from '../../shared/app-name'
 import { getFileKind, type FileKind } from '../../shared/file-types'
+import type { Point2D } from '../../shared/geometry'
 import type { ImageLayers } from '../../shared/image-layers'
 import { toRelativePath } from '../../shared/paths'
 import type { ProjectSettings } from '../../shared/segmentation'
@@ -90,6 +91,7 @@ const App: Component = () => {
   const [brushSize, setBrushSize] = createSignal(DEFAULT_BRUSH_DIAMETER_IMAGE_PX)
   const [shrinkBrushAtMaxZoom, setShrinkBrushAtMaxZoom] = createSignal(false)
   const [cursorSidebarTab, setCursorSidebarTab] = createSignal<CursorSidebarTab>('objects')
+  const [pointerPixel, setPointerPixel] = createSignal<Point2D | null>(null)
   const [projectSettings, setProjectSettings] = createSignal<ProjectSettings>({
     name: 'Explorer',
     segmentationMode: DEFAULT_SEGMENTATION_MODE
@@ -158,6 +160,7 @@ const App: Component = () => {
     setSelectedFile(null)
     setFileInfo(null)
     setImageMeta(null)
+    setPointerPixel(null)
     textEditor.resetForNavigation()
     annotationStore.clear()
     semanticStore.clear()
@@ -935,6 +938,8 @@ const App: Component = () => {
     setShrinkBrushAtMaxZoom,
     cursorSidebarTab,
     setCursorSidebarTab,
+    pointerPixel,
+    setPointerPixel,
     focusShapeBounds,
     registerFocusShapeBounds,
     requestDeleteShapes,

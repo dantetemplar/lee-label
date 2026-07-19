@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'solid-js'
 import type { Label } from '../../../shared/annotations'
+import type { Point2D } from '../../../shared/geometry'
 import type { ProjectSettings } from '../../../shared/segmentation'
 import type { AnnotationTool } from '../components/AnnotationToolbar'
 import type { ImageBounds } from './annotation-coords'
@@ -27,6 +28,8 @@ export interface ProjectContextValue {
   setShrinkBrushAtMaxZoom: (value: boolean) => void
   cursorSidebarTab: () => CursorSidebarTab
   setCursorSidebarTab: (tab: CursorSidebarTab) => void
+  pointerPixel: () => Point2D | null
+  setPointerPixel: (point: Point2D | null) => void
   focusShapeBounds: (bounds: ImageBounds) => void
   registerFocusShapeBounds: (handler: ((bounds: ImageBounds) => void) | null) => void
   requestDeleteShapes: (ids?: string[]) => void

@@ -1384,28 +1384,27 @@ const AnnotationOverlay: Component<{
 
   const handleOverlayPointerMove = (event: PointerEvent): void => {
     lastPointerClient = { x: event.clientX, y: event.clientY }
+    const point = getImagePoint(event)
+    project.setPointerPixel(point)
 
     if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode === 'sam-box') {
-      const point = getImagePoint(event)
       if (point) setSamDraftBox(normalizeRectFromPoints(dragStart, point))
       return
     }
 
     if (rectPointerId !== null && event.pointerId === rectPointerId && dragMode !== 'none') {
-      const point = getImagePoint(event)
       if (point) updateRectDrag(point)
       return
     }
 
     if (isAltSelectMode()) {
-      updateAltSelectHover(getImagePoint(event))
+      updateAltSelectHover(point)
       return
     }
 
     const tool = props.activeTool()
 
     if (tool === 'cursor') {
-      const point = getImagePoint(event)
       if (!point) {
         props.store.setHoveredShapeId(null)
         if (overlayRef) overlayRef.style.cursor = ''
@@ -1421,7 +1420,6 @@ const AnnotationOverlay: Component<{
     }
 
     if (tool === 'rectangle' && props.segmentationMode() === 'instance') {
-      const point = getImagePoint(event)
       if (!point || !overlayRef) return
 
       const pendingOrigin = pendingRectOrigin()
@@ -1436,7 +1434,6 @@ const AnnotationOverlay: Component<{
 
     if (tool !== 'mask') return
 
-    const point = getImagePoint(event)
     if (!point) {
       setHoverPoint(null)
       if (overlayRef) overlayRef.style.cursor = ''
@@ -1472,6 +1469,7 @@ const AnnotationOverlay: Component<{
         addStrokeSegment(brushSession.lastPoint, samplePoint)
         brushSession.lastPoint = samplePoint
         setHoverPoint(samplePoint)
+        project.setPointerPixel(samplePoint)
       }
 
       requestOverlayRender()
@@ -1533,6 +1531,7 @@ const AnnotationOverlay: Component<{
 
   const handleOverlayPointerLeave = (): void => {
     props.store.setHoveredShapeId(null)
+    project.setPointerPixel(null)
     if (props.activeTool() !== 'mask') return
     if (brushSession.isDrawing) {
       stopBrushDrawing()
@@ -1803,6 +1802,7 @@ const AnnotationOverlay: Component<{
 
   onCleanup(() => {
     stopInteraction()
+    project.setPointerPixel(null)
     if (renderFrame) cancelAnimationFrame(renderFrame)
     topologySession.dispose()
     brushEngine?.dispose()

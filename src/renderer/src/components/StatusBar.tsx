@@ -3,6 +3,7 @@ import { Show, createSignal, onCleanup } from 'solid-js'
 import { Portal } from 'solid-js/web'
 import type { ImageRecord, ImageStatus } from '../../../shared/annotations'
 import { formatTimestamp, timeToDoneLabel } from '../lib/image-timing'
+import { useProjectContext } from '../lib/project-context'
 import type { FileInfo } from './FileViewer'
 import ToolControlHints from './ToolControlHints'
 
@@ -25,6 +26,7 @@ const StatusBar: Component<{
   imageStatus?: () => ImageStatus | null
   imageMeta?: () => ImageRecord | null
 }> = (props) => {
+  const project = useProjectContext()
   const [tipPos, setTipPos] = createSignal<{ x: number; y: number } | null>(null)
 
   const isImage = (): boolean => {
@@ -53,6 +55,12 @@ const StatusBar: Component<{
       <Show when={props.info()}>
         {(info) => (
           <div class="flex shrink-0 items-center">
+            <Show when={isImage() && project.pointerPixel() != null}>
+              <span class="whitespace-nowrap px-2 tabular-nums">
+                {project.pointerPixel()!.x}, {project.pointerPixel()!.y}
+              </span>
+              <span class="h-3.5 w-px bg-base-300" />
+            </Show>
             <span class="inline-flex items-center gap-1.5 whitespace-nowrap px-2">
               <Show when={props.imageStatus?.()}>
                 {(status) => (
