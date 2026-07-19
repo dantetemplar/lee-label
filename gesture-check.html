@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wheel event viewer</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui@5"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  </head>
+  <body class="min-h-screen flex items-center justify-center p-6">
+    <main class="w-full max-w-2xl space-y-4">
+      <div class="space-y-3 text-sm leading-relaxed text-base-content/80">
+        <p>
+          Touchpad two-finger gestures always emit wheel event. However you can
+          distinguish touchpad from mouse event by looking at the deltas and
+          making some reasonable assumptions, and you can distinguish zoom from
+          scroll by checking the ctrlKey value of the event. You can also
+          determine scroll direction by looking at the deltas and the shiftKey of
+          the event.
+        </p>
+        <p>
+          The only caveat is holding Ctrl key while swiping on the trackpad
+          results in an actual scroll, but the ctrlKey value of the event is true
+          in the same way as when the trackpad is pinched. So we additionally
+          listen for keydown/keyup on Ctrl: pinch → TRACK_ZOOM (ctrlKey without a
+          real Ctrl press), Ctrl+swipe → TRACK_CTRL_SCROLL (ctrlKey with Ctrl
+          actually held).
+        </p>
+        <p>Here's a working example:</p>
+      </div>
+      <h1 class="text-2xl font-bold text-center">Last wheel event</h1>
+      <p class="text-base-content/60 text-center">
+        Scroll, pinch, or use the mouse wheel
+      </p>
+      <div class="stats stats-vertical sm:stats-horizontal shadow w-full">
+        <div class="stat">
+          <div class="stat-title">Type</div>
+          <div id="type" class="stat-value text-lg">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Direction</div>
+          <div id="direction" class="stat-value text-lg">—</div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      const typeEl = document.getElementById("type");
+      const directionEl = document.getElementById("direction");
+
+      document.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const type = getWheelType(e);
+          const direction = getWheelDirection(e);
+          typeEl.textContent = type;
+          directionEl.textContent = direction ?? "—";
+          console.log(type, direction);
+        },
+        { passive: false },
+      );
+
+      // --------------------
+
+      const WHEEL_TYPES = {
+        TRACK_ZOOM: "TRACK_ZOOM",
+        TRACK_SCROLL: "TRACK_SCROLL",
+        TRACK_CTRL_SCROLL: "TRACK_CTRL_SCROLL",
+        MOUSE_ZOOM: "MOUSE_ZOOM",
+        MOUSE_SCROLL: "MOUSE_SCROLL",
+      };
+
+      const DIRECTIONS = {
+        UP: "UP",
+        DOWN: "DOWN",
+        LEFT: "LEFT",
+        RIGHT: "RIGHT",
+        IN: "IN",
+        OUT: "OUT",
+      };
+
+      const getWheelType = (event) => {
+        if (!(event instanceof WheelEvent)) {
+          throw "Event must be a WheelEvent";
+        }
+
+        if (isWheelZoom(event)) {
+          if (isWheelMouse(event)) {
+            return WHEEL_TYPES.MOUSE_ZOOM;
+          }
+          return WHEEL_TYPES.TRACK_ZOOM;
+        }
+
+        // Not a zoom, so must be a scroll
+        if (isWheelMouse(event)) {
+          return WHEEL_TYPES.MOUSE_SCROLL;
+        }
+        if (event.ctrlKey && isCtrlKeyPressed) {
+          return WHEEL_TYPES.TRACK_CTRL_SCROLL;
+        }
+        return WHEEL_TYPES.TRACK_SCROLL;
+      };
+
+      const getWheelDirection = (event) => {
+        if (!(event instanceof WheelEvent)) {
+          throw "Event must be a WheelEvent";
+        }
+
+        const maxDelta =
+          Math.abs(event.deltaX) > Math.abs(event.deltaY)
+            ? event.deltaX
+            : event.deltaY;
+
+        if (isWheelZoom(event)) {
+          return getDeltaZoomDirection(maxDelta);
+        }
+
+        if (event.shiftKey) {
+          // Holding Shift while turning wheel or swiping trackpad in any direction
+          // results sideways scrolls (OS dependent of course, but seems to be the
+          // case on most).
+          //
+          // So we assume that if Shift was held, that it's a horizontal scroll.
+          return getMaxDeltaScrollDirection(maxDelta, 0);
+        } else {
+          // Otherwise, take the larger of the two deltas as indicating direction
+          return getMaxDeltaScrollDirection(event.deltaX, event.deltaY);
+        }
+      };
+
+      // --------------------
+
+      let isCtrlKeyPressed = false;
+
+      const onPress = (e) => {
+        if (e.key === "Control") {
+          isCtrlKeyPressed = true;
+          document.removeEventListener("keydown", onPress);
+          document.addEventListener("keyup", onDepress);
+        }
+      };
+
+      const onDepress = (e) => {
+        if (e.key === "Control") {
+          isCtrlKeyPressed = false;
+          document.addEventListener("keydown", onPress);
+          document.removeEventListener("keyup", onDepress);
+        }
+      };
+
+      // NOTE this only works if the page is focused
+      document.addEventListener("keydown", onPress);
+
+      const isWheelMouse = (event) => {
+        if (!(event instanceof WheelEvent)) {
+          throw "Event must be a WheelEvent";
+        }
+
+        // Line/page units are discrete mouse-wheel notches.
+        if (event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) {
+          return true;
+        }
+
+        // Simultaneous X+Y motion is almost always a trackpad.
+        if (event.deltaX !== 0 && event.deltaY !== 0) {
+          return false;
+        }
+
+        // Chromium trackpad signature: wheelDeltaY === -3 * deltaY.
+        // Fast trackpad flicks can exceed old "abs > 50" thresholds, so
+        // prefer this over magnitude alone.
+        if (
+          typeof event.wheelDeltaY === "number" &&
+          event.wheelDeltaY !== 0 &&
+          event.wheelDeltaY === -3 * event.deltaY
+        ) {
+          return false;
+        }
+
+        // Fractional pixel deltas → trackpad.
+        if (!Number.isInteger(event.deltaX) || !Number.isInteger(event.deltaY)) {
+          return false;
+        }
+
+        // Classic mouse notch: wheelDelta is a multiple of 120 on one axis.
+        const wheelDelta =
+          typeof event.wheelDelta === "number"
+            ? event.wheelDelta
+            : typeof event.wheelDeltaY === "number"
+              ? event.wheelDeltaY
+              : 0;
+        if (
+          wheelDelta !== 0 &&
+          Math.abs(wheelDelta) % 120 === 0 &&
+          (event.deltaX === 0) !== (event.deltaY === 0)
+        ) {
+          return true;
+        }
+
+        // Last resort: large single-axis integer jump.
+        const abs = Math.abs(event.deltaX) + Math.abs(event.deltaY);
+        return (event.deltaX === 0) !== (event.deltaY === 0) && abs >= 100;
+      };
+
+      const isWheelZoom = (event) => {
+        if (!(event instanceof WheelEvent)) {
+          throw "Event must be a WheelEvent";
+        }
+
+        // ctrlKey is set for pinch-zoom AND for Ctrl+scroll. Pinch sets ctrlKey
+        // without a real Ctrl press; Ctrl+mouse-wheel is always zoom.
+        if (!event.ctrlKey) {
+          return false;
+        }
+        return isWheelMouse(event) || !isCtrlKeyPressed;
+      };
+
+      const getMaxDeltaScrollDirection = (deltaX, deltaY) => {
+        if (deltaX === deltaY) {
+          return null;
+        }
+
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          return deltaX < 0 ? DIRECTIONS.LEFT : DIRECTIONS.RIGHT;
+        }
+
+        return deltaY < 0 ? DIRECTIONS.UP : DIRECTIONS.DOWN;
+      };
+
+      const getDeltaZoomDirection = (delta) => {
+        if (delta === 0) {
+          return null;
+        }
+
+        return delta < 0 ? DIRECTIONS.IN : DIRECTIONS.OUT;
+      };
+    </script>
+  </body>
+</html>

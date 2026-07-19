@@ -5,9 +5,9 @@ import { panFromScreenDrag, snapPanToImagePixelGrid } from './annotation-coords'
 export const MAX_SCALE_MULTIPLIER = 16
 /**
  * Mouse-wheel notches: |deltaY| is typically 100 or 120 (or multiples).
- * Intensity chosen so one notch ≈ ±10% (exp(120 * 0.0008) ≈ 1.10).
+ * Intensity chosen so one notch ≈ ±20% (exp(120 * 0.0015) ≈ 1.20).
  */
-export const ZOOM_WHEEL_INTENSITY = 0.0008
+export const ZOOM_WHEEL_INTENSITY = 0.0015
 /**
  * Chromium encodes trackpad pinch as wheel+ctrlKey with percent-scale deltaY.
  * Mapping: exp(-dy/100).
@@ -22,71 +22,152 @@ export const ZOOM_PINCH_DEADZONE = 1
 export const ZOOM_PINCH_FACTOR_MIN = 0.75
 export const ZOOM_PINCH_FACTOR_MAX = 1.25
 /**
- * Ctrl+touchpad scroll also sets ctrlKey but emits large pixel-like deltas.
- * Use a low intensity so continuous events stay proportional (no clamp saturation).
- * dy=100 → ~2%, dy=200 → ~4%.
+ * Ctrl+touchpad scroll emits large pixel-like deltas continuously.
+ * dy=100 → ~6%, dy=200 → ~13%.
  */
-export const ZOOM_CTRL_SCROLL_INTENSITY = 0.0002
-/**
- * Linux pinch: wheelDeltaY is always ±120 while deltaY stays small/fractional.
- * Ctrl+touchpad scroll: wheelDeltaY ≈ |deltaY| (not locked to 120).
- */
-export const ZOOM_PINCH_WHEEL_DELTA = 120
+export const ZOOM_CTRL_SCROLL_INTENSITY = 0.0006
 export const FIT_PADDING = 16
-/** Wheel events closer than this inherit the burst's mouse/trackpad classification. */
-export const WHEEL_BURST_GAP_MS = 80
 
-type WheelDeltaEvent = WheelEvent & { wheelDeltaX?: number; wheelDeltaY?: number }
+export const WHEEL_TYPES = {
+  TRACK_ZOOM: 'TRACK_ZOOM',
+  TRACK_SCROLL: 'TRACK_SCROLL',
+  TRACK_CTRL_SCROLL: 'TRACK_CTRL_SCROLL',
+  MOUSE_ZOOM: 'MOUSE_ZOOM',
+  MOUSE_SCROLL: 'MOUSE_SCROLL'
+} as const
 
-/**
- * Best-effort mouse-wheel vs trackpad classification.
- *
- * Do NOT trust wheelDeltaY % 120 alone: on Linux, trackpad pinch reports wDY=±120
- * while deltaY is a small fractional percent-scale value.
- * Real mouse notches: large integer |deltaY| in {100,120,…}.
- */
-export function classifyMouseWheel(event: WheelEvent): boolean {
-  if (event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) return true
+export type WheelType = (typeof WHEEL_TYPES)[keyof typeof WHEEL_TYPES]
 
-  const absY = Math.abs(event.deltaY)
-  const absX = Math.abs(event.deltaX)
-
-  // Discrete mouse notches are large integer pixel deltas.
-  if (absY >= 100 && Number.isInteger(event.deltaY) && absX === 0) return true
-  if (absX >= 100 && Number.isInteger(event.deltaX) && absY === 0) return true
-
-  // Fractional or small deltas are trackpad (scroll or pinch).
-  if (!Number.isInteger(event.deltaY) || !Number.isInteger(event.deltaX)) return false
-  if (absY > 0 && absY < 100) return false
-  if (absX > 0 && absX < 100) return false
-
-  // Diagonal motion is almost always a trackpad.
-  if (event.deltaX !== 0 && event.deltaY !== 0) return false
-
-  const e = event as WheelDeltaEvent
-  if (typeof e.wheelDeltaY === 'number' && e.wheelDeltaY !== 0 && absY >= 100) {
-    return e.wheelDeltaY % 120 === 0
-  }
-  if (typeof e.wheelDeltaX === 'number' && e.wheelDeltaX !== 0 && absX >= 100) {
-    return e.wheelDeltaX % 120 === 0
-  }
-
-  return false
+type WheelDeltaEvent = WheelEvent & {
+  wheelDelta?: number
+  wheelDeltaX?: number
+  wheelDeltaY?: number
 }
 
 /**
- * True trackpad pinch (vs Ctrl+scroll / Ctrl+mouse).
- * On Linux Chromium, pinch always reports wheelDeltaY=±120 (including dY=0
- * keepalive events). Ctrl+touchpad scroll reports wheelDeltaY ≈ |deltaY|.
+ * Pinch sets ctrlKey without a real Ctrl press. Track physical Ctrl so we can
+ * tell TRACK_ZOOM (pinch) from TRACK_CTRL_SCROLL (Ctrl+trackpad swipe).
  */
-export function isPinchWheelEvent(event: WheelEvent): boolean {
-  if (!(event.ctrlKey || event.metaKey)) return false
-  if (classifyMouseWheel(event)) return false
+let isCtrlKeyPressed = false
+let ctrlKeyTrackingInstalled = false
+
+const onCtrlPress = (event: KeyboardEvent): void => {
+  if (event.key !== 'Control') return
+  isCtrlKeyPressed = true
+  document.removeEventListener('keydown', onCtrlPress)
+  document.addEventListener('keyup', onCtrlRelease)
+}
+
+const onCtrlRelease = (event: KeyboardEvent): void => {
+  if (event.key !== 'Control') return
+  isCtrlKeyPressed = false
+  document.addEventListener('keydown', onCtrlPress)
+  document.removeEventListener('keyup', onCtrlRelease)
+}
+
+const onWindowBlur = (): void => {
+  if (!isCtrlKeyPressed) return
+  isCtrlKeyPressed = false
+  document.removeEventListener('keyup', onCtrlRelease)
+  document.addEventListener('keydown', onCtrlPress)
+}
+
+function ensureCtrlKeyTracking(): void {
+  if (ctrlKeyTrackingInstalled || typeof document === 'undefined') return
+  ctrlKeyTrackingInstalled = true
+  document.addEventListener('keydown', onCtrlPress)
+  window.addEventListener('blur', onWindowBlur)
+}
+
+/** Mouse wheel vs trackpad — same heuristics as gesture-check.html. */
+export function isWheelMouse(event: WheelEvent): boolean {
+  if (!(event instanceof WheelEvent)) {
+    throw new Error('Event must be a WheelEvent')
+  }
+
+  // Line/page units are discrete mouse-wheel notches.
+  if (event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL) {
+    return true
+  }
+
+  // Simultaneous X+Y motion is almost always a trackpad.
+  if (event.deltaX !== 0 && event.deltaY !== 0) {
+    return false
+  }
 
   const e = event as WheelDeltaEvent
-  return (
-    typeof e.wheelDeltaY === 'number' && Math.abs(e.wheelDeltaY) === ZOOM_PINCH_WHEEL_DELTA
-  )
+
+  // Chromium trackpad signature: wheelDeltaY === -3 * deltaY.
+  // Fast trackpad flicks can exceed old magnitude thresholds, so prefer this.
+  if (
+    typeof e.wheelDeltaY === 'number' &&
+    e.wheelDeltaY !== 0 &&
+    e.wheelDeltaY === -3 * event.deltaY
+  ) {
+    return false
+  }
+
+  // Fractional pixel deltas → trackpad.
+  if (!Number.isInteger(event.deltaX) || !Number.isInteger(event.deltaY)) {
+    return false
+  }
+
+  // Classic mouse notch: wheelDelta is a multiple of 120 on one axis.
+  const wheelDelta =
+    typeof e.wheelDelta === 'number'
+      ? e.wheelDelta
+      : typeof e.wheelDeltaY === 'number'
+        ? e.wheelDeltaY
+        : 0
+  if (
+    wheelDelta !== 0 &&
+    Math.abs(wheelDelta) % 120 === 0 &&
+    (event.deltaX === 0) !== (event.deltaY === 0)
+  ) {
+    return true
+  }
+
+  // Last resort: large single-axis integer jump.
+  const abs = Math.abs(event.deltaX) + Math.abs(event.deltaY)
+  return (event.deltaX === 0) !== (event.deltaY === 0) && abs >= 100
+}
+
+/**
+ * Pinch sets ctrlKey without a real Ctrl press; Ctrl+mouse-wheel is always zoom.
+ * Cmd/Meta+scroll is intentional zoom (metaKey is never auto-set by pinch).
+ */
+export function isWheelZoom(event: WheelEvent): boolean {
+  if (!(event instanceof WheelEvent)) {
+    throw new Error('Event must be a WheelEvent')
+  }
+  ensureCtrlKeyTracking()
+
+  if (event.metaKey) return true
+  if (!event.ctrlKey) return false
+  return isWheelMouse(event) || !isCtrlKeyPressed
+}
+
+export function getWheelType(event: WheelEvent): WheelType {
+  if (!(event instanceof WheelEvent)) {
+    throw new Error('Event must be a WheelEvent')
+  }
+  ensureCtrlKeyTracking()
+
+  if (isWheelZoom(event)) {
+    return isWheelMouse(event) ? WHEEL_TYPES.MOUSE_ZOOM : WHEEL_TYPES.TRACK_ZOOM
+  }
+
+  if (isWheelMouse(event)) {
+    return WHEEL_TYPES.MOUSE_SCROLL
+  }
+  if (event.ctrlKey && isCtrlKeyPressed) {
+    return WHEEL_TYPES.TRACK_CTRL_SCROLL
+  }
+  return WHEEL_TYPES.TRACK_SCROLL
+}
+
+export function wheelZoomDelta(event: WheelEvent): number {
+  return Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
 }
 
 export interface SidePadding {
@@ -113,18 +194,23 @@ export function clampValue(value: number, min: number, max: number): number {
 }
 
 /** Chromium percent-scale pinch factor, or null if within deadzone. */
-export function pinchZoomFactor(deltaY: number): number | null {
-  if (Math.abs(deltaY) < ZOOM_PINCH_DEADZONE) return null
+export function pinchZoomFactor(delta: number): number | null {
+  if (Math.abs(delta) < ZOOM_PINCH_DEADZONE) return null
   return clampValue(
-    Math.exp(-deltaY / ZOOM_PINCH_DIVISOR),
+    Math.exp(-delta / ZOOM_PINCH_DIVISOR),
     ZOOM_PINCH_FACTOR_MIN,
     ZOOM_PINCH_FACTOR_MAX
   )
 }
 
-/** Proportional Ctrl+scroll / Ctrl+mouse zoom (no clamp saturation). */
-export function ctrlScrollZoomFactor(deltaY: number): number {
-  return Math.exp(-deltaY * ZOOM_CTRL_SCROLL_INTENSITY)
+/** Discrete mouse-wheel / Ctrl+mouse zoom factor. */
+export function mouseZoomFactor(delta: number): number {
+  return Math.exp(-delta * ZOOM_WHEEL_INTENSITY)
+}
+
+/** Proportional Ctrl+trackpad scroll zoom (no per-event clamp saturation). */
+export function ctrlScrollZoomFactor(delta: number): number {
+  return Math.exp(-delta * ZOOM_CTRL_SCROLL_INTENSITY)
 }
 
 export function computeMaxScale(minScale: number): number {
@@ -243,8 +329,8 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
   let panStartY = 0
   let panOriginX = 0
   let panOriginY = 0
-  let lastWheelTime = -Infinity
-  let burstIsMouseWheel = false
+
+  ensureCtrlKeyTracking()
 
   const maxScale = (): number => computeMaxScale(minScale())
 
@@ -346,33 +432,27 @@ export function createImageViewport(options: ImageViewportOptions): ImageViewpor
   const handleWheel = (event: WheelEvent): void => {
     event.preventDefault()
 
-    const now = performance.now()
-    if (now - lastWheelTime > WHEEL_BURST_GAP_MS) {
-      burstIsMouseWheel = classifyMouseWheel(event)
-    }
-    lastWheelTime = now
+    const type = getWheelType(event)
+    const delta = wheelZoomDelta(event)
 
-    // Zoom: mouse wheel, Ctrl/Meta+scroll, or touchpad pinch (ctrlKey).
-    // Pan: touchpad two-finger scroll (vertical + horizontal).
-    if (event.ctrlKey || event.metaKey) {
-      if (isPinchWheelEvent(event)) {
-        const factor = pinchZoomFactor(event.deltaY)
-        if (factor == null) return
-        zoomAt(event.clientX, event.clientY, scale() * factor)
-        return
-      }
-      zoomAt(event.clientX, event.clientY, scale() * ctrlScrollZoomFactor(event.deltaY))
-      return
-    }
-    if (burstIsMouseWheel) {
-      zoomAt(
-        event.clientX,
-        event.clientY,
-        scale() * Math.exp(-event.deltaY * ZOOM_WHEEL_INTENSITY)
-      )
+    if (type === WHEEL_TYPES.TRACK_ZOOM) {
+      const factor = pinchZoomFactor(delta)
+      if (factor == null) return
+      zoomAt(event.clientX, event.clientY, scale() * factor)
       return
     }
 
+    if (type === WHEEL_TYPES.MOUSE_ZOOM || type === WHEEL_TYPES.MOUSE_SCROLL) {
+      zoomAt(event.clientX, event.clientY, scale() * mouseZoomFactor(delta))
+      return
+    }
+
+    if (type === WHEEL_TYPES.TRACK_CTRL_SCROLL) {
+      zoomAt(event.clientX, event.clientY, scale() * ctrlScrollZoomFactor(delta))
+      return
+    }
+
+    // TRACK_SCROLL — two-finger pan
     setClampedPan(panX() - event.deltaX, panY() - event.deltaY)
   }
 
