@@ -146,11 +146,10 @@ jobs:
           elif [ "$PLATFORM" = "mac" ]; then
             mkdir -p artifacts/dmg artifacts/x64 artifacts/arm64
             cp dist/*.dmg artifacts/dmg/
-            for file in dist/*-arm64-mac.zip; do
+            for file in dist/*-darwin-arm64.zip; do
               cp "$file" artifacts/arm64/
             done
-            for file in dist/*-mac.zip; do
-              [[ "$file" == *arm64* ]] && continue
+            for file in dist/*-darwin-x64.zip; do
               cp "$file" artifacts/x64/
             done
           elif [ "$PLATFORM" = "win" ]; then
