@@ -613,9 +613,11 @@ const AnnotationOverlay: Component<{
 
     const editingId = editingShapeId()
     let changed = false
+
     for (const shape of props.store.shapes[0]()) {
       if (shape.type !== 'mask') continue
       if (shape.id === editingId) continue
+
       const erased = usesPixelBrushShape(brushSession.lockedBrushDiameterImagePx)
         ? erasePixelBrushStrokeFromMaskData(
             shape.data,
@@ -638,30 +640,6 @@ const AnnotationOverlay: Component<{
       brushSession.savedMasksErased = true
       requestOverlayRender()
     }
-  }
-
-  const finalizeErasedMasks = (): void => {
-    if (!brushSession.savedMasksErased) return
-
-    const size = props.imageSize()
-    if (!size) return
-
-    const now = new Date().toISOString()
-    const nextShapes: WorkingShape[] = []
-
-    for (const shape of props.store.shapes[0]()) {
-      if (shape.type !== 'mask') {
-        nextShapes.push(shape)
-        continue
-      }
-
-      const tightened = tightenMaskBitmap(shape, size.width, size.height)
-      if (!tightened) continue
-      nextShapes.push({ ...tightened, updatedAt: now })
-    }
-
-    props.store.setShapes(nextShapes)
-    brushSession.savedMasksErased = false
   }
 
   const addStrokeSegment = (from: Point2D, to: Point2D): void => {
@@ -749,6 +727,30 @@ const AnnotationOverlay: Component<{
       )
     }
     brushEngine?.clearActiveStroke()
+  }
+
+  const finalizeErasedMasks = (): void => {
+    if (!brushSession.savedMasksErased) return
+
+    const size = props.imageSize()
+    if (!size) return
+
+    const now = new Date().toISOString()
+    const nextShapes: WorkingShape[] = []
+
+    for (const shape of props.store.shapes[0]()) {
+      if (shape.type !== 'mask') {
+        nextShapes.push(shape)
+        continue
+      }
+
+      const tightened = tightenMaskBitmap(shape, size.width, size.height)
+      if (!tightened) continue
+      nextShapes.push({ ...tightened, updatedAt: now })
+    }
+
+    props.store.setShapes(nextShapes)
+    brushSession.savedMasksErased = false
   }
 
   const commitSessionPolygon = async (): Promise<void> => {
@@ -998,26 +1000,13 @@ const AnnotationOverlay: Component<{
       if (didChange) setTopologyIssues(nextIssues)
     }
     if (brushSession.strokeSegments.length > 0 && brushSession.brushStrokeMode === 'paint') {
-      if (usesPixelBrushShape(brushSession.lockedBrushDiameterImagePx)) {
-        brushEngine?.stampPixelBrushStrokes(
-          brushSession.strokeSegments,
-          brushSession.lockedBrushDiameterImagePx,
-          'session',
-          'paint'
-        )
-      } else {
-        brushEngine?.stampCapsules(
-          brushSession.strokeSegments,
-          brushSession.lockedBrushDiameterImagePx / 2,
-          'session',
-          'paint'
-        )
-      }
+      stampPendingStrokeToSession()
+    } else {
+      brushEngine?.clearActiveStroke()
     }
     if (brushSession.brushStrokeMode === 'erase') {
       finalizeErasedMasks()
     }
-    brushEngine?.clearActiveStroke()
     brushSession.strokeSegments = []
     brushSession.lastPoint = null
     brushSession.brushStrokeMode = 'paint'
