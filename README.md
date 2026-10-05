@@ -6,6 +6,12 @@ Open a folder. Label. Done. No accounts, no cloud upload, no SaaS — your image
 
 Built with Electron, SolidJS, and SQLite.
 
+<div align="center">
+  
+https://github.com/user-attachments/assets/6f042268-b1d5-46e1-b8b3-ab6485eb35a1
+
+</div>
+
 ## Features
 
 - **Local-first** — open any folder and start labeling; metadata lives beside your files
